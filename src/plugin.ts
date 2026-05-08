@@ -7,9 +7,11 @@ import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
 
-// Default to "warn" so the diagnostic info logs (audio: ..., http: ..., dispatcher: ...)
-// stay in code but don't fire. Bump to "info" temporarily when investigating issues.
-streamDeck.logger.setLevel("warn");
+// CLAUDE_NOTIFY_DEBUG=1 in the plugin's env raises log level from "warn" to "info",
+// surfacing every received HTTP event (action + info routes) plus dispatcher and
+// audio diagnostic lines. Toggle requires plugin restart:
+//   $env:CLAUDE_NOTIFY_DEBUG = "1"; npx streamdeck restart com.nshopik.claudenotify
+streamDeck.logger.setLevel(process.env.CLAUDE_NOTIFY_DEBUG ? "info" : "warn");
 
 const audioPlayer = new AudioPlayer({
   log: (level, msg) => streamDeck.logger[level](`audio: ${msg}`),
