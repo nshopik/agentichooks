@@ -30,6 +30,7 @@
       "Tooltip": "Flash on a Claude Code hook event",
       "PropertyInspectorPath": "ui/flash.html",
       "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
       "States": [
         {
           "Image": "images/keys/stop-idle",
