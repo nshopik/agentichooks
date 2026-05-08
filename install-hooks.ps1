@@ -6,8 +6,9 @@
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_claude-notify-installer"
-$CURRENT_VERSION = "v2"
+$CURRENT_VERSION = "v3"
 $debugLogPath = Join-Path $env:TEMP "claude-notify-debug.log"
+$helperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
 
 function Read-Settings {
     if (-not (Test-Path $settingsPath)) {
@@ -67,10 +68,11 @@ function Remove-OurHooks($hooksArray) {
 }
 
 function Make-Hook($sigName, $eventName) {
-    # Writes the sig file the plugin watches AND appends a tab-separated debug line
-    # (timestamp, event name, sig file) to %TEMP%\claude-notify-debug.log so we can
-    # see exactly which hook fired and when.
-    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); Add-Content -Path `"`$env:TEMP\claude-notify-debug.log`" -Value `"`$(Get-Date -Format 'o')`t$eventName`t$sigName`""
+    # Hook delegates to the helper script (installed alongside settings.json by
+    # Write-HelperScript). The helper writes the sig file AND appends a debug
+    # line under a retry loop so concurrent hook fires (e.g., several PostToolUse
+    # in one turn) don't drop log entries to file-lock contention.
+    $cmd = "& `"`$env:USERPROFILE\.claude\claude-notify-hook.ps1`" -Sig `"$sigName`" -EventName `"$eventName`""
     $h = [ordered]@{
         type    = "command"
         command = $cmd
@@ -80,6 +82,43 @@ function Make-Hook($sigName, $eventName) {
     $h[$marker] = $CURRENT_VERSION
     return [pscustomobject]$h
 }
+
+function Write-HelperScript {
+    $dir = Split-Path $helperPath -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+    $content = @'
+# claude-notify-hook.ps1 - invoked by Claude Code hooks installed by install-hooks.ps1.
+# Writes a sig file the Stream Deck plugin watches, then appends a tab-separated
+# line to a shared debug log. Retry loop handles concurrent hook fires that
+# would otherwise contend for the log file and silently drop entries.
+param(
+    [Parameter(Mandatory=$true)][string]$Sig,
+    [Parameter(Mandatory=$true)][string]$EventName
+)
+
+$ErrorActionPreference = "SilentlyContinue"
+
+$ts = Get-Date -Format 'o'
+$sigPath = Join-Path $env:TEMP $Sig
+$logPath = Join-Path $env:TEMP "claude-notify-debug.log"
+
+Set-Content -Path $sigPath -Value $ts
+
+$line = "$ts`t$EventName`t$Sig"
+for ($i = 0; $i -lt 30; $i++) {
+    try {
+        Add-Content -LiteralPath $logPath -Value $line -ErrorAction Stop
+        return
+    } catch {
+        Start-Sleep -Milliseconds 30
+    }
+}
+'@
+    Set-Content -Path $helperPath -Value $content -Encoding UTF8
+    Write-Host "[help] wrote $helperPath"
+}
+
+Write-HelperScript
 
 $settings = Read-Settings
 if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
