@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Claude Notify — Flash</title>
+  <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+</head>
+<body>
+  <sdpi-item label="Event type">
+    <sdpi-select setting="eventType" default="idle">
+      <option value="stop">Stop (task done)</option>
+      <option value="idle">Idle / waiting</option>
+      <option value="permission">Permission request</option>
+    </sdpi-select>
+  </sdpi-item>
+
+  <sdpi-item label="Idle icon">
+    <sdpi-file setting="idleIconPath" placeholder="(default for chosen event)" accept="image/png,image/jpeg,image/svg+xml"></sdpi-file>
+  </sdpi-item>
+
+  <sdpi-item label="Alert icon">
+    <sdpi-file setting="alertIconPath" placeholder="(default for chosen event)" accept="image/png,image/jpeg,image/svg+xml"></sdpi-file>
+  </sdpi-item>
+
+  <sdpi-item label="Flash mode">
+    <sdpi-radio setting="flashMode" default="static">
+      <option value="static">Static</option>
+      <option value="pulse">Pulse</option>
+    </sdpi-radio>
+  </sdpi-item>
+
+  <sdpi-item label="Pulse rate (ms)" id="pulse-rate-row">
+    <sdpi-range setting="pulseIntervalMs" min="100" max="2000" step="50" default="500" showlabels></sdpi-range>
+  </sdpi-item>
+
+  <sdpi-item label="Auto-dismiss (sec)">
+    <sdpi-textfield setting="autoTimeoutSeconds" placeholder="30" default="30" pattern="[0-9]+"></sdpi-textfield>
+  </sdpi-item>
+
+  <sdpi-item>
+    <sdpi-button id="test-flash">Test flash</sdpi-button>
+  </sdpi-item>
+
+  <script>
+    const updatePulseVisibility = () => {
+      const row = document.getElementById("pulse-rate-row");
+      const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
+      const mode = radio?.value;
+      if (row) row.style.display = mode === "pulse" ? "" : "none";
+    };
+    document.addEventListener("DOMContentLoaded", () => {
+      setTimeout(updatePulseVisibility, 100);
+      const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
+      radio?.addEventListener("valuechange", updatePulseVisibility);
+    });
+
+    document.getElementById("test-flash")?.addEventListener("click", () => {
+      window.SDPIComponents?.streamDeckClient?.send("sendToPlugin", { kind: "test-flash" });
+    });
+  </script>
+</body>
+</html>
