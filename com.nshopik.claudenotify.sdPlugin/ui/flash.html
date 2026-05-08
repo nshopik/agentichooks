@@ -88,7 +88,7 @@
 
   <sdpi-item>
     <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
-      Audio plays only for events received over HTTP. Listening on <code>127.0.0.1:9123</code>.
+      Audio plays for both local sig-file events and remote HTTP events; use the per-event Audio enabled toggle above to silence any event type. HTTP listening on <code>127.0.0.1:9123</code>.
       From a remote host (SSH-tunneled), POST to one of:
       <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
 curl -X POST http://localhost:9123/event/idle

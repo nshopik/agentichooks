@@ -109,7 +109,7 @@ function adjustWavVolume(buf: Buffer, volumePercent: number, log: LogFn): Buffer
       }
       return out;
     }
-    offset += 8 + size;
+    offset += 8 + size + (size % 2);
   }
   return null;
 }

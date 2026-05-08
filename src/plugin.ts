@@ -7,7 +7,7 @@ import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
-import { DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, STICKY_EVENT_TYPES, type GlobalSettings, type EventType } from "./types.js";
+import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, STICKY_EVENT_TYPES, type GlobalSettings } from "./types.js";
 
 // Default to "warn" so the diagnostic info logs (audio: ..., http: ..., dispatcher: ...)
 // stay in code but don't fire. Bump to "info" temporarily when investigating issues.
@@ -34,7 +34,7 @@ streamDeck.actions.registerAction(action);
 function mergeGlobals(stored: Partial<GlobalSettings> | undefined): GlobalSettings {
   const base = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS)) as GlobalSettings;
   if (!stored?.audio) return base;
-  for (const ev of ["stop", "idle", "permission"] as EventType[]) {
+  for (const ev of ALL_EVENT_TYPES) {
     if (stored.audio[ev]) Object.assign(base.audio[ev], stored.audio[ev]);
   }
   return base;
