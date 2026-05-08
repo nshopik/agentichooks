@@ -14,14 +14,6 @@
     </sdpi-select>
   </sdpi-item>
 
-  <sdpi-item label="Idle icon">
-    <sdpi-file setting="idleIconPath" placeholder="(default for chosen event)" accept="image/png,image/jpeg,image/svg+xml"></sdpi-file>
-  </sdpi-item>
-
-  <sdpi-item label="Alert icon">
-    <sdpi-file setting="alertIconPath" placeholder="(default for chosen event)" accept="image/png,image/jpeg,image/svg+xml"></sdpi-file>
-  </sdpi-item>
-
   <sdpi-item label="Flash mode">
     <sdpi-radio setting="flashMode" default="static">
       <option value="static">Static</option>
@@ -34,7 +26,7 @@
   </sdpi-item>
 
   <sdpi-item label="Auto-dismiss (sec)">
-    <sdpi-textfield setting="autoTimeoutSeconds" placeholder="30" default="30" pattern="[0-9]+"></sdpi-textfield>
+    <sdpi-textfield setting="autoTimeoutSeconds" placeholder="0 = never" default="0" pattern="[0-9]+"></sdpi-textfield>
   </sdpi-item>
 
   <sdpi-item>

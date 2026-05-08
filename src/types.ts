@@ -6,8 +6,6 @@ export type FlashSettings = {
   flashMode: "static" | "pulse";
   pulseIntervalMs: number;
   autoTimeoutMs: number;
-  idleIconPath?: string;
-  alertIconPath?: string;
 };
 
 export type AudioConfig = {
@@ -38,7 +36,7 @@ export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
   eventType: "idle",
   flashMode: "static",
   pulseIntervalMs: 500,
-  autoTimeoutMs: 30000,
+  autoTimeoutMs: 0,
 };
 
 const baseAudio: Omit<AudioConfig, "volumePercent"> = {

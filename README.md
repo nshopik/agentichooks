@@ -142,7 +142,7 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 ### Per-button settings (Property Inspector)
 
 - **Event type** — which Claude event this button reacts to (Stop / Idle / Permission). Default: Idle.
-- **Idle / Alert icon** — optional file overrides; empty = use the bundled default for the chosen event.
+- **Icons** — set via Stream Deck's native two-dot state picker below the button preview. Each dot is a state (Idle / Alert). Click a dot's icon dropdown to **Set from File**, **Create New Icon**, or **Open Stream Deck Icon Library**. The plugin ships with a default idle/alert pair; replace either as you like.
 - **Flash mode** — Static (icon swap) or Pulse (toggle every N ms).
 - **Pulse rate** — milliseconds between toggles when Pulse is selected. Min 100ms (Elgato's 10/sec key-update cap).
 - **Auto-dismiss** — seconds. 0 = never auto-dismiss.

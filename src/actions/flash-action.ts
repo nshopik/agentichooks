@@ -2,21 +2,25 @@ import {
   action,
   SingletonAction,
   type DidReceiveSettingsEvent,
+  type KeyAction,
   type KeyDownEvent,
   type SendToPluginEvent,
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { JsonObject, JsonValue } from "@elgato/utils";
-import { DEFAULT_FLASH_SETTINGS, type FlashSettings, type ButtonState } from "../types.js";
+import { DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
-import { keyIconBase64, readImageAsDataUri } from "../icons.js";
+
+const STATE_IDLE = 0;
+const STATE_ALERT = 1;
 
 type Ctx = {
   context: string;
   settings: FlashSettings;
   state: ButtonState;
-  setImage: (b64: string) => Promise<void>;
+  setState: (s: 0 | 1) => Promise<void>;
+  setImage: (image: string, state: 0 | 1) => Promise<void>;
 };
 
 type RawSettings = JsonObject & {
@@ -25,8 +29,6 @@ type RawSettings = JsonObject & {
   pulseIntervalMs?: number;
   autoTimeoutMs?: number;
   autoTimeoutSeconds?: number | string;
-  idleIconPath?: string;
-  alertIconPath?: string;
 };
 
 function mergeSettings(raw: JsonObject | undefined): FlashSettings {
@@ -43,9 +45,11 @@ function mergeSettings(raw: JsonObject | undefined): FlashSettings {
     flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
     pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
     autoTimeoutMs: timeoutMs,
-    idleIconPath: r.idleIconPath || undefined,
-    alertIconPath: r.alertIconPath || undefined,
   };
+}
+
+function defaultImageForState(event: EventType, state: 0 | 1): string {
+  return `images/keys/${event}-${state === STATE_IDLE ? "idle" : "alert"}.png`;
 }
 
 @action({ UUID: "com.nshopik.claudenotify.flash" })
@@ -67,14 +71,20 @@ export class FlashAction extends SingletonAction<JsonObject> {
 
   override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
     const settings = mergeSettings(ev.payload.settings);
+    const action = ev.action;
+    const isKey = action.isKey();
     const ctx: Ctx = {
-      context: ev.action.id,
+      context: action.id,
       settings,
       state: { alerting: false, pulseFrame: 0 },
-      setImage: (b64) => ev.action.setImage(b64) as Promise<void>,
+      setState: isKey ? (s) => (action as KeyAction<JsonObject>).setState(s) : async () => {},
+      setImage: isKey
+        ? (image, state) => (action as KeyAction<JsonObject>).setImage(image, { state })
+        : async () => {},
     };
-    this.contexts.set(ev.action.id, ctx);
-    await ctx.setImage(this.idleIcon(ctx));
+    this.contexts.set(action.id, ctx);
+    await this.applyEventTypeDefaults(ctx);
+    await ctx.setState(STATE_IDLE);
   }
 
   override async onWillDisappear(ev: WillDisappearEvent<JsonObject>): Promise<void> {
@@ -92,8 +102,11 @@ export class FlashAction extends SingletonAction<JsonObject> {
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<JsonObject>): Promise<void> {
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
+    const prev = ctx.settings;
     ctx.settings = mergeSettings(ev.payload.settings);
-    if (!ctx.state.alerting) await ctx.setImage(this.idleIcon(ctx));
+    if (ctx.settings.eventType !== prev.eventType) {
+      await this.applyEventTypeDefaults(ctx);
+    }
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
@@ -105,16 +118,24 @@ export class FlashAction extends SingletonAction<JsonObject> {
     }
   }
 
+  private async applyEventTypeDefaults(ctx: Ctx): Promise<void> {
+    // setImage per state seeds the manifest defaults to match the chosen event type.
+    // The SDK silently no-ops when the user has set a custom image via the State Picker,
+    // so user customizations always win over these defaults.
+    await ctx.setImage(defaultImageForState(ctx.settings.eventType, STATE_IDLE), STATE_IDLE);
+    await ctx.setImage(defaultImageForState(ctx.settings.eventType, STATE_ALERT), STATE_ALERT);
+  }
+
   private alertContext(ctx: Ctx): void {
     this.clearTimers(ctx);
     ctx.state.alerting = true;
     ctx.state.pulseFrame = 1;
-    void ctx.setImage(this.alertIcon(ctx));
+    void ctx.setState(STATE_ALERT);
     if (ctx.settings.flashMode === "pulse") {
       const interval = Math.max(100, ctx.settings.pulseIntervalMs);
       ctx.state.pulseTimer = setInterval(() => {
         ctx.state.pulseFrame = ctx.state.pulseFrame === 1 ? 0 : 1;
-        void ctx.setImage(ctx.state.pulseFrame === 1 ? this.alertIcon(ctx) : this.idleIcon(ctx));
+        void ctx.setState(ctx.state.pulseFrame === 1 ? STATE_ALERT : STATE_IDLE);
       }, interval);
     }
     if (ctx.settings.autoTimeoutMs > 0) {
@@ -126,25 +147,11 @@ export class FlashAction extends SingletonAction<JsonObject> {
     this.clearTimers(ctx);
     ctx.state.alerting = false;
     ctx.state.pulseFrame = 0;
-    void ctx.setImage(this.idleIcon(ctx));
+    void ctx.setState(STATE_IDLE);
   }
 
   private clearTimers(ctx: Ctx): void {
     if (ctx.state.pulseTimer) { clearInterval(ctx.state.pulseTimer); ctx.state.pulseTimer = undefined; }
     if (ctx.state.timeoutTimer) { clearTimeout(ctx.state.timeoutTimer); ctx.state.timeoutTimer = undefined; }
-  }
-
-  private idleIcon(ctx: Ctx): string {
-    if (ctx.settings.idleIconPath) {
-      try { return readImageAsDataUri(ctx.settings.idleIconPath); } catch { /* fall through */ }
-    }
-    return `images/keys/${ctx.settings.eventType}-idle.png`;
-  }
-
-  private alertIcon(ctx: Ctx): string {
-    if (ctx.settings.alertIconPath) {
-      try { return readImageAsDataUri(ctx.settings.alertIconPath); } catch { /* fall through */ }
-    }
-    return `images/keys/${ctx.settings.eventType}-alert.png`;
   }
 }

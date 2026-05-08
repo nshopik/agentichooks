@@ -34,7 +34,12 @@
       "SupportedInMultiActions": false,
       "States": [
         {
-          "Image": "images/keys/idle-idle"
+          "Image": "images/keys/idle-idle",
+          "Name": "Idle"
+        },
+        {
+          "Image": "images/keys/idle-alert",
+          "Name": "Alert"
         }
       ]
     }
