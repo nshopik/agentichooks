@@ -6,3 +6,6 @@ coverage/
 dist/
 .DS_Store
 .claude/
+TODO.md
+CLAUDE.md
+docs/superpowers/
