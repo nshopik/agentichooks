@@ -61,7 +61,7 @@ const watcher = new SignalWatcher({
   tmpDir: os.tmpdir(),
   onSignal: (signal) => {
     if (signal === "active") dispatcher.dismissAll();
-    else if (signal === "active-soft") dispatcher.dismiss("permission");
+    else if (signal === "permission-resolved") dispatcher.dismiss("permission");
     else dispatcher.dispatch(signal, "local");
   },
 });
@@ -73,7 +73,7 @@ async function startListener(): Promise<void> {
     port: HTTP_PORT,
     onEvent: (signal) => {
       if (signal === "active") dispatcher.dismissAll();
-      else if (signal === "active-soft") dispatcher.dismiss("permission");
+      else if (signal === "permission-resolved") dispatcher.dismiss("permission");
       else dispatcher.dispatch(signal, "remote");
     },
     log: (msg) => streamDeck.logger.info(`http: ${msg}`),

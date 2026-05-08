@@ -1,5 +1,5 @@
 export type EventType = "stop" | "permission" | "task-completed";
-export type SignalType = EventType | "active" | "active-soft";
+export type SignalType = EventType | "active" | "permission-resolved";
 
 export type EventSource = "local" | "remote";
 

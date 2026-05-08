@@ -7,7 +7,7 @@ const ROUTES: Record<string, SignalType> = {
   "/event/permission": "permission",
   "/event/task-completed": "task-completed",
   "/event/active": "active",
-  "/event/active-soft": "active-soft",
+  "/event/permission-resolved": "permission-resolved",
 };
 
 export type HttpListenerOpts = {

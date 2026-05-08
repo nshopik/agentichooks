@@ -80,4 +80,13 @@ describe("HttpListener", () => {
     const addr = (listener as any).server.address();
     expect(addr.address).toBe("127.0.0.1");
   });
+
+  it("POST /event/permission-resolved returns 204 and calls onEvent('permission-resolved')", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("POST", "/event/permission-resolved", listener.port());
+    expect(res.status).toBe(204);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual(["permission-resolved"]);
+  });
 });

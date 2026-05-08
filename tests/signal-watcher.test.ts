@@ -93,4 +93,14 @@ describe("SignalWatcher", () => {
     await sleep(150);
     expect(received.map((r) => r.event)).toEqual(["stop", "permission", "task-completed"]);
   });
+
+  it("creates and emits 'permission-resolved' for claude-notify-permission-resolved.sig", async () => {
+    watcher = new SignalWatcher({ tmpDir, onSignal: (e) => received.push({ event: e, t: Date.now() }) });
+    watcher.start();
+    expect(fs.existsSync(path.join(tmpDir, "claude-notify-permission-resolved.sig"))).toBe(true);
+    await sleep(20);
+    fs.writeFileSync(path.join(tmpDir, "claude-notify-permission-resolved.sig"), new Date().toISOString());
+    await sleep(150);
+    expect(received.map((r) => r.event)).toEqual(["permission-resolved"]);
+  });
 });
