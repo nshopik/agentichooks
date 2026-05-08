@@ -100,6 +100,16 @@ describe("Dispatcher.dispatch", () => {
     expect(buttons.get("stop1")!.alert).toHaveBeenCalledTimes(1);
   });
 
+  it("dispatch(stop) re-arms own slot AND cross-dismisses permission when both are alerting", () => {
+    buttons.set("stop1", makeButton("stop", true));
+    buttons.set("perm1", makeButton("permission", true));
+    dispatcher().dispatch("stop", "remote");
+    expect(buttons.get("stop1")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("stop1")!.alert).toHaveBeenCalledTimes(1);
+    expect(buttons.get("perm1")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("perm1")!.alert).not.toHaveBeenCalled();
+  });
+
   it("dispatch(stop) preserves alerting task-completed buttons", () => {
     buttons.set("task1", makeButton("task-completed", true));
     buttons.set("stop1", makeButton("stop"));

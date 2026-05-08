@@ -9,7 +9,7 @@ import streamDeck, {
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { JsonObject, JsonValue } from "@elgato/utils";
-import { DEFAULT_AUTO_TIMEOUT_BY_EVENT, DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
+import { ALL_EVENT_TYPES, DEFAULT_AUTO_TIMEOUT_BY_EVENT, DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
 
 const STATE_IDLE = 0;
@@ -40,9 +40,24 @@ type RawSettings = JsonObject & {
   autoTimeoutSeconds?: number | string;
 };
 
+function isEventType(value: unknown): value is EventType {
+  return typeof value === "string" && (ALL_EVENT_TYPES as ReadonlyArray<string>).includes(value);
+}
+
 function mergeSettings(raw: JsonObject | undefined): FlashSettings {
   const r = (raw ?? {}) as RawSettings;
-  const eventType = r.eventType ?? DEFAULT_FLASH_SETTINGS.eventType;
+  // Guard against stale persisted eventType values (e.g. "idle" from pre-v6 profiles).
+  // Without this, a button with an unknown eventType becomes a permanently-silent
+  // ghost: the dispatcher never matches it, and setImage builds a missing path.
+  let eventType: EventType;
+  if (r.eventType === undefined) {
+    eventType = DEFAULT_FLASH_SETTINGS.eventType;
+  } else if (isEventType(r.eventType)) {
+    eventType = r.eventType;
+  } else {
+    streamDeck.logger.warn(`flash-action: unknown eventType ${JSON.stringify(r.eventType)}, falling back to ${DEFAULT_FLASH_SETTINGS.eventType}`);
+    eventType = DEFAULT_FLASH_SETTINGS.eventType;
+  }
   let timeoutMs: number;
   if (r.autoTimeoutSeconds !== undefined) {
     const seconds = Number(r.autoTimeoutSeconds);

@@ -81,7 +81,9 @@
       From a remote host (SSH-tunneled), POST to one of:
       <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
 curl -X POST http://localhost:9123/event/permission
-curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
+curl -X POST http://localhost:9123/event/task-completed
+curl -X POST http://localhost:9123/event/permission-resolved   # dismiss only permission alerts
+curl -X POST http://localhost:9123/event/active                # dismiss all alerts</pre>
       Add this to your outbound SSH from Windows to the remote: <code>ssh -R 9123:127.0.0.1:9123 user@remote-host</code>
     </div>
   </sdpi-item>
