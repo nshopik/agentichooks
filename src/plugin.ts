@@ -1,8 +1,6 @@
 import streamDeck from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
-import os from "node:os";
 import { FlashAction } from "./actions/flash-action.js";
-import { SignalWatcher } from "./signal-watcher.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher } from "./dispatcher.js";
@@ -57,15 +55,6 @@ const dispatcher = new Dispatcher({
   log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
 });
 
-const watcher = new SignalWatcher({
-  tmpDir: os.tmpdir(),
-  onSignal: (signal) => {
-    if (signal === "active") dispatcher.dismissAll();
-    else if (signal === "permission-resolved") dispatcher.dismiss("permission");
-    else dispatcher.dispatch(signal);
-  },
-});
-
 let listener: HttpListener | undefined;
 
 async function startListener(): Promise<void> {
@@ -88,7 +77,6 @@ async function startListener(): Promise<void> {
 }
 
 async function shutdown(): Promise<void> {
-  watcher.stop();
   if (listener) await listener.stop();
 }
 process.on("SIGINT", () => { void shutdown().then(() => process.exit(0)); });
@@ -97,7 +85,6 @@ process.on("SIGTERM", () => { void shutdown().then(() => process.exit(0)); });
 (async () => {
   await streamDeck.connect();
   await loadGlobals();
-  watcher.start();
   await startListener();
   streamDeck.logger.info("Claude Notify plugin started");
 })().catch((err) => {
