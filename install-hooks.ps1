@@ -1,6 +1,6 @@
 # install-hooks.ps1
 # Idempotently installs Claude Code hooks that signal the Claude Notify Stream Deck plugin.
-# Covers 3 alert-arming events (Stop, PermissionRequest, TaskCompleted) plus dismiss events.
+# Installs 15 Claude Code hooks: 9 action events (flash/audio) + 6 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
 $ErrorActionPreference = "Stop"
@@ -66,7 +66,7 @@ function Remove-OurHooks($hooksArray) {
     return $result
 }
 
-function Make-Hook($routeName, $eventName) {
+function Make-Hook($routeName) {
     # v7: hook fires a single curl.exe POST to the local plugin listener.
     # No sig file, no toast, no AUMID. async=$true means Claude Code does
     # not wait on the curl call. --max-time 2 keeps a stuck listener from
@@ -99,7 +99,7 @@ if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
 $hooks = $settings.hooks
 
 $events = [ordered]@{
-    # Action events — drive button/audio behavior (9 entries → 5 SignalTypes server-side)
+    # Action events — drive button/audio behavior (9 entries)
     Stop                = "stop"
     StopFailure         = "stop-failure"
     PermissionRequest   = "permission-request"
@@ -136,15 +136,15 @@ foreach ($evt in $events.Keys) {
     } else {
         Write-Host "[add ] $evt -> POST /event/$($events[$evt])"
     }
-    $newEntry = [pscustomobject]@{ hooks = @(Make-Hook $events[$evt] $evt) }
+    $newEntry = [pscustomobject]@{ hooks = @(Make-Hook $events[$evt]) }
     $arr = $arr + $newEntry
     $hooks.$evt = $arr
     $changed += $evt
 }
 
-# Orphan cleanup: remove our managed hooks from event keys we no longer install
-# (e.g., Notification was removed when the idle slot was dropped). Only entries
-# carrying our marker are removed; user-added hooks under the same key remain.
+# Orphan cleanup: remove our managed hooks from event keys we no longer install.
+# Only entries carrying our marker are removed; user-added hooks under the same key remain.
+# The list is empty in v7; the loop is kept for future drops.
 $droppedEvents = @()
 foreach ($evt in $droppedEvents) {
     if (-not ($hooks.PSObject.Properties.Name -contains $evt)) { continue }
