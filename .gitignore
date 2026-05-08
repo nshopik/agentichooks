@@ -1,4 +1,5 @@
 node_modules/
+__pycache__/
 com.nshopik.claudenotify.sdPlugin/bin/
 *.streamDeckPlugin
 *.log
