@@ -71,8 +71,7 @@ describe("Dispatcher", () => {
     expect(buttons.get("c")!.alert).toHaveBeenCalledTimes(1);
   });
 
-  it("plays audio for matching source filter", () => {
-    globals.audio.stop.source = "remote";
+  it("plays audio for remote events", () => {
     globals.audio.stop.volumePercent = 75;
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "remote");
@@ -80,8 +79,7 @@ describe("Dispatcher", () => {
     expect(audioPlayer.play).toHaveBeenCalledWith(expect.stringContaining("Speech On.wav"), 75);
   });
 
-  it("skips audio when source filter is 'remote' but event source is 'local'", () => {
-    globals.audio.stop.source = "remote";
+  it("never plays audio for local events (local hooks play their own sound)", () => {
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "local");
     expect(audioPlayer.play).not.toHaveBeenCalled();
@@ -89,24 +87,15 @@ describe("Dispatcher", () => {
 
   it("skips audio when audio.enabled is false", () => {
     globals.audio.stop.enabled = false;
-    globals.audio.stop.source = "all";
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "remote");
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
 
-  it("plays audio with source 'all' regardless of event source", () => {
-    globals.audio.idle.source = "all";
-    buttons.set("a", makeButton("idle"));
-    dispatcher().dispatch("idle", "local");
-    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
-  });
-
   it("uses configured soundPath when set", () => {
     globals.audio.permission.soundPath = "C:\\custom\\alert.wav";
-    globals.audio.permission.source = "all";
     buttons.set("a", makeButton("permission"));
-    dispatcher().dispatch("permission", "local");
+    dispatcher().dispatch("permission", "remote");
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav", expect.any(Number));
   });
 

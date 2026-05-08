@@ -1,4 +1,4 @@
-import {
+import streamDeck, {
   action,
   SingletonAction,
   type DidReceiveSettingsEvent,
@@ -14,6 +14,14 @@ import type { DispatchableButton } from "../dispatcher.js";
 
 const STATE_IDLE = 0;
 const STATE_ALERT = 1;
+
+export type FlashActionOpts = {
+  /**
+   * Invoked when the user clicks Test flash or ▶ Test sound in the per-button PI.
+   * Always plays audio for the given event type, bypassing the source filter.
+   */
+  onTestSound?: (eventType: EventType) => void;
+};
 
 type Ctx = {
   context: string;
@@ -55,6 +63,12 @@ function defaultImageForState(event: EventType, state: 0 | 1): string {
 @action({ UUID: "com.nshopik.claudenotify.flash" })
 export class FlashAction extends SingletonAction<JsonObject> {
   private readonly contexts = new Map<string, Ctx>();
+  private readonly opts: FlashActionOpts;
+
+  constructor(opts: FlashActionOpts = {}) {
+    super();
+    this.opts = opts;
+  }
 
   buttonsForDispatcher(): Map<string, DispatchableButton> {
     const out = new Map<string, DispatchableButton>();
@@ -111,10 +125,19 @@ export class FlashAction extends SingletonAction<JsonObject> {
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
     const ctx = this.contexts.get(ev.action.id);
-    if (!ctx) return;
-    const payload = ev.payload as { kind?: string } | null;
+    if (!ctx) {
+      streamDeck.logger.info(`onSendToPlugin: no ctx for ${ev.action.id}`);
+      return;
+    }
+    const payload = ev.payload as { kind?: string; event?: EventType } | null;
+    streamDeck.logger.info(`onSendToPlugin: kind=${payload?.kind} event=${payload?.event ?? ctx.settings.eventType}`);
     if (payload?.kind === "test-flash") {
       this.alertContext(ctx);
+      this.opts.onTestSound?.(ctx.settings.eventType);
+      return;
+    }
+    if (payload?.kind === "test-audio" && payload.event) {
+      this.opts.onTestSound?.(payload.event);
     }
   }
 

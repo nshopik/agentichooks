@@ -7,7 +7,6 @@
   "Description": "Flash a Stream Deck button on Claude Code hook events (task complete, idle, permission request). Works for local Claude on Windows and remote Claude over SSH.",
   "URL": "https://github.com/nshopik/claudenotify",
   "Icon": "images/plugin-icon",
-  "PropertyInspectorPath": "ui/plugin-settings.html",
   "CodePath": "bin/plugin.js",
   "UUID": "com.nshopik.claudenotify",
   "SDKVersion": 3,

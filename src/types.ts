@@ -13,18 +13,17 @@ export type AudioConfig = {
   enabled: boolean;
   soundPath?: string;
   volumePercent: number;
-  source: "all" | "remote" | "local";
 };
 
 export type GlobalSettings = {
-  httpPort: number;
-  httpEnabled: boolean;
   audio: {
     stop: AudioConfig;
     idle: AudioConfig;
     permission: AudioConfig;
   };
 };
+
+export const HTTP_PORT = 9123;
 
 export type ButtonState = {
   alerting: boolean;
@@ -42,12 +41,9 @@ export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
 
 const baseAudio: Omit<AudioConfig, "volumePercent"> = {
   enabled: true,
-  source: "remote",
 };
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
-  httpPort: 9123,
-  httpEnabled: true,
   audio: {
     stop: { ...baseAudio, volumePercent: 80 },
     idle: { ...baseAudio, volumePercent: 80 },

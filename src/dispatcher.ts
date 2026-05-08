@@ -29,9 +29,10 @@ export class Dispatcher {
     for (const [, btn] of buttons) {
       if (btn.settings.eventType === event) btn.alert();
     }
+    // Audio fires only for remote events; local hook scripts play their own sound.
+    if (source !== "remote") return;
     const audioCfg = this.opts.getGlobalSettings().audio[event];
     if (!audioCfg.enabled) return;
-    if (audioCfg.source !== "all" && audioCfg.source !== source) return;
     const path = audioCfg.soundPath ?? defaultSoundPath(event);
     this.opts.audioPlayer.play(path, audioCfg.volumePercent);
   }

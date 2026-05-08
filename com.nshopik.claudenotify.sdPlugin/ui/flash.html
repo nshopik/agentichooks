@@ -33,18 +33,68 @@
     <sdpi-button onclick="testFlash()">Test flash</sdpi-button>
   </sdpi-item>
 
+  <div id="audio-stop-section">
+    <sdpi-item label="Audio enabled">
+      <sdpi-checkbox setting="audio.stop.enabled" default="true" global></sdpi-checkbox>
+    </sdpi-item>
+    <sdpi-item label="Sound (WAV)">
+      <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,.wav" placeholder="Speech On.wav (system)" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item label="Volume %">
+      <sdpi-range setting="audio.stop.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
+    </sdpi-item>
+    <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
+  </div>
+
+  <div id="audio-idle-section">
+    <sdpi-item label="Audio enabled">
+      <sdpi-checkbox setting="audio.idle.enabled" default="true" global></sdpi-checkbox>
+    </sdpi-item>
+    <sdpi-item label="Sound (WAV)">
+      <sdpi-file setting="audio.idle.soundPath" accept="audio/wav,.wav" placeholder="Windows Notify System Generic.wav (system)" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item label="Volume %">
+      <sdpi-range setting="audio.idle.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
+    </sdpi-item>
+    <sdpi-item><sdpi-button onclick="testAudio('idle')">▶ Test sound</sdpi-button></sdpi-item>
+  </div>
+
+  <div id="audio-permission-section">
+    <sdpi-item label="Audio enabled">
+      <sdpi-checkbox setting="audio.permission.enabled" default="true" global></sdpi-checkbox>
+    </sdpi-item>
+    <sdpi-item label="Sound (WAV)">
+      <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,.wav" placeholder="Windows Message Nudge.wav (system)" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item label="Volume %">
+      <sdpi-range setting="audio.permission.volumePercent" min="0" max="100" step="5" default="90" showlabels global></sdpi-range>
+    </sdpi-item>
+    <sdpi-item><sdpi-button onclick="testAudio('permission')">▶ Test sound</sdpi-button></sdpi-item>
+  </div>
+
+  <sdpi-item>
+    <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
+      Audio plays only for events received over HTTP. Listening on <code>127.0.0.1:9123</code>.
+      From a remote host (SSH-tunneled), POST to one of:
+      <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
+curl -X POST http://localhost:9123/event/idle
+curl -X POST http://localhost:9123/event/permission
+curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
+      Tunnel from Linux/macOS: <code>ssh -R 9123:127.0.0.1:9123 user@host</code>
+    </div>
+  </sdpi-item>
+
   <script>
     function testFlash() {
-      console.log("[claude-notify-pi] test flash clicked");
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
-      if (!client) {
-        console.error("[claude-notify-pi] SDPIComponents.streamDeckClient not available");
-        return;
-      }
-      client.send("sendToPlugin", { kind: "test-flash" }).then(
-        () => console.log("[claude-notify-pi] sendToPlugin ok"),
-        (err) => console.error("[claude-notify-pi] sendToPlugin failed:", err)
-      );
+      if (!client) return;
+      client.send("sendToPlugin", { kind: "test-flash" });
+    }
+
+    function testAudio(event) {
+      const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
+      if (!client) return;
+      client.send("sendToPlugin", { kind: "test-audio", event: event });
     }
 
     const updatePulseVisibility = () => {
@@ -53,10 +103,21 @@
       const mode = radio && radio.value;
       if (row) row.style.display = mode === "pulse" ? "" : "none";
     };
+    const updateAudioVisibility = () => {
+      const select = document.querySelector('sdpi-select[setting="eventType"]');
+      const event = (select && select.value) || "idle";
+      for (const ev of ["stop", "idle", "permission"]) {
+        const section = document.getElementById("audio-" + ev + "-section");
+        if (section) section.style.display = ev === event ? "" : "none";
+      }
+    };
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(updatePulseVisibility, 100);
+      setTimeout(updateAudioVisibility, 100);
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
       if (radio) radio.addEventListener("valuechange", updatePulseVisibility);
+      const eventSelect = document.querySelector('sdpi-select[setting="eventType"]');
+      if (eventSelect) eventSelect.addEventListener("valuechange", updateAudioVisibility);
     });
   </script>
 </body>

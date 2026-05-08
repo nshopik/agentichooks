@@ -7,29 +7,32 @@ import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
-import { DEFAULT_GLOBAL_SETTINGS, type GlobalSettings, type EventType } from "./types.js";
+import { DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type EventType } from "./types.js";
 
 streamDeck.logger.setLevel("info");
 
-const action = new FlashAction();
-streamDeck.actions.registerAction(action);
-
-const audioPlayer = new AudioPlayer();
+const audioPlayer = new AudioPlayer({
+  log: (level, msg) => streamDeck.logger[level](`audio: ${msg}`),
+});
 
 let globals: GlobalSettings = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
 
+const action = new FlashAction({
+  onTestSound: (eventType) => {
+    // Always play (bypass enabled flag) for explicit user-initiated tests.
+    const cfg = globals.audio[eventType];
+    const path = cfg.soundPath ?? defaultSoundPath(eventType);
+    streamDeck.logger.info(`onTestSound: event=${eventType} path=${path} vol=${cfg.volumePercent}`);
+    audioPlayer.play(path, cfg.volumePercent);
+  },
+});
+streamDeck.actions.registerAction(action);
+
 function mergeGlobals(stored: Partial<GlobalSettings> | undefined): GlobalSettings {
   const base = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS)) as GlobalSettings;
-  if (!stored) return base;
-  if (typeof stored.httpPort === "number" || typeof stored.httpPort === "string") {
-    const n = Number(stored.httpPort);
-    if (!Number.isNaN(n) && n > 0) base.httpPort = n;
-  }
-  if (typeof stored.httpEnabled === "boolean") base.httpEnabled = stored.httpEnabled;
-  if (stored.audio) {
-    for (const ev of ["stop", "idle", "permission"] as EventType[]) {
-      if (stored.audio[ev]) Object.assign(base.audio[ev], stored.audio[ev]);
-    }
+  if (!stored?.audio) return base;
+  for (const ev of ["stop", "idle", "permission"] as EventType[]) {
+    if (stored.audio[ev]) Object.assign(base.audio[ev], stored.audio[ev]);
   }
   return base;
 }
@@ -60,9 +63,8 @@ const watcher = new SignalWatcher({
 let listener: HttpListener | undefined;
 
 async function startListener(): Promise<void> {
-  if (!globals.httpEnabled) return;
   listener = new HttpListener({
-    port: globals.httpPort,
+    port: HTTP_PORT,
     onEvent: (signal) => {
       if (signal === "active") dispatcher.dismissAll();
       else dispatcher.dispatch(signal, "remote");
@@ -70,21 +72,12 @@ async function startListener(): Promise<void> {
   });
   try {
     await listener.start();
-    streamDeck.logger.info(`HTTP listener bound to 127.0.0.1:${globals.httpPort}`);
+    streamDeck.logger.info(`HTTP listener bound to 127.0.0.1:${HTTP_PORT}`);
   } catch (err) {
     streamDeck.logger.error(`HTTP listener failed to start: ${err}`);
     listener = undefined;
   }
 }
-
-streamDeck.ui.onSendToPlugin((ev) => {
-  const payload = ev.payload as { kind?: string; event?: EventType } | null;
-  if (payload?.kind === "test-audio" && payload.event) {
-    const cfg = globals.audio[payload.event];
-    const path = cfg.soundPath ?? defaultSoundPath(payload.event);
-    audioPlayer.play(path, cfg.volumePercent);
-  }
-});
 
 async function shutdown(): Promise<void> {
   watcher.stop();
