@@ -6,9 +6,8 @@
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_claude-notify-installer"
-$CURRENT_VERSION = "v6"
+$CURRENT_VERSION = "v7"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
-$aumid = "Claude.Notify"
 
 function Read-Settings {
     if (-not (Test-Path $settingsPath)) {
@@ -67,18 +66,12 @@ function Remove-OurHooks($hooksArray) {
     return $result
 }
 
-function Make-Hook($sigName, $eventName) {
-    # Hook writes the sig file the plugin watches, then fires a native Windows
-    # toast via the WinRT ToastNotificationManager API. No external module, no
-    # helper script: a single inline command keeps PowerShell ExecutionPolicy
-    # out of the picture on default Windows installs. Toasts are silent (no
-    # sound) so high-rate hooks like PostToolUse don't become a sonic assault.
-    # The 'Claude.Notify' AppUserModelID is registered once in HKCU below,
-    # which gets toasts attributed correctly and persisted in Action Center.
-    # Note: nodes are cached via .Item(0)/.Item(1) before mutation because
-    # IXmlNodeList is live and re-indexing after AppendChild raises
-    # "Collection was modified" on the second access.
-    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); try { [void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]; [void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime]; `$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); `$n=`$x.GetElementsByTagName('text'); `$t1=`$n.Item(0); `$t2=`$n.Item(1); `$t1.AppendChild(`$x.CreateTextNode('Claude Notify: $eventName')) | Out-Null; `$t2.AppendChild(`$x.CreateTextNode((Get-Date -Format 'HH:mm:ss.fff'))) | Out-Null; `$a=`$x.CreateElement('audio'); `$a.SetAttribute('silent','true'); `$x.DocumentElement.AppendChild(`$a) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('$aumid').Show([Windows.UI.Notifications.ToastNotification]::new(`$x)) } catch {}"
+function Make-Hook($routeName, $eventName) {
+    # v7: hook fires a single curl.exe POST to the local plugin listener.
+    # No sig file, no toast, no AUMID. async=$true means Claude Code does
+    # not wait on the curl call. --max-time 2 keeps a stuck listener from
+    # hanging the hook. -s silences progress output.
+    $cmd = "curl.exe -X POST -s --max-time 2 http://127.0.0.1:9123/event/$routeName"
     $h = [ordered]@{
         type    = "command"
         command = $cmd
@@ -89,28 +82,15 @@ function Make-Hook($sigName, $eventName) {
     return [pscustomobject]$h
 }
 
-function Register-AppId {
-    # Registers an AppUserModelID in HKCU so toasts are attributed as "Claude
-    # Notify" in Action Center. Without this, modern Windows may silently
-    # refuse to display toasts from an unregistered AUMID. Pure registry —
-    # no Start Menu shortcut, no IPropertyStore P/Invoke, no module install.
-    $regPath = "HKCU:\Software\Classes\AppUserModelId\$aumid"
-    if (Test-Path $regPath) {
-        Write-Host "[reg ] AppUserModelID '$aumid' already registered"
-        return
-    }
-    New-Item -Path $regPath -Force | Out-Null
-    New-ItemProperty -Path $regPath -Name "DisplayName" -Value "Claude Notify" -PropertyType String -Force | Out-Null
-    Write-Host "[reg ] registered AppUserModelID '$aumid' in HKCU"
-}
-
-Register-AppId
-
 # Clean up the v3 helper script if it's still around (replaced by inline commands in v4+).
 if (Test-Path $staleHelperPath) {
     Remove-Item $staleHelperPath -Force
     Write-Host "[clean] removed stale $staleHelperPath"
 }
+
+# v6 left stub claude-notify-*.sig files in %TEMP% (created by SignalWatcher).
+# v7 doesn't use them; clean up so they don't linger.
+Remove-Item "$env:TEMP\claude-notify-*.sig" -Force -ErrorAction SilentlyContinue
 
 $settings = Read-Settings
 if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
@@ -119,18 +99,23 @@ if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
 $hooks = $settings.hooks
 
 $events = [ordered]@{
-    # Alert-arming events
-    Stop                = "claude-notify-stop.sig"
-    StopFailure         = "claude-notify-stop.sig"
-    PermissionRequest   = "claude-notify-permission.sig"
-    TaskCompleted       = "claude-notify-task-completed.sig"
-    # Full dismiss (clears every armed alert)
-    UserPromptSubmit    = "claude-notify-active.sig"
-    SessionStart        = "claude-notify-active.sig"
-    # Permission-resolved (dismisses only an armed permission alert)
-    PermissionDenied    = "claude-notify-permission-resolved.sig"
-    PostToolUse         = "claude-notify-permission-resolved.sig"
-    PostToolUseFailure  = "claude-notify-permission-resolved.sig"
+    # Action events — drive button/audio behavior (9 entries → 5 SignalTypes server-side)
+    Stop                = "stop"
+    StopFailure         = "stop-failure"
+    PermissionRequest   = "permission-request"
+    TaskCompleted       = "task-completed"
+    SessionStart        = "session-start"
+    UserPromptSubmit    = "user-prompt-submit"
+    PermissionDenied    = "permission-denied"
+    PostToolUse         = "post-tool-use"
+    PostToolUseFailure  = "post-tool-use-failure"
+    # Info events — log only on the plugin side (6 entries)
+    Notification        = "notification"
+    PreToolUse          = "pre-tool-use"
+    PostToolBatch       = "post-tool-batch"
+    SubagentStart       = "subagent-start"
+    SubagentStop        = "subagent-stop"
+    TaskCreated         = "task-created"
 }
 
 $changed = @()
@@ -149,7 +134,7 @@ foreach ($evt in $events.Keys) {
         $arr = @(Remove-OurHooks $arr)
         Write-Host "[up  ] ${evt}: $existingVer -> $CURRENT_VERSION"
     } else {
-        Write-Host "[add ] $evt -> writes $($events[$evt])"
+        Write-Host "[add ] $evt -> POST /event/$($events[$evt])"
     }
     $newEntry = [pscustomobject]@{ hooks = @(Make-Hook $events[$evt] $evt) }
     $arr = $arr + $newEntry
@@ -160,7 +145,7 @@ foreach ($evt in $events.Keys) {
 # Orphan cleanup: remove our managed hooks from event keys we no longer install
 # (e.g., Notification was removed when the idle slot was dropped). Only entries
 # carrying our marker are removed; user-added hooks under the same key remain.
-$droppedEvents = @("Notification")
+$droppedEvents = @()
 foreach ($evt in $droppedEvents) {
     if (-not ($hooks.PSObject.Properties.Name -contains $evt)) { continue }
     $arr = @($hooks.$evt)
@@ -172,34 +157,7 @@ foreach ($evt in $droppedEvents) {
     $changed += $evt
 }
 
-# Legacy migration: detect any local hook still writing claude-notify-flash.sig
-$legacyFound = $false
-foreach ($evt in $hooks.PSObject.Properties.Name) {
-    foreach ($entry in @($hooks.$evt)) {
-        if ($null -eq $entry.hooks) { continue }
-        foreach ($h in $entry.hooks) {
-            if ($h.command -match "claude-notify-flash\.sig") { $legacyFound = $true }
-        }
-    }
-}
-if ($legacyFound) {
-    $resp = Read-Host "Detected legacy 'claude-notify-flash.sig' hook. Migrate to claude-notify-stop.sig? (y/n)"
-    if ($resp -eq "y") {
-        foreach ($evt in $hooks.PSObject.Properties.Name) {
-            foreach ($entry in @($hooks.$evt)) {
-                if ($null -eq $entry.hooks) { continue }
-                foreach ($h in $entry.hooks) {
-                    if ($h.command -match "claude-notify-flash\.sig") {
-                        $h.command = $h.command -replace "claude-notify-flash\.sig", "claude-notify-stop.sig"
-                        Write-Host "[mig ] migrated legacy hook in '$evt'"
-                    }
-                }
-            }
-        }
-    }
-}
-
-if ($changed.Count -gt 0 -or $legacyFound) {
+if ($changed.Count -gt 0) {
     $settings.hooks = $hooks
     Write-Settings $settings
     Write-Host ""
@@ -208,4 +166,4 @@ if ($changed.Count -gt 0 -or $legacyFound) {
     Write-Host ""
     Write-Host "No changes needed."
 }
-Write-Host "Each hook fire shows a silent native Windows toast (Action Center keeps history)."
+Write-Host "Each hook fire posts to http://127.0.0.1:9123/event/<route>. Set CLAUDE_NOTIFY_DEBUG=1 + restart plugin for verbose logging."
