@@ -1,5 +1,4 @@
 export type EventType = "stop" | "permission" | "task-completed";
-export type SignalType = EventType | "active" | "permission-resolved";
 
 export type FlashSettings = {
   eventType: EventType;
@@ -18,6 +17,11 @@ export type GlobalSettings = {
     stop: AudioConfig;
     permission: AudioConfig;
     "task-completed": AudioConfig;
+  };
+  alertDelay: {
+    stop: number;
+    permission: number;
+    "task-completed": number;
   };
 };
 
@@ -46,11 +50,22 @@ export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
   "task-completed": 30_000,
 };
 
+// Default per-event-type delay (ms) between an arming route arriving and the
+// alert (audio + flash) actually firing. A clearing route arriving inside this
+// window cancels the pending alert entirely — fixes the false-positive sound
+// when PermissionRequest → PostToolUse fires within ~1s.
+export const DEFAULT_ALERT_DELAY_MS = 1500;
+
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   audio: {
     stop: { volumePercent: 80 },
     permission: { volumePercent: 90 },
     "task-completed": { volumePercent: 80 },
+  },
+  alertDelay: {
+    stop: DEFAULT_ALERT_DELAY_MS,
+    permission: DEFAULT_ALERT_DELAY_MS,
+    "task-completed": DEFAULT_ALERT_DELAY_MS,
   },
 };
 

@@ -1,6 +1,6 @@
 # install-hooks.ps1
 # Idempotently installs Claude Code hooks that signal the Claude Notify Stream Deck plugin.
-# Installs 15 Claude Code hooks: 9 action events (flash/audio) + 6 info events (log-only).
+# Installs 15 Claude Code hooks: 10 action events (flash/audio/clear) + 5 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
 $ErrorActionPreference = "Stop"
@@ -99,7 +99,7 @@ if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
 $hooks = $settings.hooks
 
 $events = [ordered]@{
-    # Action events — drive button/audio behavior (9 entries)
+    # Action events — drive button/audio behavior (10 entries)
     Stop                = "stop"
     StopFailure         = "stop-failure"
     PermissionRequest   = "permission-request"
@@ -109,9 +109,9 @@ $events = [ordered]@{
     PermissionDenied    = "permission-denied"
     PostToolUse         = "post-tool-use"
     PostToolUseFailure  = "post-tool-use-failure"
-    # Info events — log only on the plugin side (6 entries)
-    Notification        = "notification"
     PreToolUse          = "pre-tool-use"
+    # Info events — log only on the plugin side (5 entries)
+    Notification        = "notification"
     PostToolBatch       = "post-tool-batch"
     SubagentStart       = "subagent-start"
     SubagentStop        = "subagent-stop"

@@ -15,8 +15,31 @@ export type DispatcherOpts = {
   log?: (msg: string) => void;
 };
 
+// Each incoming HTTP route maps to a set of event types whose alerts it clears
+// and (optionally) the event type it arms. Apply order is clears-first then arm,
+// so a fresh stop cancels stale permission/task-completed before entering its
+// own pending window.
+type RouteSpec = { clears: ReadonlyArray<EventType>; arms?: EventType };
+
+const ROUTES: Readonly<Record<string, RouteSpec>> = {
+  "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
+  "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
+  "/event/permission-request":    { arms: "permission",     clears: [] },
+  "/event/task-completed":        { arms: "task-completed", clears: ["permission"] },
+  "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"] },
+  "/event/user-prompt-submit":    {                         clears: ["stop", "permission", "task-completed"] },
+  "/event/permission-denied":     {                         clears: ["permission"] },
+  "/event/post-tool-use":         {                         clears: ["permission"] },
+  "/event/post-tool-use-failure": {                         clears: ["permission"] },
+  // The agentic loop can restart after Stop without a UserPromptSubmit (auto-continue,
+  // /continue, compact-and-continue). A fresh PreToolUse means the agent is working
+  // again, so a still-armed stop alert is stale.
+  "/event/pre-tool-use":          {                         clears: ["stop"] },
+};
+
 export class Dispatcher {
   private opts: DispatcherOpts;
+  private pending = new Map<EventType, NodeJS.Timeout>();
 
   constructor(opts: DispatcherOpts) {
     this.opts = opts;
@@ -26,57 +49,78 @@ export class Dispatcher {
     this.opts.log?.(msg);
   }
 
-  // Arms buttons whose eventType === event. Re-arming clears any prior alerts
-  // of the same event type. The one cross-dismiss rule: dispatch("stop") also
-  // dismisses any armed permission button (turn ended → permission stale).
-  dispatch(event: EventType): void {
+  // Single matrix-driven entry point. Replaces dispatch / dismiss / dismissAll.
+  // For each event type, the dispatcher tracks one of three states:
+  //   IDLE     — nothing pending, no alerting buttons
+  //   PENDING  — delay timer running; will fire (audio + flash) on expiry
+  //   ARMED    — delay elapsed; one or more buttons of that type are alerting
+  // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
+  // extension), so a burst of arming events still produces exactly one alert.
+  handleRoute(route: string): void {
+    const spec = ROUTES[route];
+    if (!spec) return;
+    for (const t of spec.clears) this.clearType(t);
+    if (spec.arms) this.armType(spec.arms);
+    this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"}`);
+  }
+
+  private clearType(type: EventType): void {
+    const timer = this.pending.get(type);
+    if (timer) {
+      clearTimeout(timer);
+      this.pending.delete(type);
+    }
+    for (const [, btn] of this.opts.getButtons()) {
+      if (btn.state.alerting && btn.settings.eventType === type) btn.dismiss();
+    }
+  }
+
+  private armType(type: EventType): void {
+    if (this.pending.has(type)) return;
+    if (this.isAnyArmed(type)) {
+      this.fire(type);
+      return;
+    }
+    const delayMs = this.opts.getGlobalSettings().alertDelay[type];
+    if (delayMs <= 0) {
+      this.fire(type);
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.pending.delete(type);
+      this.fire(type);
+    }, delayMs);
+    this.pending.set(type, timer);
+    this.log(`pending type=${type} delayMs=${delayMs}`);
+  }
+
+  private fire(type: EventType): void {
     const buttons = this.opts.getButtons();
     let dismissed = 0;
     let armed = 0;
-    let crossDismiss = false;
     for (const [, btn] of buttons) {
-      if (!btn.state.alerting) continue;
-      const sameEvent = btn.settings.eventType === event;
-      const stopCrossesPermission = event === "stop" && btn.settings.eventType === "permission";
-      if (!sameEvent && !stopCrossesPermission) continue;
-      if (stopCrossesPermission) crossDismiss = true;
-      btn.dismiss();
-      dismissed++;
+      if (btn.state.alerting && btn.settings.eventType === type) {
+        btn.dismiss();
+        dismissed++;
+      }
     }
     for (const [, btn] of buttons) {
-      if (btn.settings.eventType === event) { btn.alert(); armed++; }
+      if (btn.settings.eventType === type) {
+        btn.alert();
+        armed++;
+      }
     }
-    this.log(`dispatch event=${event} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} cross-dismiss=${crossDismiss}`);
-    const audioCfg = this.opts.getGlobalSettings().audio[event];
-    const path = audioCfg.soundPath ?? defaultSoundPath(event);
+    const audioCfg = this.opts.getGlobalSettings().audio[type];
+    const path = audioCfg.soundPath ?? defaultSoundPath(type);
+    this.log(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
     if (!path) return;
     this.opts.audioPlayer.play(path, audioCfg.volumePercent);
   }
 
-  // Dismisses any alerting buttons whose eventType matches. No effect on others.
-  // Wired to the permission-resolved signal (PostToolUse / PostToolUseFailure /
-  // PermissionDenied → dismiss("permission")).
-  dismiss(event: EventType): void {
-    const buttons = this.opts.getButtons();
-    let dismissed = 0;
-    for (const [, btn] of buttons) {
-      if (!btn.state.alerting) continue;
-      if (btn.settings.eventType !== event) continue;
-      btn.dismiss();
-      dismissed++;
+  private isAnyArmed(type: EventType): boolean {
+    for (const [, btn] of this.opts.getButtons()) {
+      if (btn.state.alerting && btn.settings.eventType === type) return true;
     }
-    this.log(`dismiss event=${event} buttons=${buttons.size} dismissed=${dismissed}`);
-  }
-
-  // Dismisses every alerting button. Wired to UserPromptSubmit / SessionStart.
-  dismissAll(): void {
-    const buttons = this.opts.getButtons();
-    let dismissed = 0;
-    for (const [, btn] of buttons) {
-      if (!btn.state.alerting) continue;
-      btn.dismiss();
-      dismissed++;
-    }
-    this.log(`dismissAll buttons=${buttons.size} dismissed=${dismissed}`);
+    return false;
   }
 }

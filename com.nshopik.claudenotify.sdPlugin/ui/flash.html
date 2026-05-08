@@ -44,6 +44,9 @@
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.stop.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
     </sdpi-item>
+    <sdpi-item label="Alert delay (sec)">
+      <sdpi-textfield setting="alertDelay.stop.seconds" placeholder="1.5" default="1.5" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
+    </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
@@ -57,6 +60,9 @@
     </sdpi-item>
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.permission.volumePercent" min="0" max="100" step="5" default="90" showlabels global></sdpi-range>
+    </sdpi-item>
+    <sdpi-item label="Alert delay (sec)">
+      <sdpi-textfield setting="alertDelay.permission.seconds" placeholder="1.5" default="1.5" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
     </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('permission')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
@@ -72,18 +78,22 @@
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.task-completed.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
     </sdpi-item>
+    <sdpi-item label="Alert delay (sec)">
+      <sdpi-textfield setting="alertDelay.task-completed.seconds" placeholder="1.5" default="1.5" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
+    </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('task-completed')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
   <sdpi-item>
     <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
-      Audio plays for both local sig-file events and remote HTTP events; use <strong>Mute</strong> next to a sound to silence that event, or pick a different WAV file. HTTP listening on <code>127.0.0.1:9123</code>.
-      From a remote host (SSH-tunneled), POST to one of:
+      <strong>Alert delay</strong> defers the alert (audio + flash) by N seconds; if a clearing event arrives during that window the alert is cancelled silently. Set to <code>0</code> to fire immediately. Default <code>1.5</code> covers fast PermissionRequest → PostToolUse races.
+      <br><br>
+      <strong>HTTP listener</strong> on <code>127.0.0.1:9123</code>. From a remote host (SSH-tunneled), POST to:
       <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
-curl -X POST http://localhost:9123/event/permission
+curl -X POST http://localhost:9123/event/permission-request
 curl -X POST http://localhost:9123/event/task-completed
-curl -X POST http://localhost:9123/event/permission-resolved   # dismiss only permission alerts
-curl -X POST http://localhost:9123/event/active                # dismiss all alerts</pre>
+curl -X POST http://localhost:9123/event/post-tool-use      # clears permission
+curl -X POST http://localhost:9123/event/user-prompt-submit # clears all</pre>
       Add this to your outbound SSH from Windows to the remote: <code>ssh -R 9123:127.0.0.1:9123 user@remote-host</code>
     </div>
   </sdpi-item>

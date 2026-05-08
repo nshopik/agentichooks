@@ -256,7 +256,7 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
 }
 ```
 
-These cover the 9 action routes that arm or dismiss buttons. The 6 info routes (`/event/notification`, `/event/pre-tool-use`, `/event/post-tool-batch`, `/event/subagent-start`, `/event/subagent-stop`, `/event/task-created`) are accepted by the listener but have no button effect today — omitting them from a remote config is safe.
+These cover most of the action routes that arm or dismiss buttons. To also clear stale `stop` alerts when the agentic loop auto-restarts, add a `PreToolUse` hook (POST to `/event/pre-tool-use`). The 5 info routes (`/event/notification`, `/event/post-tool-batch`, `/event/subagent-start`, `/event/subagent-stop`, `/event/task-created`) are accepted by the listener but have no button effect today — omitting them from a remote config is safe.
 
 `--max-time 1` keeps Claude unblocked if the tunnel is down; `&` makes the hook non-blocking; `>/dev/null 2>&1` suppresses output.
 
@@ -310,19 +310,26 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 
 - **HTTP listener** — toggle + port (default 9123).
 - **Audio per event** — sound file (defaults to system WAVs), volume %.
+- **Alert delay per event** — seconds to wait between an arming hook arriving and the alert (audio + flash) firing. Default 1.5s. If a clearing hook arrives during the window, the alert is cancelled silently. Set to 0 to fire immediately.
 - **▶ Test** — plays the configured sound at the configured volume.
 
-### When alerts clear
+### Alert delay window (false-positive guard)
 
-Each armed alert button clears on a specific set of events — never on unrelated activity. The dispatcher arms only the matching slot per event; other event types' alerts stay armed until their own clearing trigger fires.
+Claude often emits a `PermissionRequest` immediately followed by a `PostToolUse` when a tool resolves in well under a second — the visual flash gets dismissed before you'd notice it, but the sound has already played. The **alert delay** prevents that: an arming hook enters a "pending" state for the configured number of seconds, and any clearing hook arriving inside that window cancels the pending alert with no sound and no flash. Default 1.5s per event type, configurable in the Property Inspector.
+
+Repeat arms of the same event type during the pending window are **no-ops** — the original timer keeps running, never extended. A burst of ten `PermissionRequest` hooks in 200ms still produces exactly one alert at the original deadline. Set delay to `0` to disable the window for an event type and fire immediately.
+
+### When alerts clear (the matrix)
+
+Each incoming Claude Code hook is mapped to the set of event-type alerts it clears, plus (optionally) the event type it arms. Clears apply first, then the arm — so a fresh `Stop` cancels stale `permission`/`task-completed` before entering its own pending window.
 
 | Armed event | Cleared by | Auto-timeout default |
 |---|---|---|
-| `stop` | `Stop` (re-arm), `StopFailure` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press | 0 (no timeout) |
-| `permission` | `Stop`, `StopFailure`, `PermissionRequest` (re-arm), `UserPromptSubmit`, `SessionStart`, `PermissionDenied`, `PostToolUse`, `PostToolUseFailure`, manual press | 0 (no timeout) |
-| `task-completed` | `TaskCompleted` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press, auto-timeout | 30,000 ms |
+| `stop` | `Stop` (re-arm), `StopFailure` (re-arm), `PreToolUse`, `UserPromptSubmit`, `SessionStart`, manual press | 0 (no timeout) |
+| `permission` | `Stop`, `StopFailure`, `TaskCompleted`, `PermissionRequest` (re-arm), `UserPromptSubmit`, `SessionStart`, `PermissionDenied`, `PostToolUse`, `PostToolUseFailure`, manual press | 0 (no timeout) |
+| `task-completed` | `Stop`, `StopFailure`, `TaskCompleted` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press, auto-timeout | 30,000 ms |
 
-Notable consequence: a fresh `Stop` (or `StopFailure`) cross-dismisses any armed `permission` alert because turn-end makes a pending permission request stale. `task-completed` survives `Stop` and `Permission` events and clears only on session-boundary signals or its own 30 s timeout.
+Notable consequences: `Stop` (or `StopFailure`) ends a turn, so it dismisses both `permission` and `task-completed` (any in-flight alerts from inside that turn are stale). `TaskCompleted` clears `permission` because tool resolution implies the permission was settled. `PreToolUse` clears `stop` because the agentic loop has restarted without user input (auto-continue, `/continue`, compact-and-continue). Within the alert delay window, the same matrix governs cancellation of *pending* alerts, not just dismissal of armed ones.
 
 ## Debug logging
 

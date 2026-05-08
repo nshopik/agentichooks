@@ -1,22 +1,21 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import type { SignalType } from "./types.js";
 
-const ACTION_ROUTES: Record<string, SignalType> = {
-  "/event/stop": "stop",
-  "/event/stop-failure": "stop",
-  "/event/permission-request": "permission",
-  "/event/task-completed": "task-completed",
-  "/event/session-start": "active",
-  "/event/user-prompt-submit": "active",
-  "/event/permission-denied": "permission-resolved",
-  "/event/post-tool-use": "permission-resolved",
-  "/event/post-tool-use-failure": "permission-resolved",
-};
+const ACTION_ROUTES = new Set<string>([
+  "/event/stop",
+  "/event/stop-failure",
+  "/event/permission-request",
+  "/event/task-completed",
+  "/event/session-start",
+  "/event/user-prompt-submit",
+  "/event/permission-denied",
+  "/event/post-tool-use",
+  "/event/post-tool-use-failure",
+  "/event/pre-tool-use",
+]);
 
 const INFO_ROUTES = new Set<string>([
   "/event/notification",
-  "/event/pre-tool-use",
   "/event/post-tool-batch",
   "/event/subagent-start",
   "/event/subagent-stop",
@@ -25,7 +24,9 @@ const INFO_ROUTES = new Set<string>([
 
 export type HttpListenerOpts = {
   port: number;
-  onEvent: (signal: SignalType) => void;
+  // Called for every action route; the URL path is forwarded to the dispatcher's
+  // matrix lookup. Info routes log + 204 only and never invoke this callback.
+  onEvent: (route: string) => void;
   log?: (msg: string) => void;
 };
 
@@ -75,7 +76,7 @@ export class HttpListener {
       res.end("OK");
       return;
     }
-    const isAction = url in ACTION_ROUTES;
+    const isAction = ACTION_ROUTES.has(url);
     const isInfo = INFO_ROUTES.has(url);
     if (isAction || isInfo) {
       if (req.method !== "POST") {
@@ -89,9 +90,8 @@ export class HttpListener {
         res.end();
         setImmediate(() => {
           if (isAction) {
-            const signal = ACTION_ROUTES[url];
-            this.log(`dispatch=${signal}`);
-            this.opts.onEvent(signal);
+            this.log(`action route=${url}`);
+            this.opts.onEvent(url);
           } else {
             this.log(`info-only route=${url}`);
           }

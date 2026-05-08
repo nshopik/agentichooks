@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "node:http";
 import { HttpListener } from "../src/http-listener.js";
-import type { SignalType } from "../src/types.js";
 
 let listener: HttpListener | undefined;
-let received: SignalType[];
+let received: string[];
 
 async function request(method: string, path: string, port: number): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -18,21 +17,21 @@ async function request(method: string, path: string, port: number): Promise<{ st
   });
 }
 
-const ACTION_ROUTES: Array<[string, SignalType]> = [
-  ["/event/stop", "stop"],
-  ["/event/stop-failure", "stop"],
-  ["/event/permission-request", "permission"],
-  ["/event/task-completed", "task-completed"],
-  ["/event/session-start", "active"],
-  ["/event/user-prompt-submit", "active"],
-  ["/event/permission-denied", "permission-resolved"],
-  ["/event/post-tool-use", "permission-resolved"],
-  ["/event/post-tool-use-failure", "permission-resolved"],
+const ACTION_ROUTES = [
+  "/event/stop",
+  "/event/stop-failure",
+  "/event/permission-request",
+  "/event/task-completed",
+  "/event/session-start",
+  "/event/user-prompt-submit",
+  "/event/permission-denied",
+  "/event/post-tool-use",
+  "/event/post-tool-use-failure",
+  "/event/pre-tool-use",
 ];
 
 const INFO_ROUTES = [
   "/event/notification",
-  "/event/pre-tool-use",
   "/event/post-tool-batch",
   "/event/subagent-start",
   "/event/subagent-stop",
@@ -57,13 +56,13 @@ afterEach(async () => {
 });
 
 describe("HttpListener", () => {
-  it.each(ACTION_ROUTES)("POST %s returns 204 and calls onEvent('%s')", async (path, signal) => {
+  it.each(ACTION_ROUTES)("POST %s returns 204 and forwards the URL to onEvent", async (path) => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
     const res = await request("POST", path, listener.port());
     expect(res.status).toBe(204);
     await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual([signal]);
+    expect(received).toEqual([path]);
   });
 
   it.each(INFO_ROUTES)("POST %s returns 204 without calling onEvent", async (path) => {
@@ -92,7 +91,7 @@ describe("HttpListener", () => {
     await request("POST", "/event/permission-request", port);
     await request("POST", "/event/session-start", port);
     await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["stop", "permission", "active"]);
+    expect(received).toEqual(["/event/stop", "/event/permission-request", "/event/session-start"]);
   });
 
   it("GET /health returns 200 OK", async () => {

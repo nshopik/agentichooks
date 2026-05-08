@@ -32,22 +32,35 @@ const action = new FlashAction({
 });
 streamDeck.actions.registerAction(action);
 
-function mergeGlobals(stored: Partial<GlobalSettings> | undefined): GlobalSettings {
+// PI persists alertDelay as { stop: { seconds: 1.5 }, ... } for human readability,
+// matching the autoTimeoutSeconds precedent. Convert to ms once at load time.
+type StoredAlertDelay = Partial<Record<typeof ALL_EVENT_TYPES[number], { seconds?: number | string }>>;
+type StoredGlobalSettings = Partial<GlobalSettings> & { alertDelay?: StoredAlertDelay };
+
+function mergeGlobals(stored: StoredGlobalSettings | undefined): GlobalSettings {
   const base = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS)) as GlobalSettings;
-  if (!stored?.audio) return base;
-  for (const ev of ALL_EVENT_TYPES) {
-    if (stored.audio[ev]) Object.assign(base.audio[ev], stored.audio[ev]);
+  if (!stored) return base;
+  if (stored.audio) {
+    for (const ev of ALL_EVENT_TYPES) {
+      if (stored.audio[ev]) Object.assign(base.audio[ev], stored.audio[ev]);
+    }
+  }
+  if (stored.alertDelay) {
+    for (const ev of ALL_EVENT_TYPES) {
+      const sec = Number(stored.alertDelay[ev]?.seconds);
+      if (Number.isFinite(sec)) base.alertDelay[ev] = Math.max(0, sec * 1000);
+    }
   }
   return base;
 }
 
 async function loadGlobals(): Promise<void> {
   const stored = await streamDeck.settings.getGlobalSettings<JsonObject>();
-  globals = mergeGlobals(stored as unknown as Partial<GlobalSettings>);
+  globals = mergeGlobals(stored as unknown as StoredGlobalSettings);
 }
 
 streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
-  globals = mergeGlobals(ev.settings as unknown as Partial<GlobalSettings>);
+  globals = mergeGlobals(ev.settings as unknown as StoredGlobalSettings);
 });
 
 const dispatcher = new Dispatcher({
@@ -62,11 +75,7 @@ let listener: HttpListener | undefined;
 async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
-    onEvent: (signal) => {
-      if (signal === "active") dispatcher.dismissAll();
-      else if (signal === "permission-resolved") dispatcher.dismiss("permission");
-      else dispatcher.dispatch(signal);
-    },
+    onEvent: (route) => dispatcher.handleRoute(route),
     log: (msg) => streamDeck.logger.info(`http: ${msg}`),
   });
   try {
