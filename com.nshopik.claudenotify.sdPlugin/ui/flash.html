@@ -38,24 +38,33 @@
   </sdpi-item>
 
   <sdpi-item>
-    <sdpi-button id="test-flash">Test flash</sdpi-button>
+    <sdpi-button onclick="testFlash()">Test flash</sdpi-button>
   </sdpi-item>
 
   <script>
+    function testFlash() {
+      console.log("[claude-notify-pi] test flash clicked");
+      const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
+      if (!client) {
+        console.error("[claude-notify-pi] SDPIComponents.streamDeckClient not available");
+        return;
+      }
+      client.send("sendToPlugin", { kind: "test-flash" }).then(
+        () => console.log("[claude-notify-pi] sendToPlugin ok"),
+        (err) => console.error("[claude-notify-pi] sendToPlugin failed:", err)
+      );
+    }
+
     const updatePulseVisibility = () => {
       const row = document.getElementById("pulse-rate-row");
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
-      const mode = radio?.value;
+      const mode = radio && radio.value;
       if (row) row.style.display = mode === "pulse" ? "" : "none";
     };
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(updatePulseVisibility, 100);
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
-      radio?.addEventListener("valuechange", updatePulseVisibility);
-    });
-
-    document.getElementById("test-flash")?.addEventListener("click", () => {
-      window.SDPIComponents?.streamDeckClient?.send("sendToPlugin", { kind: "test-flash" });
+      if (radio) radio.addEventListener("valuechange", updatePulseVisibility);
     });
   </script>
 </body>

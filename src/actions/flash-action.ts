@@ -138,21 +138,13 @@ export class FlashAction extends SingletonAction<JsonObject> {
     if (ctx.settings.idleIconPath) {
       try { return readImageAsDataUri(ctx.settings.idleIconPath); } catch { /* fall through */ }
     }
-    try {
-      return keyIconBase64(ctx.settings.eventType, "idle");
-    } catch {
-      return "";
-    }
+    return `images/keys/${ctx.settings.eventType}-idle.png`;
   }
 
   private alertIcon(ctx: Ctx): string {
     if (ctx.settings.alertIconPath) {
       try { return readImageAsDataUri(ctx.settings.alertIconPath); } catch { /* fall through */ }
     }
-    try {
-      return keyIconBase64(ctx.settings.eventType, "alert");
-    } catch {
-      return "";
-    }
+    return `images/keys/${ctx.settings.eventType}-alert.png`;
   }
 }

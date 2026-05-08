@@ -5,3 +5,4 @@ com.nshopik.claudenotify.sdPlugin/bin/
 coverage/
 dist/
 .DS_Store
+.claude/

@@ -36,7 +36,7 @@
   <sdpi-item label="Volume %">
     <sdpi-range setting="audio.stop.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
   </sdpi-item>
-  <sdpi-item><sdpi-button class="audio-test" data-event="stop">▶ Test</sdpi-button></sdpi-item>
+  <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test</sdpi-button></sdpi-item>
 
   <sdpi-heading style="font-size: 0.9em; margin-top: 12px;">Idle</sdpi-heading>
   <sdpi-item label="Enabled">
@@ -55,7 +55,7 @@
   <sdpi-item label="Volume %">
     <sdpi-range setting="audio.idle.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
   </sdpi-item>
-  <sdpi-item><sdpi-button class="audio-test" data-event="idle">▶ Test</sdpi-button></sdpi-item>
+  <sdpi-item><sdpi-button onclick="testAudio('idle')">▶ Test</sdpi-button></sdpi-item>
 
   <sdpi-heading style="font-size: 0.9em; margin-top: 12px;">Permission</sdpi-heading>
   <sdpi-item label="Enabled">
@@ -74,15 +74,21 @@
   <sdpi-item label="Volume %">
     <sdpi-range setting="audio.permission.volumePercent" min="0" max="100" step="5" default="90" showlabels global></sdpi-range>
   </sdpi-item>
-  <sdpi-item><sdpi-button class="audio-test" data-event="permission">▶ Test</sdpi-button></sdpi-item>
+  <sdpi-item><sdpi-button onclick="testAudio('permission')">▶ Test</sdpi-button></sdpi-item>
 
   <script>
-    document.querySelectorAll(".audio-test").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const event = btn.getAttribute("data-event");
-        window.SDPIComponents?.streamDeckClient?.send("sendToPlugin", { kind: "test-audio", event });
-      });
-    });
+    function testAudio(event) {
+      console.log("[claude-notify-pi] test audio:", event);
+      const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
+      if (!client) {
+        console.error("[claude-notify-pi] SDPIComponents.streamDeckClient not available");
+        return;
+      }
+      client.send("sendToPlugin", { kind: "test-audio", event: event }).then(
+        () => console.log("[claude-notify-pi] sendToPlugin ok"),
+        (err) => console.error("[claude-notify-pi] sendToPlugin failed:", err)
+      );
+    }
   </script>
 </body>
 </html>
