@@ -44,6 +44,42 @@ function Draw-IdleGlyph {
     $g.DrawLine($pen, $cx, $cy, ($cx + $r * 0.5), $cy)
 }
 
+function Draw-MoonGlyph {
+    param($g, $size, $pen, $white)
+    $s = [single]$size
+
+    # Crescent shape: two same-radius circles offset horizontally. The crescent
+    # is bounded by the outer circle's LEFT arc and the inner circle's LEFT arc,
+    # which meet at the two intersection points (top and bottom).
+    $R = $s * 0.30
+    $d = $s * 0.20    # distance between the two circle centers
+    $cx1 = $s * 0.40  # outer (illuminated) center, slightly left so the moon sits centered
+    $cy  = $s * 0.50
+    $cx2 = $cx1 + $d  # inner (shadow) center
+
+    # Half-angle β at each circle subtended to the intersection chord.
+    # cos(β) = (d/2) / R    so β = acos((d/2)/R)
+    $betaDeg = [Math]::Acos(($d / 2.0) / $R) * 180.0 / [Math]::PI
+
+    # Outer LEFT arc: from top intersection (-β) sweeping CCW through 180° to bottom intersection (+β).
+    $startOuter = -$betaDeg
+    $sweepOuter = -(360.0 - 2 * $betaDeg)
+
+    # Inner LEFT arc: from bottom intersection (180-β) sweeping CW through 180° to top intersection (180+β).
+    $startInner = 180.0 - $betaDeg
+    $sweepInner = 2 * $betaDeg
+
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc(($cx1 - $R), ($cy - $R), ($R * 2), ($R * 2), $startOuter, $sweepOuter)
+    $path.AddArc(($cx2 - $R), ($cy - $R), ($R * 2), ($R * 2), $startInner, $sweepInner)
+    $path.CloseFigure()
+
+    $brush = New-Object System.Drawing.SolidBrush($white)
+    $g.FillPath($brush, $path)
+    $brush.Dispose()
+    $path.Dispose()
+}
+
 function Draw-PermGlyph {
     param($g, $size, $pen, $white)
     $s = [single]$size
@@ -79,6 +115,7 @@ function Make-KeyIcon {
         "check" { Draw-CheckGlyph $g $size $pen $white }
         "idle"  { Draw-IdleGlyph  $g $size $pen $white }
         "perm"  { Draw-PermGlyph  $g $size $pen $white }
+        "moon"  { Draw-MoonGlyph  $g $size $pen $white }
     }
 
     $pen.Dispose()
@@ -90,9 +127,10 @@ function Make-KeyIcon {
 }
 
 $events = @(
-    @{ name = "stop";       glyph = "check"; idle = "#1f2937"; alert = "#16a34a" },
-    @{ name = "idle";       glyph = "idle";  idle = "#1f2937"; alert = "#eab308" },
-    @{ name = "permission"; glyph = "perm";  idle = "#1f2937"; alert = "#dc2626" }
+    @{ name = "stop";           glyph = "check"; idle = "#1f2937"; alert = "#16a34a" },
+    @{ name = "idle";           glyph = "moon";  idle = "#1f2937"; alert = "#eab308" },
+    @{ name = "permission";     glyph = "perm";  idle = "#1f2937"; alert = "#dc2626" },
+    @{ name = "task-completed"; glyph = "idle";  idle = "#1f2937"; alert = "#3b82f6" }
 )
 
 foreach ($e in $events) {
