@@ -18,7 +18,8 @@ const STATE_ALERT = 1;
 export type FlashActionOpts = {
   /**
    * Invoked when the user clicks Test flash or ▶ Test sound in the per-button PI.
-   * Always plays audio for the given event type, bypassing the source filter.
+   * Plays whatever soundPath resolves to for the event type — user pick, runtime
+   * default, or silent if muted (soundPath = "") or no default exists (idle).
    */
   onTestSound?: (eventType: EventType) => void;
 };
