@@ -21,7 +21,9 @@ let globals: GlobalSettings = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS)
 
 const action = new FlashAction({
   onTestSound: (eventType) => {
-    // Always play (bypass enabled flag) for explicit user-initiated tests.
+    // Plays whatever soundPath resolves to: user pick, runtime default, or
+    // nothing if the event was muted (soundPath = "") or has no default (idle
+    // without a user pick).
     const cfg = globals.audio[eventType];
     const path = cfg.soundPath ?? defaultSoundPath(eventType);
     streamDeck.logger.info(`onTestSound: event=${eventType} path=${path} vol=${cfg.volumePercent}`);
