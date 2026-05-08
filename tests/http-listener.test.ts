@@ -18,6 +18,33 @@ async function request(method: string, path: string, port: number): Promise<{ st
   });
 }
 
+const ACTION_ROUTES: Array<[string, SignalType]> = [
+  ["/event/stop", "stop"],
+  ["/event/stop-failure", "stop"],
+  ["/event/permission-request", "permission"],
+  ["/event/task-completed", "task-completed"],
+  ["/event/session-start", "active"],
+  ["/event/user-prompt-submit", "active"],
+  ["/event/permission-denied", "permission-resolved"],
+  ["/event/post-tool-use", "permission-resolved"],
+  ["/event/post-tool-use-failure", "permission-resolved"],
+];
+
+const INFO_ROUTES = [
+  "/event/notification",
+  "/event/pre-tool-use",
+  "/event/post-tool-batch",
+  "/event/subagent-start",
+  "/event/subagent-stop",
+  "/event/task-created",
+];
+
+const REMOVED_ROUTES = [
+  "/event/permission",
+  "/event/active",
+  "/event/permission-resolved",
+];
+
 beforeEach(() => {
   received = [];
 });
@@ -30,22 +57,40 @@ afterEach(async () => {
 });
 
 describe("HttpListener", () => {
-  it("POST /event/stop returns 204 and calls onEvent('stop')", async () => {
+  it.each(ACTION_ROUTES)("POST %s returns 204 and calls onEvent('%s')", async (path, signal) => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
-    const res = await request("POST", "/event/stop", listener.port());
+    const res = await request("POST", path, listener.port());
     expect(res.status).toBe(204);
     await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["stop"]);
+    expect(received).toEqual([signal]);
   });
 
-  it("dispatches each event type from its respective route", async () => {
+  it.each(INFO_ROUTES)("POST %s returns 204 without calling onEvent", async (path) => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("POST", path, listener.port());
+    expect(res.status).toBe(204);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual([]);
+  });
+
+  it.each(REMOVED_ROUTES)("POST %s returns 404 (route was removed)", async (path) => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("POST", path, listener.port());
+    expect(res.status).toBe(404);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual([]);
+  });
+
+  it("dispatches multiple events in arrival order", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
     const port = listener.port();
     await request("POST", "/event/stop", port);
-    await request("POST", "/event/permission", port);
-    await request("POST", "/event/active", port);
+    await request("POST", "/event/permission-request", port);
+    await request("POST", "/event/session-start", port);
     await new Promise((r) => setTimeout(r, 20));
     expect(received).toEqual(["stop", "permission", "active"]);
   });
@@ -65,10 +110,18 @@ describe("HttpListener", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 405 for GET on POST-only event routes", async () => {
+  it("returns 405 for GET on POST-only action routes", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
     const res = await request("GET", "/event/stop", listener.port());
+    expect(res.status).toBe(405);
+    expect(received).toEqual([]);
+  });
+
+  it("returns 405 for GET on POST-only info routes", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("GET", "/event/notification", listener.port());
     expect(res.status).toBe(405);
     expect(received).toEqual([]);
   });
@@ -79,14 +132,5 @@ describe("HttpListener", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const addr = (listener as any).server.address();
     expect(addr.address).toBe("127.0.0.1");
-  });
-
-  it("POST /event/permission-resolved returns 204 and calls onEvent('permission-resolved')", async () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
-    await listener.start();
-    const res = await request("POST", "/event/permission-resolved", listener.port());
-    expect(res.status).toBe(204);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["permission-resolved"]);
   });
 });

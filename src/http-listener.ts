@@ -2,13 +2,26 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import type { SignalType } from "./types.js";
 
-const ROUTES: Record<string, SignalType> = {
+const ACTION_ROUTES: Record<string, SignalType> = {
   "/event/stop": "stop",
-  "/event/permission": "permission",
+  "/event/stop-failure": "stop",
+  "/event/permission-request": "permission",
   "/event/task-completed": "task-completed",
-  "/event/active": "active",
-  "/event/permission-resolved": "permission-resolved",
+  "/event/session-start": "active",
+  "/event/user-prompt-submit": "active",
+  "/event/permission-denied": "permission-resolved",
+  "/event/post-tool-use": "permission-resolved",
+  "/event/post-tool-use-failure": "permission-resolved",
 };
+
+const INFO_ROUTES = new Set<string>([
+  "/event/notification",
+  "/event/pre-tool-use",
+  "/event/post-tool-batch",
+  "/event/subagent-start",
+  "/event/subagent-stop",
+  "/event/task-created",
+]);
 
 export type HttpListenerOpts = {
   port: number;
@@ -62,7 +75,9 @@ export class HttpListener {
       res.end("OK");
       return;
     }
-    if (url in ROUTES) {
+    const isAction = url in ACTION_ROUTES;
+    const isInfo = INFO_ROUTES.has(url);
+    if (isAction || isInfo) {
       if (req.method !== "POST") {
         res.writeHead(405);
         res.end();
@@ -73,8 +88,13 @@ export class HttpListener {
         res.writeHead(204);
         res.end();
         setImmediate(() => {
-          this.log(`dispatch signal=${ROUTES[url]}`);
-          this.opts.onEvent(ROUTES[url]);
+          if (isAction) {
+            const signal = ACTION_ROUTES[url];
+            this.log(`dispatch=${signal}`);
+            this.opts.onEvent(signal);
+          } else {
+            this.log(`info-only route=${url}`);
+          }
         });
       });
       return;
