@@ -1,13 +1,13 @@
 # Claude Notify — Stream Deck plugin
 
-Flash a Stream Deck button on Claude Code hook events (task complete, idle, permission request). Works for local Claude on Windows and remote Claude over SSH.
+Flash a Stream Deck button on Claude Code hook events (turn end, idle, permission request, task completed). Works for local Claude on Windows and remote Claude over SSH.
 
 ![preview](com.nshopik.claudenotify.sdPlugin/previews/main.png)
 
 ## Features
 
 - One configurable Stream Deck action: place it as many times as you want, configure each instance for a single event type.
-- Three events covered: **Stop** (Claude finished), **Idle** (Claude waiting for input), **Permission** (Claude wants approval).
+- Four events covered: **Stop** (Claude finished a turn), **Idle** (Claude waiting for input), **Permission** (Claude wants approval), **Task Completed** (Claude finished a task — self-clears after 30s).
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude — the deck doesn't keep glowing after you've already responded.
 - Static or pulsing flash mode, configurable per button.
 - Optional audio cue per event, defaulting to Windows system sounds, with per-event source filter (remote-only by default to avoid doubling up with local PowerShell sound hooks).
@@ -52,7 +52,7 @@ The script is idempotent — safe to run multiple times. See [Local hook install
 
 ## Local hook installation (Windows)
 
-Install the three Claude hooks that signal the plugin:
+Install the Claude hooks that signal the plugin (4 alert-arming events plus dismiss events):
 
 ```
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -156,7 +156,7 @@ Host my-dev-vm
 
 For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` to your `ssh` command.
 
-**Step 2. Add the three hooks to the remote's `~/.claude/settings.json`**
+**Step 2. Add the hooks to the remote's `~/.claude/settings.json`**
 
 ```json
 {
@@ -225,7 +225,7 @@ A button on your local Stream Deck configured for Stop should flash.
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `curl: connection refused` from remote | SSH session opened without `-R`; or plugin not running on Windows; or HTTP listener disabled in plugin settings | Reconnect ensuring `-R 9123:127.0.0.1:9123` is set; verify plugin's global settings show "HTTP listener: listening on 127.0.0.1:9123" |
-| Tunnel responds but deck doesn't flash | No button configured for that event type, or the button's event type is different | Open Property Inspector on a button, set Event type to match (Stop / Idle / Permission); use the per-button Test button to verify |
+| Tunnel responds but deck doesn't flash | No button configured for that event type, or the button's event type is different | Open Property Inspector on a button, set Event type to match (Stop / Idle / Permission / Task Completed); use the per-button Test button to verify |
 | `bind: Address already in use` warning when SSH connects | A previous SSH session to the same remote is still holding the reverse port | Disconnect the old session; or pick a different port (change plugin global setting + `-R` line + curl URLs to match) |
 | `Permission denied` or "channel 3: open failed" on `-R` | Remote sshd has `AllowTcpForwarding no` (rare, hardened servers) | Ask sysadmin to enable; or use a different transport (out of scope) |
 | `bash: curl: command not found` on remote | Minimal container/distro without curl | Install curl, or substitute the hook with `wget -q --tries=1 --timeout=1 --method=POST http://localhost:9123/event/stop -O /dev/null &` |
@@ -241,7 +241,7 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 
 ### Per-button settings (Property Inspector)
 
-- **Event type** — which Claude event this button reacts to (Stop / Idle / Permission). Default: Idle.
+- **Event type** — which Claude event this button reacts to (Stop / Idle / Permission / Task Completed). Default: Idle.
 - **Icons** — set via Stream Deck's native two-dot state picker below the button preview. Each dot is a state (Idle / Alert). Click a dot's icon dropdown to **Set from File**, **Create New Icon**, or **Open Stream Deck Icon Library**. The plugin ships with a default idle/alert pair; replace either as you like.
 - **Flash mode** — Static (icon swap) or Pulse (toggle every N ms).
 - **Pulse rate** — milliseconds between toggles when Pulse is selected. Min 100ms (Elgato's 10/sec key-update cap).
