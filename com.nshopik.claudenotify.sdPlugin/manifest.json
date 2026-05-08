@@ -1,0 +1,42 @@
+{
+  "Name": "Claude Notify",
+  "Version": "1.0.0.0",
+  "Author": "Nikolay Shopik",
+  "Category": "Claude Notify",
+  "CategoryIcon": "images/actions/category",
+  "Description": "Flash a Stream Deck button on Claude Code hook events (task complete, idle, permission request). Works for local Claude on Windows and remote Claude over SSH.",
+  "URL": "https://github.com/nshopik/claudenotify",
+  "Icon": "images/plugin-icon",
+  "PropertyInspectorPath": "ui/plugin-settings.html",
+  "CodePath": "bin/plugin.js",
+  "UUID": "com.nshopik.claudenotify",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "6.9"
+  },
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "Actions": [
+    {
+      "Name": "Flash",
+      "UUID": "com.nshopik.claudenotify.flash",
+      "Icon": "images/actions/flash",
+      "Tooltip": "Flash on a Claude Code hook event",
+      "PropertyInspectorPath": "ui/flash.html",
+      "SupportedInMultiActions": false,
+      "States": [
+        {
+          "Image": "images/keys/idle-idle"
+        }
+      ]
+    }
+  ]
+}
