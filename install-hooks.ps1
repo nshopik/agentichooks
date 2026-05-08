@@ -1,5 +1,6 @@
 # install-hooks.ps1
-# Idempotently installs Claude Code hooks that touch the three claude-notify-*.sig files.
+# Idempotently installs Claude Code hooks that signal the Claude Notify Stream Deck plugin.
+# Covers 4 alert-arming events (Stop, Notification, PermissionRequest, TaskCompleted) plus dismiss events.
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
 $ErrorActionPreference = "Stop"

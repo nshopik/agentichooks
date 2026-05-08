@@ -30,6 +30,26 @@ npm run build
 npx streamdeck link com.nshopik.claudenotify.sdPlugin
 ```
 
+## Quick Start — Local (Windows)
+
+### Install plugin
+
+Choose Option A (download) or Option B (build) above, then:
+
+```powershell
+npx streamdeck link com.nshopik.claudenotify.sdPlugin
+```
+
+### Add Claude hooks
+
+Run the provided installer to add hooks for all 4 event types (Stop, Idle, Permission, Task Completed) to `~/.claude/settings.json`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
+```
+
+The script is idempotent — safe to run multiple times. See [Local hook installation](#local-hook-installation-windows) below for details and troubleshooting.
+
 ## Local hook installation (Windows)
 
 Install the three Claude hooks that signal the plugin:
@@ -39,6 +59,71 @@ powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 ```
 
 The script edits `~/.claude/settings.json` additively, marks each added hook with a versioned tag for idempotency, and offers to migrate any legacy `claude-notify-flash.sig` hook to the new naming.
+
+## Quick Start — Remote (Linux/macOS)
+
+### Configure SSH reverse-forward
+
+Edit `~/.ssh/config` on your **Windows** machine and add this Host entry:
+
+```
+Host my-dev-vm
+  HostName dev-vm.example.com
+  User you
+  RemoteForward 9123 127.0.0.1:9123
+```
+
+Replace `my-dev-vm`, `dev-vm.example.com`, and `you` with your actual values. Then SSH to the remote and verify the tunnel:
+
+```bash
+curl -i http://localhost:9123/health
+```
+
+Expected: `HTTP/1.1 200 OK`.
+
+### Add hooks to remote machine
+
+On the remote machine, add these hooks to `~/.claude/settings.json` under the `"hooks"` key:
+
+```json
+"Stop": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"Notification": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/idle >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"PermissionRequest": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"TaskCompleted": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/task-completed >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"UserPromptSubmit": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+]
+```
+
+Test a Claude task on the remote — the Stop event should fire and your local Stream Deck button should flash. See [Remote setup](#remote-setup-linux--macos) below for detailed troubleshooting.
 
 ## Remote setup (Linux / macOS)
 
@@ -94,6 +179,13 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
       { "hooks": [
         { "type": "command",
           "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "TaskCompleted": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/task-completed >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
