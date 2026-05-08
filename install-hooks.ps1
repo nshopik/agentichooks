@@ -1,13 +1,14 @@
 # install-hooks.ps1
 # Idempotently installs Claude Code hooks that signal the Claude Notify Stream Deck plugin.
-# Covers 4 alert-arming events (Stop, Notification, PermissionRequest, TaskCompleted) plus dismiss events.
+# Covers 3 alert-arming events (Stop, PermissionRequest, TaskCompleted) plus dismiss events.
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_claude-notify-installer"
-$CURRENT_VERSION = "v4"
+$CURRENT_VERSION = "v6"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
+$aumid = "Claude.Notify"
 
 function Read-Settings {
     if (-not (Test-Path $settingsPath)) {
@@ -67,11 +68,17 @@ function Remove-OurHooks($hooksArray) {
 }
 
 function Make-Hook($sigName, $eventName) {
-    # Hook writes the sig file the plugin watches, then fires a Windows toast
-    # via BurntToast so we can see exactly which hook fired and when. Inline
-    # commands only (no helper script) so PowerShell ExecutionPolicy can't block
-    # the hook on default Windows installs.
-    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); try { New-BurntToastNotification -Text 'Claude Notify: $eventName', (Get-Date -Format 'HH:mm:ss.fff') -Silent } catch {}"
+    # Hook writes the sig file the plugin watches, then fires a native Windows
+    # toast via the WinRT ToastNotificationManager API. No external module, no
+    # helper script: a single inline command keeps PowerShell ExecutionPolicy
+    # out of the picture on default Windows installs. Toasts are silent (no
+    # sound) so high-rate hooks like PostToolUse don't become a sonic assault.
+    # The 'Claude.Notify' AppUserModelID is registered once in HKCU below,
+    # which gets toasts attributed correctly and persisted in Action Center.
+    # Note: nodes are cached via .Item(0)/.Item(1) before mutation because
+    # IXmlNodeList is live and re-indexing after AppendChild raises
+    # "Collection was modified" on the second access.
+    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); try { [void][Windows.UI.Notifications.ToastNotificationManager,Windows.UI.Notifications,ContentType=WindowsRuntime]; [void][Windows.Data.Xml.Dom.XmlDocument,Windows.Data.Xml.Dom.XmlDocument,ContentType=WindowsRuntime]; `$x=[Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); `$n=`$x.GetElementsByTagName('text'); `$t1=`$n.Item(0); `$t2=`$n.Item(1); `$t1.AppendChild(`$x.CreateTextNode('Claude Notify: $eventName')) | Out-Null; `$t2.AppendChild(`$x.CreateTextNode((Get-Date -Format 'HH:mm:ss.fff'))) | Out-Null; `$a=`$x.CreateElement('audio'); `$a.SetAttribute('silent','true'); `$x.DocumentElement.AppendChild(`$a) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('$aumid').Show([Windows.UI.Notifications.ToastNotification]::new(`$x)) } catch {}"
     $h = [ordered]@{
         type    = "command"
         command = $cmd
@@ -82,36 +89,24 @@ function Make-Hook($sigName, $eventName) {
     return [pscustomobject]$h
 }
 
-function Ensure-BurntToast {
-    if (Get-Module -ListAvailable -Name BurntToast) {
-        Write-Host "[mod ] BurntToast already installed"
+function Register-AppId {
+    # Registers an AppUserModelID in HKCU so toasts are attributed as "Claude
+    # Notify" in Action Center. Without this, modern Windows may silently
+    # refuse to display toasts from an unregistered AUMID. Pure registry —
+    # no Start Menu shortcut, no IPropertyStore P/Invoke, no module install.
+    $regPath = "HKCU:\Software\Classes\AppUserModelId\$aumid"
+    if (Test-Path $regPath) {
+        Write-Host "[reg ] AppUserModelID '$aumid' already registered"
         return
     }
-    Write-Host "[mod ] Installing BurntToast (CurrentUser scope)..."
-    try {
-        # NuGet provider is required by Install-Module; on a fresh box it prompts
-        # to install. Pre-install it non-interactively here to avoid the prompt.
-        if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) {
-            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force -Confirm:$false -ErrorAction Stop | Out-Null
-        }
-        # PSGallery policy: must be Trusted to install without prompting.
-        $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
-        if ($gallery -and $gallery.InstallationPolicy -ne 'Trusted') {
-            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-        }
-        Install-Module -Name BurntToast -Scope CurrentUser -Force -AllowClobber -Confirm:$false -ErrorAction Stop
-        Write-Host "[mod ] BurntToast installed"
-    } catch {
-        Write-Host "[mod ] Auto-install failed: $($_.Exception.Message)"
-        Write-Host "       Hooks will still install. Install BurntToast manually with:"
-        Write-Host "         Install-Module -Name BurntToast -Scope CurrentUser -Force"
-        Write-Host "       Then re-run this script (or just leave it; sig writes still work)."
-    }
+    New-Item -Path $regPath -Force | Out-Null
+    New-ItemProperty -Path $regPath -Name "DisplayName" -Value "Claude Notify" -PropertyType String -Force | Out-Null
+    Write-Host "[reg ] registered AppUserModelID '$aumid' in HKCU"
 }
 
-Ensure-BurntToast
+Register-AppId
 
-# Clean up the v3 helper script if it's still around (replaced by inline commands in v4).
+# Clean up the v3 helper script if it's still around (replaced by inline commands in v4+).
 if (Test-Path $staleHelperPath) {
     Remove-Item $staleHelperPath -Force
     Write-Host "[clean] removed stale $staleHelperPath"
@@ -126,16 +121,16 @@ $hooks = $settings.hooks
 $events = [ordered]@{
     # Alert-arming events
     Stop                = "claude-notify-stop.sig"
-    Notification        = "claude-notify-idle.sig"
+    StopFailure         = "claude-notify-stop.sig"
     PermissionRequest   = "claude-notify-permission.sig"
     TaskCompleted       = "claude-notify-task-completed.sig"
-    # Full dismiss (clears every alert including task-completed)
-    StopFailure         = "claude-notify-active.sig"
+    # Full dismiss (clears every armed alert)
     UserPromptSubmit    = "claude-notify-active.sig"
-    # Soft dismiss (clears all except sticky event types — task-completed survives)
-    PermissionDenied    = "claude-notify-active-soft.sig"
-    PostToolUse         = "claude-notify-active-soft.sig"
-    PostToolUseFailure  = "claude-notify-active-soft.sig"
+    SessionStart        = "claude-notify-active.sig"
+    # Permission-resolved (dismisses only an armed permission alert)
+    PermissionDenied    = "claude-notify-permission-resolved.sig"
+    PostToolUse         = "claude-notify-permission-resolved.sig"
+    PostToolUseFailure  = "claude-notify-permission-resolved.sig"
 }
 
 $changed = @()
@@ -198,4 +193,4 @@ if ($changed.Count -gt 0 -or $legacyFound) {
     Write-Host ""
     Write-Host "No changes needed."
 }
-Write-Host "Each hook fire shows a Windows toast (Action Center keeps history)."
+Write-Host "Each hook fire shows a silent native Windows toast (Action Center keeps history)."
