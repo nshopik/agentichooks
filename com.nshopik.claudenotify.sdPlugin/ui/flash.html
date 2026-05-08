@@ -35,11 +35,12 @@
   </sdpi-item>
 
   <div id="audio-stop-section">
-    <sdpi-item label="Audio enabled">
-      <sdpi-checkbox setting="audio.stop.enabled" default="true" global></sdpi-checkbox>
-    </sdpi-item>
     <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,.wav" placeholder="Speech On.wav (system)" global></sdpi-file>
+      <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Speech On.wav" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item>
+      <sdpi-button onclick="muteAudio('stop')">Mute</sdpi-button>
+      <sdpi-button onclick="resetAudio('stop')">Reset to default</sdpi-button>
     </sdpi-item>
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.stop.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
@@ -48,11 +49,12 @@
   </div>
 
   <div id="audio-idle-section">
-    <sdpi-item label="Audio enabled">
-      <sdpi-checkbox setting="audio.idle.enabled" default="true" global></sdpi-checkbox>
-    </sdpi-item>
     <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.idle.soundPath" accept="audio/wav,.wav" placeholder="Windows Notify System Generic.wav (system)" global></sdpi-file>
+      <sdpi-file setting="audio.idle.soundPath" accept="audio/wav,.wav" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item>
+      <sdpi-button onclick="muteAudio('idle')">Mute</sdpi-button>
+      <sdpi-button onclick="resetAudio('idle')">Reset to default</sdpi-button>
     </sdpi-item>
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.idle.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
@@ -61,11 +63,12 @@
   </div>
 
   <div id="audio-permission-section">
-    <sdpi-item label="Audio enabled">
-      <sdpi-checkbox setting="audio.permission.enabled" default="true" global></sdpi-checkbox>
-    </sdpi-item>
     <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,.wav" placeholder="Windows Message Nudge.wav (system)" global></sdpi-file>
+      <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Windows Message Nudge.wav" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item>
+      <sdpi-button onclick="muteAudio('permission')">Mute</sdpi-button>
+      <sdpi-button onclick="resetAudio('permission')">Reset to default</sdpi-button>
     </sdpi-item>
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.permission.volumePercent" min="0" max="100" step="5" default="90" showlabels global></sdpi-range>
@@ -74,11 +77,12 @@
   </div>
 
   <div id="audio-task-completed-section">
-    <sdpi-item label="Audio enabled">
-      <sdpi-checkbox setting="audio.task-completed.enabled" default="true" global></sdpi-checkbox>
-    </sdpi-item>
     <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,.wav" placeholder="Windows Notify System Generic.wav (system)" global></sdpi-file>
+      <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Windows Notify System Generic.wav" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item>
+      <sdpi-button onclick="muteAudio('task-completed')">Mute</sdpi-button>
+      <sdpi-button onclick="resetAudio('task-completed')">Reset to default</sdpi-button>
     </sdpi-item>
     <sdpi-item label="Volume %">
       <sdpi-range setting="audio.task-completed.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
@@ -88,7 +92,7 @@
 
   <sdpi-item>
     <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
-      Audio plays for both local sig-file events and remote HTTP events; use the per-event Audio enabled toggle above to silence any event type. HTTP listening on <code>127.0.0.1:9123</code>.
+      Audio plays for both local sig-file events and remote HTTP events; use <strong>Mute</strong> next to a sound to silence that event, or pick a different WAV file. HTTP listening on <code>127.0.0.1:9123</code>.
       From a remote host (SSH-tunneled), POST to one of:
       <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
 curl -X POST http://localhost:9123/event/idle
@@ -109,6 +113,16 @@ curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
       if (!client) return;
       client.send("sendToPlugin", { kind: "test-audio", event: event });
+    }
+
+    function muteAudio(event) {
+      const el = document.querySelector('sdpi-file[setting="audio.' + event + '.soundPath"]');
+      if (el) el.value = "";
+    }
+
+    function resetAudio(event) {
+      const el = document.querySelector('sdpi-file[setting="audio.' + event + '.soundPath"]');
+      if (el) el.value = undefined;
     }
 
     const updatePulseVisibility = () => {
