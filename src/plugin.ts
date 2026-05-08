@@ -1,4 +1,5 @@
-import streamDeck, { LogLevel, type JsonObject } from "@elgato/streamdeck";
+import streamDeck from "@elgato/streamdeck";
+import type { JsonObject } from "@elgato/utils";
 import os from "node:os";
 import { FlashAction } from "./actions/flash-action.js";
 import { SignalWatcher } from "./signal-watcher.js";
@@ -8,7 +9,7 @@ import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { DEFAULT_GLOBAL_SETTINGS, type GlobalSettings, type EventType } from "./types.js";
 
-streamDeck.logger.setLevel(LogLevel.INFO);
+streamDeck.logger.setLevel("info");
 
 const action = new FlashAction();
 streamDeck.actions.registerAction(action);

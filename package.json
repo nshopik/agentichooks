@@ -12,7 +12,7 @@
     "pack": "streamdeck pack com.nshopik.claudenotify.sdPlugin"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^1.0.0"
+    "@elgato/streamdeck": "^2.1.0"
   },
   "devDependencies": {
     "@elgato/cli": "^1.0.0",

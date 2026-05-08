@@ -2,13 +2,12 @@ import {
   action,
   SingletonAction,
   type DidReceiveSettingsEvent,
-  type JsonObject,
-  type JsonValue,
   type KeyDownEvent,
   type SendToPluginEvent,
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
+import type { JsonObject, JsonValue } from "@elgato/utils";
 import { DEFAULT_FLASH_SETTINGS, type FlashSettings, type ButtonState } from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
 import { keyIconBase64, readImageAsDataUri } from "../icons.js";
