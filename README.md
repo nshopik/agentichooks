@@ -60,7 +60,7 @@ powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 
 The script edits `~/.claude/settings.json` additively, marks each added hook with a versioned tag for idempotency, and offers to migrate any legacy `claude-notify-flash.sig` hook to the new naming. Re-running upgrades older marker versions in place.
 
-Each installed hook also appends a line to `%TEMP%\claude-notify-debug.log` (`<timestamp>\t<event>\t<sig-file>`, tab-separated). Tail it to see exactly which hooks fire and when — useful for debugging unexpected dismissals or correlating with the plugin's own log at `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.claudenotify.sdPlugin\logs\com.nshopik.claudenotify.0.log`.
+Each installed hook also fires a Windows toast (via the [BurntToast](https://github.com/Windos/BurntToast) PowerShell module, auto-installed by the script) showing the event name and timestamp. Useful for debugging unexpected dismissals — Action Center keeps the history so you can see exactly which hooks fired and in what order. Cross-reference with the plugin's own log at `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.claudenotify.sdPlugin\logs\com.nshopik.claudenotify.0.log` to see which dispatches followed.
 
 ## Quick Start — Remote (Linux/macOS)
 

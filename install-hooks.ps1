@@ -6,9 +6,8 @@
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_claude-notify-installer"
-$CURRENT_VERSION = "v3"
-$debugLogPath = Join-Path $env:TEMP "claude-notify-debug.log"
-$helperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
+$CURRENT_VERSION = "v4"
+$staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
 
 function Read-Settings {
     if (-not (Test-Path $settingsPath)) {
@@ -68,11 +67,11 @@ function Remove-OurHooks($hooksArray) {
 }
 
 function Make-Hook($sigName, $eventName) {
-    # Hook delegates to the helper script (installed alongside settings.json by
-    # Write-HelperScript). The helper writes the sig file AND appends a debug
-    # line under a retry loop so concurrent hook fires (e.g., several PostToolUse
-    # in one turn) don't drop log entries to file-lock contention.
-    $cmd = "& `"`$env:USERPROFILE\.claude\claude-notify-hook.ps1`" -Sig `"$sigName`" -EventName `"$eventName`""
+    # Hook writes the sig file the plugin watches, then fires a Windows toast
+    # via BurntToast so we can see exactly which hook fired and when. Inline
+    # commands only (no helper script) so PowerShell ExecutionPolicy can't block
+    # the hook on default Windows installs.
+    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); try { New-BurntToastNotification -Text 'Claude Notify: $eventName', (Get-Date -Format 'HH:mm:ss.fff') -Silent } catch {}"
     $h = [ordered]@{
         type    = "command"
         command = $cmd
@@ -83,42 +82,40 @@ function Make-Hook($sigName, $eventName) {
     return [pscustomobject]$h
 }
 
-function Write-HelperScript {
-    $dir = Split-Path $helperPath -Parent
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    $content = @'
-# claude-notify-hook.ps1 - invoked by Claude Code hooks installed by install-hooks.ps1.
-# Writes a sig file the Stream Deck plugin watches, then appends a tab-separated
-# line to a shared debug log. Retry loop handles concurrent hook fires that
-# would otherwise contend for the log file and silently drop entries.
-param(
-    [Parameter(Mandatory=$true)][string]$Sig,
-    [Parameter(Mandatory=$true)][string]$EventName
-)
-
-$ErrorActionPreference = "SilentlyContinue"
-
-$ts = Get-Date -Format 'o'
-$sigPath = Join-Path $env:TEMP $Sig
-$logPath = Join-Path $env:TEMP "claude-notify-debug.log"
-
-Set-Content -Path $sigPath -Value $ts
-
-$line = "$ts`t$EventName`t$Sig"
-for ($i = 0; $i -lt 30; $i++) {
-    try {
-        Add-Content -LiteralPath $logPath -Value $line -ErrorAction Stop
+function Ensure-BurntToast {
+    if (Get-Module -ListAvailable -Name BurntToast) {
+        Write-Host "[mod ] BurntToast already installed"
         return
+    }
+    Write-Host "[mod ] Installing BurntToast (CurrentUser scope)..."
+    try {
+        # NuGet provider is required by Install-Module; on a fresh box it prompts
+        # to install. Pre-install it non-interactively here to avoid the prompt.
+        if (-not (Get-PackageProvider -Name NuGet -ListAvailable -ErrorAction SilentlyContinue)) {
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force -Confirm:$false -ErrorAction Stop | Out-Null
+        }
+        # PSGallery policy: must be Trusted to install without prompting.
+        $gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+        if ($gallery -and $gallery.InstallationPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        }
+        Install-Module -Name BurntToast -Scope CurrentUser -Force -AllowClobber -Confirm:$false -ErrorAction Stop
+        Write-Host "[mod ] BurntToast installed"
     } catch {
-        Start-Sleep -Milliseconds 30
+        Write-Host "[mod ] Auto-install failed: $($_.Exception.Message)"
+        Write-Host "       Hooks will still install. Install BurntToast manually with:"
+        Write-Host "         Install-Module -Name BurntToast -Scope CurrentUser -Force"
+        Write-Host "       Then re-run this script (or just leave it; sig writes still work)."
     }
 }
-'@
-    Set-Content -Path $helperPath -Value $content -Encoding UTF8
-    Write-Host "[help] wrote $helperPath"
-}
 
-Write-HelperScript
+Ensure-BurntToast
+
+# Clean up the v3 helper script if it's still around (replaced by inline commands in v4).
+if (Test-Path $staleHelperPath) {
+    Remove-Item $staleHelperPath -Force
+    Write-Host "[clean] removed stale $staleHelperPath"
+}
 
 $settings = Read-Settings
 if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
@@ -201,4 +198,4 @@ if ($changed.Count -gt 0 -or $legacyFound) {
     Write-Host ""
     Write-Host "No changes needed."
 }
-Write-Host "Debug log: $debugLogPath  (each hook fire appends a line: <timestamp>`t<event>`t<sig>)"
+Write-Host "Each hook fire shows a Windows toast (Action Center keeps history)."
