@@ -45,10 +45,9 @@ export class Dispatcher {
       if (btn.settings.eventType === event) { btn.alert(); armed++; }
     }
     this.log(`dispatch event=${event} source=${source} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} preserveSticky=${preserveSticky}`);
-    // Audio plays for any source. The per-event audio.enabled toggle in the
-    // PI is authoritative.
+    // Audio plays for any source. soundPath is the only gate:
+    // undefined → fall back to defaultSoundPath; "" → explicit mute; path → user pick.
     const audioCfg = this.opts.getGlobalSettings().audio[event];
-    if (!audioCfg.enabled) return;
     const path = audioCfg.soundPath ?? defaultSoundPath(event);
     if (!path) return;
     this.opts.audioPlayer.play(path, audioCfg.volumePercent);

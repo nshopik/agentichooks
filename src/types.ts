@@ -16,7 +16,6 @@ export type FlashSettings = {
 };
 
 export type AudioConfig = {
-  enabled: boolean;
   soundPath?: string;
   volumePercent: number;
 };
@@ -56,16 +55,12 @@ export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
   "task-completed": 30_000,
 };
 
-const baseAudio: Omit<AudioConfig, "volumePercent"> = {
-  enabled: true,
-};
-
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   audio: {
-    stop: { ...baseAudio, volumePercent: 80 },
-    idle: { ...baseAudio, volumePercent: 80 },
-    permission: { ...baseAudio, volumePercent: 90 },
-    "task-completed": { ...baseAudio, volumePercent: 80 },
+    stop: { volumePercent: 80 },
+    idle: { volumePercent: 80 },
+    permission: { volumePercent: 90 },
+    "task-completed": { volumePercent: 80 },
   },
 };
 
