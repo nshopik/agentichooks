@@ -6,6 +6,8 @@
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_claude-notify-installer"
+$CURRENT_VERSION = "v2"
+$debugLogPath = Join-Path $env:TEMP "claude-notify-debug.log"
 
 function Read-Settings {
     if (-not (Test-Path $settingsPath)) {
@@ -30,26 +32,52 @@ function Get-OrAdd-Property($obj, $name, $default) {
     return , $obj.$name
 }
 
-function Has-OurHook($hooksArray) {
-    if ($null -eq $hooksArray) { return $false }
+function Find-OurHookVersion($hooksArray) {
+    if ($null -eq $hooksArray) { return $null }
     foreach ($entry in $hooksArray) {
         if ($null -eq $entry.hooks) { continue }
         foreach ($h in $entry.hooks) {
-            if ($h.PSObject.Properties.Name -contains $marker) { return $true }
+            if ($h.PSObject.Properties.Name -contains $marker) {
+                return [string]$h.$marker
+            }
         }
     }
-    return $false
+    return $null
 }
 
-function Make-Hook($sigName) {
-    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o')"
+function Remove-OurHooks($hooksArray) {
+    if ($null -eq $hooksArray) { return @() }
+    $result = @()
+    foreach ($entry in $hooksArray) {
+        if ($null -eq $entry.hooks) {
+            $result += $entry
+            continue
+        }
+        $remaining = @()
+        foreach ($h in $entry.hooks) {
+            if ($h.PSObject.Properties.Name -contains $marker) { continue }
+            $remaining += $h
+        }
+        if ($remaining.Count -gt 0) {
+            $entry.hooks = $remaining
+            $result += $entry
+        }
+    }
+    return $result
+}
+
+function Make-Hook($sigName, $eventName) {
+    # Writes the sig file the plugin watches AND appends a tab-separated debug line
+    # (timestamp, event name, sig file) to %TEMP%\claude-notify-debug.log so we can
+    # see exactly which hook fired and when.
+    $cmd = "Set-Content -Path `"`$env:TEMP\$sigName`" -Value (Get-Date -Format 'o'); Add-Content -Path `"`$env:TEMP\claude-notify-debug.log`" -Value `"`$(Get-Date -Format 'o')`t$eventName`t$sigName`""
     $h = [ordered]@{
         type    = "command"
         command = $cmd
         shell   = "powershell"
         async   = $true
     }
-    $h[$marker] = "v1"
+    $h[$marker] = $CURRENT_VERSION
     return [pscustomobject]$h
 }
 
@@ -74,22 +102,28 @@ $events = [ordered]@{
     PostToolUseFailure  = "claude-notify-active-soft.sig"
 }
 
-$added = @()
+$changed = @()
 foreach ($evt in $events.Keys) {
     if (-not ($hooks.PSObject.Properties.Name -contains $evt)) {
         $hooks | Add-Member -MemberType NoteProperty -Name $evt -Value @() -Force
     }
     $arr = @($hooks.$evt)
 
-    if (Has-OurHook $arr) {
-        Write-Host "[skip] $evt already has Claude Notify hook"
+    $existingVer = Find-OurHookVersion $arr
+    if ($existingVer -eq $CURRENT_VERSION) {
+        Write-Host "[skip] $evt already at $CURRENT_VERSION"
         continue
     }
-    $newEntry = [pscustomobject]@{ hooks = @(Make-Hook $events[$evt]) }
+    if ($null -ne $existingVer) {
+        $arr = @(Remove-OurHooks $arr)
+        Write-Host "[up  ] ${evt}: $existingVer -> $CURRENT_VERSION"
+    } else {
+        Write-Host "[add ] $evt -> writes $($events[$evt])"
+    }
+    $newEntry = [pscustomobject]@{ hooks = @(Make-Hook $events[$evt] $evt) }
     $arr = $arr + $newEntry
     $hooks.$evt = $arr
-    $added += $evt
-    Write-Host "[add ] $evt -> writes $($events[$evt])"
+    $changed += $evt
 }
 
 # Legacy migration: detect any local hook still writing claude-notify-flash.sig
@@ -119,7 +153,7 @@ if ($legacyFound) {
     }
 }
 
-if ($added.Count -gt 0 -or $legacyFound) {
+if ($changed.Count -gt 0 -or $legacyFound) {
     $settings.hooks = $hooks
     Write-Settings $settings
     Write-Host ""
@@ -128,3 +162,4 @@ if ($added.Count -gt 0 -or $legacyFound) {
     Write-Host ""
     Write-Host "No changes needed."
 }
+Write-Host "Debug log: $debugLogPath  (each hook fire appends a line: <timestamp>`t<event>`t<sig>)"
