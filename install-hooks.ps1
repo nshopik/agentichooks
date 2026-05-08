@@ -157,6 +157,21 @@ foreach ($evt in $events.Keys) {
     $changed += $evt
 }
 
+# Orphan cleanup: remove our managed hooks from event keys we no longer install
+# (e.g., Notification was removed when the idle slot was dropped). Only entries
+# carrying our marker are removed; user-added hooks under the same key remain.
+$droppedEvents = @("Notification")
+foreach ($evt in $droppedEvents) {
+    if (-not ($hooks.PSObject.Properties.Name -contains $evt)) { continue }
+    $arr = @($hooks.$evt)
+    $existingVer = Find-OurHookVersion $arr
+    if ($null -eq $existingVer) { continue }
+    $arr = @(Remove-OurHooks $arr)
+    $hooks.$evt = $arr
+    Write-Host "[drop] removed managed $evt hook ($existingVer; event no longer used)"
+    $changed += $evt
+}
+
 # Legacy migration: detect any local hook still writing claude-notify-flash.sig
 $legacyFound = $false
 foreach ($evt in $hooks.PSObject.Properties.Name) {
