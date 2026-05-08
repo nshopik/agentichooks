@@ -10,8 +10,8 @@
     "declaration": false,
     "sourceMap": true,
     "outDir": "./com.nshopik.claudenotify.sdPlugin/bin",
-    "rootDir": "./src",
     "resolveJsonModule": true,
+    "noEmit": true,
     "types": ["node"]
   },
   "include": ["src/**/*", "tests/**/*"],
