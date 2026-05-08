@@ -62,7 +62,7 @@ const watcher = new SignalWatcher({
   onSignal: (signal) => {
     if (signal === "active") dispatcher.dismissAll();
     else if (signal === "permission-resolved") dispatcher.dismiss("permission");
-    else dispatcher.dispatch(signal, "local");
+    else dispatcher.dispatch(signal);
   },
 });
 
@@ -74,7 +74,7 @@ async function startListener(): Promise<void> {
     onEvent: (signal) => {
       if (signal === "active") dispatcher.dismissAll();
       else if (signal === "permission-resolved") dispatcher.dismiss("permission");
-      else dispatcher.dispatch(signal, "remote");
+      else dispatcher.dispatch(signal);
     },
     log: (msg) => streamDeck.logger.info(`http: ${msg}`),
   });

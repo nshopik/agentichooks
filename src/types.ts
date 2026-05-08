@@ -1,8 +1,6 @@
 export type EventType = "stop" | "permission" | "task-completed";
 export type SignalType = EventType | "active" | "permission-resolved";
 
-export type EventSource = "local" | "remote";
-
 export type FlashSettings = {
   eventType: EventType;
   flashMode: "static" | "pulse";

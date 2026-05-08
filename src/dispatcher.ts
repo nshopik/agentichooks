@@ -1,4 +1,4 @@
-import type { EventType, EventSource, GlobalSettings, FlashSettings, ButtonState } from "./types.js";
+import type { EventType, GlobalSettings, FlashSettings, ButtonState } from "./types.js";
 import { defaultSoundPath } from "./system-sounds.js";
 
 export type DispatchableButton = {
@@ -29,7 +29,7 @@ export class Dispatcher {
   // Arms buttons whose eventType === event. Re-arming clears any prior alerts
   // of the same event type. The one cross-dismiss rule: dispatch("stop") also
   // dismisses any armed permission button (turn ended → permission stale).
-  dispatch(event: EventType, source: EventSource): void {
+  dispatch(event: EventType): void {
     const buttons = this.opts.getButtons();
     let dismissed = 0;
     let armed = 0;
@@ -46,7 +46,7 @@ export class Dispatcher {
     for (const [, btn] of buttons) {
       if (btn.settings.eventType === event) { btn.alert(); armed++; }
     }
-    this.log(`dispatch event=${event} source=${source} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} cross-dismiss=${crossDismiss}`);
+    this.log(`dispatch event=${event} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} cross-dismiss=${crossDismiss}`);
     const audioCfg = this.opts.getGlobalSettings().audio[event];
     const path = audioCfg.soundPath ?? defaultSoundPath(event);
     if (!path) return;
