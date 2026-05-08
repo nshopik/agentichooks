@@ -79,14 +79,14 @@ describe("Dispatcher", () => {
     expect(audioPlayer.play).toHaveBeenCalledWith(expect.stringContaining("Speech On.wav"), 75);
   });
 
-  it("plays audio for local events too (audio.enabled is the only gate)", () => {
+  it("plays audio for local events too (soundPath is the only gate)", () => {
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "local");
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 
-  it("skips audio when audio.enabled is false", () => {
-    globals.audio.stop.enabled = false;
+  it("skips audio when soundPath is the empty string (explicit mute)", () => {
+    globals.audio.stop.soundPath = "";
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "remote");
     expect(audioPlayer.play).not.toHaveBeenCalled();
