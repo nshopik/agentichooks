@@ -37,6 +37,7 @@ describe("SignalWatcher", () => {
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-stop.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-idle.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-permission.sig"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "claude-notify-task-completed.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-active.sig"))).toBe(true);
   });
 
@@ -90,7 +91,9 @@ describe("SignalWatcher", () => {
     fs.writeFileSync(path.join(tmpDir, "claude-notify-idle.sig"), "b");
     await sleep(120);
     fs.writeFileSync(path.join(tmpDir, "claude-notify-permission.sig"), "c");
+    await sleep(120);
+    fs.writeFileSync(path.join(tmpDir, "claude-notify-task-completed.sig"), "d");
     await sleep(150);
-    expect(received.map((r) => r.event)).toEqual(["stop", "idle", "permission"]);
+    expect(received.map((r) => r.event)).toEqual(["stop", "idle", "permission", "task-completed"]);
   });
 });

@@ -79,10 +79,10 @@ describe("Dispatcher", () => {
     expect(audioPlayer.play).toHaveBeenCalledWith(expect.stringContaining("Speech On.wav"), 75);
   });
 
-  it("never plays audio for local events (local hooks play their own sound)", () => {
+  it("plays audio for local events too (audio.enabled is the only gate)", () => {
     buttons.set("a", makeButton("stop"));
     dispatcher().dispatch("stop", "local");
-    expect(audioPlayer.play).not.toHaveBeenCalled();
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 
   it("skips audio when audio.enabled is false", () => {
@@ -99,6 +99,18 @@ describe("Dispatcher", () => {
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav", expect.any(Number));
   });
 
+  it("idle has no default sound and skips play() unless soundPath is set", () => {
+    buttons.set("a", makeButton("idle"));
+    dispatcher().dispatch("idle", "remote");
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("task-completed plays its default sound (Windows Notify System Generic.wav)", () => {
+    buttons.set("a", makeButton("task-completed"));
+    dispatcher().dispatch("task-completed", "remote");
+    expect(audioPlayer.play).toHaveBeenCalledWith(expect.stringContaining("Windows Notify System Generic.wav"), expect.any(Number));
+  });
+
   it("dismissAll dismisses every alerting button without arming or playing audio", () => {
     buttons.set("a", makeButton("stop", true));
     buttons.set("b", makeButton("idle", true));
@@ -109,5 +121,46 @@ describe("Dispatcher", () => {
     expect(buttons.get("c")!.dismiss).not.toHaveBeenCalled();
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("dismissAll(except=['task-completed']) preserves alerting task-completed buttons", () => {
+    buttons.set("a", makeButton("stop", true));
+    buttons.set("b", makeButton("task-completed", true));
+    buttons.set("c", makeButton("permission", true));
+    dispatcher().dismissAll(["task-completed"]);
+    expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("b")!.dismiss).not.toHaveBeenCalled();
+    expect(buttons.get("c")!.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatch(idle) preserves an alerting task-completed button", () => {
+    buttons.set("a", makeButton("task-completed", true));
+    buttons.set("b", makeButton("idle", false));
+    dispatcher().dispatch("idle", "remote");
+    expect(buttons.get("a")!.dismiss).not.toHaveBeenCalled();
+    expect(buttons.get("b")!.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatch(permission) preserves an alerting task-completed button", () => {
+    buttons.set("a", makeButton("task-completed", true));
+    buttons.set("b", makeButton("permission", false));
+    dispatcher().dispatch("permission", "remote");
+    expect(buttons.get("a")!.dismiss).not.toHaveBeenCalled();
+    expect(buttons.get("b")!.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatch(stop) DOES dismiss an alerting task-completed button", () => {
+    buttons.set("a", makeButton("task-completed", true));
+    buttons.set("b", makeButton("stop", false));
+    dispatcher().dispatch("stop", "remote");
+    expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("b")!.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("dispatch(task-completed) re-arms by clearing existing task-completed alerts", () => {
+    buttons.set("a", makeButton("task-completed", true));
+    dispatcher().dispatch("task-completed", "remote");
+    expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
 });

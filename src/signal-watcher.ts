@@ -6,7 +6,9 @@ const FILES: Record<SignalType, string> = {
   stop: "claude-notify-stop.sig",
   idle: "claude-notify-idle.sig",
   permission: "claude-notify-permission.sig",
+  "task-completed": "claude-notify-task-completed.sig",
   active: "claude-notify-active.sig",
+  "active-soft": "claude-notify-active-soft.sig",
 };
 
 const DEBOUNCE_MS = 50;
@@ -19,9 +21,9 @@ export type SignalWatcherOpts = {
 export class SignalWatcher {
   private opts: SignalWatcherOpts;
   private watchers: fs.FSWatcher[] = [];
-  private lastMtimeMs: Record<SignalType, number> = { stop: 0, idle: 0, permission: 0, active: 0 };
+  private lastMtimeMs: Record<SignalType, number> = { stop: 0, idle: 0, permission: 0, "task-completed": 0, active: 0, "active-soft": 0 };
   private startupMs = 0;
-  private debounceTimers: Record<SignalType, NodeJS.Timeout | null> = { stop: null, idle: null, permission: null, active: null };
+  private debounceTimers: Record<SignalType, NodeJS.Timeout | null> = { stop: null, idle: null, permission: null, "task-completed": null, active: null, "active-soft": null };
 
   constructor(opts: SignalWatcherOpts) {
     this.opts = opts;

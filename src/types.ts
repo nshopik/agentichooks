@@ -1,5 +1,11 @@
-export type EventType = "stop" | "idle" | "permission";
-export type SignalType = EventType | "active";
+export type EventType = "stop" | "idle" | "permission" | "task-completed";
+export type SignalType = EventType | "active" | "active-soft";
+
+// Event types that survive a "soft" dismiss. These persist through events
+// that fire continuously during a turn (PostToolUse, PostToolUseFailure,
+// PermissionDenied) and clear only on session-boundary events
+// (Stop, StopFailure, UserPromptSubmit) or their own auto-timeout.
+export const STICKY_EVENT_TYPES: ReadonlyArray<EventType> = ["task-completed"];
 export type EventSource = "local" | "remote";
 
 export type FlashSettings = {
@@ -20,6 +26,7 @@ export type GlobalSettings = {
     stop: AudioConfig;
     idle: AudioConfig;
     permission: AudioConfig;
+    "task-completed": AudioConfig;
   };
 };
 
@@ -39,6 +46,16 @@ export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
   autoTimeoutMs: 0,
 };
 
+// Per-event-type default for autoTimeoutMs. task-completed self-clears after 30s
+// because no Claude Code hook reliably fires after the task completion that we
+// can use as a dismiss signal short of the next prompt.
+export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
+  stop: 0,
+  idle: 0,
+  permission: 0,
+  "task-completed": 30_000,
+};
+
 const baseAudio: Omit<AudioConfig, "volumePercent"> = {
   enabled: true,
 };
@@ -48,7 +65,8 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     stop: { ...baseAudio, volumePercent: 80 },
     idle: { ...baseAudio, volumePercent: 80 },
     permission: { ...baseAudio, volumePercent: 90 },
+    "task-completed": { ...baseAudio, volumePercent: 80 },
   },
 };
 
-export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "idle", "permission"];
+export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "idle", "permission", "task-completed"];

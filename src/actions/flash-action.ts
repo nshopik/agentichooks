@@ -9,7 +9,7 @@ import streamDeck, {
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { JsonObject, JsonValue } from "@elgato/utils";
-import { DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
+import { DEFAULT_AUTO_TIMEOUT_BY_EVENT, DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
 
 const STATE_IDLE = 0;
@@ -41,15 +41,18 @@ type RawSettings = JsonObject & {
 
 function mergeSettings(raw: JsonObject | undefined): FlashSettings {
   const r = (raw ?? {}) as RawSettings;
-  let timeoutMs = DEFAULT_FLASH_SETTINGS.autoTimeoutMs;
+  const eventType = r.eventType ?? DEFAULT_FLASH_SETTINGS.eventType;
+  let timeoutMs: number;
   if (r.autoTimeoutSeconds !== undefined) {
     const seconds = Number(r.autoTimeoutSeconds);
-    if (!Number.isNaN(seconds)) timeoutMs = seconds * 1000;
+    timeoutMs = Number.isNaN(seconds) ? DEFAULT_AUTO_TIMEOUT_BY_EVENT[eventType] : seconds * 1000;
   } else if (typeof r.autoTimeoutMs === "number") {
     timeoutMs = r.autoTimeoutMs;
+  } else {
+    timeoutMs = DEFAULT_AUTO_TIMEOUT_BY_EVENT[eventType];
   }
   return {
-    eventType: r.eventType ?? DEFAULT_FLASH_SETTINGS.eventType,
+    eventType,
     flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
     pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
     autoTimeoutMs: timeoutMs,

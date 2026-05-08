@@ -29,12 +29,18 @@ fi
 
 # event_name -> path suffix on the listener
 declare -a EVENTS=(
+  # Alert-arming events
   "Stop:stop"
   "Notification:idle"
   "PermissionRequest:permission"
+  "TaskCompleted:task-completed"
+  # Full dismiss (clears every alert including task-completed)
+  "StopFailure:active"
   "UserPromptSubmit:active"
-  "PermissionDenied:active"
-  "PostToolUse:active"
+  # Soft dismiss (clears all except sticky event types — task-completed survives)
+  "PermissionDenied:active-soft"
+  "PostToolUse:active-soft"
+  "PostToolUseFailure:active-soft"
 )
 
 added=0

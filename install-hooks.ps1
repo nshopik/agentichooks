@@ -59,12 +59,18 @@ if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
 $hooks = $settings.hooks
 
 $events = [ordered]@{
-    Stop              = "claude-notify-stop.sig"
-    Notification      = "claude-notify-idle.sig"
-    PermissionRequest = "claude-notify-permission.sig"
-    UserPromptSubmit  = "claude-notify-active.sig"
-    PermissionDenied  = "claude-notify-active.sig"
-    PostToolUse       = "claude-notify-active.sig"
+    # Alert-arming events
+    Stop                = "claude-notify-stop.sig"
+    Notification        = "claude-notify-idle.sig"
+    PermissionRequest   = "claude-notify-permission.sig"
+    TaskCompleted       = "claude-notify-task-completed.sig"
+    # Full dismiss (clears every alert including task-completed)
+    StopFailure         = "claude-notify-active.sig"
+    UserPromptSubmit    = "claude-notify-active.sig"
+    # Soft dismiss (clears all except sticky event types — task-completed survives)
+    PermissionDenied    = "claude-notify-active-soft.sig"
+    PostToolUse         = "claude-notify-active-soft.sig"
+    PostToolUseFailure  = "claude-notify-active-soft.sig"
 }
 
 $added = @()

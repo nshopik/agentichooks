@@ -7,9 +7,11 @@ import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
-import { DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type EventType } from "./types.js";
+import { DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, STICKY_EVENT_TYPES, type GlobalSettings, type EventType } from "./types.js";
 
-streamDeck.logger.setLevel("info");
+// Default to "warn" so the diagnostic info logs (audio: ..., http: ..., dispatcher: ...)
+// stay in code but don't fire. Bump to "info" temporarily when investigating issues.
+streamDeck.logger.setLevel("warn");
 
 const audioPlayer = new AudioPlayer({
   log: (level, msg) => streamDeck.logger[level](`audio: ${msg}`),
@@ -23,6 +25,7 @@ const action = new FlashAction({
     const cfg = globals.audio[eventType];
     const path = cfg.soundPath ?? defaultSoundPath(eventType);
     streamDeck.logger.info(`onTestSound: event=${eventType} path=${path} vol=${cfg.volumePercent}`);
+    if (!path) return;
     audioPlayer.play(path, cfg.volumePercent);
   },
 });
@@ -50,12 +53,14 @@ const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
   getButtons: () => action.buttonsForDispatcher(),
+  log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
 });
 
 const watcher = new SignalWatcher({
   tmpDir: os.tmpdir(),
   onSignal: (signal) => {
     if (signal === "active") dispatcher.dismissAll();
+    else if (signal === "active-soft") dispatcher.dismissAll(STICKY_EVENT_TYPES);
     else dispatcher.dispatch(signal, "local");
   },
 });
@@ -67,8 +72,10 @@ async function startListener(): Promise<void> {
     port: HTTP_PORT,
     onEvent: (signal) => {
       if (signal === "active") dispatcher.dismissAll();
+      else if (signal === "active-soft") dispatcher.dismissAll(STICKY_EVENT_TYPES);
       else dispatcher.dispatch(signal, "remote");
     },
+    log: (msg) => streamDeck.logger.info(`http: ${msg}`),
   });
   try {
     await listener.start();

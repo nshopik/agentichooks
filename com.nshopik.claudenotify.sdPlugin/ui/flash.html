@@ -8,9 +8,10 @@
 <body>
   <sdpi-item label="Event type">
     <sdpi-select setting="eventType" default="idle">
-      <option value="stop">Stop (task done)</option>
+      <option value="stop">Stop (turn ended)</option>
       <option value="idle">Idle / waiting</option>
       <option value="permission">Permission request</option>
+      <option value="task-completed">Task completed</option>
     </sdpi-select>
   </sdpi-item>
 
@@ -72,6 +73,19 @@
     <sdpi-item><sdpi-button onclick="testAudio('permission')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
+  <div id="audio-task-completed-section">
+    <sdpi-item label="Audio enabled">
+      <sdpi-checkbox setting="audio.task-completed.enabled" default="true" global></sdpi-checkbox>
+    </sdpi-item>
+    <sdpi-item label="Sound (WAV)">
+      <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,.wav" placeholder="Windows Notify System Generic.wav (system)" global></sdpi-file>
+    </sdpi-item>
+    <sdpi-item label="Volume %">
+      <sdpi-range setting="audio.task-completed.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
+    </sdpi-item>
+    <sdpi-item><sdpi-button onclick="testAudio('task-completed')">▶ Test sound</sdpi-button></sdpi-item>
+  </div>
+
   <sdpi-item>
     <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
       Audio plays only for events received over HTTP. Listening on <code>127.0.0.1:9123</code>.
@@ -106,7 +120,7 @@ curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
     const updateAudioVisibility = () => {
       const select = document.querySelector('sdpi-select[setting="eventType"]');
       const event = (select && select.value) || "idle";
-      for (const ev of ["stop", "idle", "permission"]) {
+      for (const ev of ["stop", "idle", "permission", "task-completed"]) {
         const section = document.getElementById("audio-" + ev + "-section");
         if (section) section.style.display = ev === event ? "" : "none";
       }

@@ -18,12 +18,16 @@ describe("defaultSoundPath", () => {
     expect(defaultSoundPath("stop")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
 
-  it("returns Windows Notify System Generic.wav for idle", () => {
-    expect(defaultSoundPath("idle")).toBe("C:\\Windows\\Media\\Windows Notify System Generic.wav");
+  it("returns undefined for idle (no default — user supplies one if wanted)", () => {
+    expect(defaultSoundPath("idle")).toBeUndefined();
   });
 
   it("returns Windows Message Nudge.wav for permission", () => {
     expect(defaultSoundPath("permission")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
+  });
+
+  it("returns Windows Notify System Generic.wav for task-completed", () => {
+    expect(defaultSoundPath("task-completed")).toBe("C:\\Windows\\Media\\Windows Notify System Generic.wav");
   });
 
   it("falls back to C:\\Windows when SystemRoot unset", () => {
