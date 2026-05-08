@@ -52,7 +52,7 @@ The script is idempotent — safe to run multiple times. See [Local hook install
 
 ## Local hook installation (Windows)
 
-Install the Claude hooks that signal the plugin (3 alert-arming events plus dismiss events):
+Install the Claude hooks that signal the plugin (9 action events plus 6 info events):
 
 ```
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -255,6 +255,8 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
   }
 }
 ```
+
+These cover the 9 action routes that arm or dismiss buttons. The 6 info routes (`/event/notification`, `/event/pre-tool-use`, `/event/post-tool-batch`, `/event/subagent-start`, `/event/subagent-stop`, `/event/task-created`) are accepted by the listener but have no button effect today — omitting them from a remote config is safe.
 
 `--max-time 1` keeps Claude unblocked if the tunnel is down; `&` makes the hook non-blocking; `>/dev/null 2>&1` suppresses output.
 
