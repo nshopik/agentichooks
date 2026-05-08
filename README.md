@@ -10,7 +10,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 - Three events covered: **Stop** (Claude finished a turn), **Permission** (Claude wants approval), **Task Completed** (Claude finished a task — self-clears after 30s).
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude — the deck doesn't keep glowing after you've already responded.
 - Static or pulsing flash mode, configurable per button.
-- Optional audio cue per event, defaulting to Windows system sounds, with per-event source filter (remote-only by default to avoid doubling up with local PowerShell sound hooks).
+- Optional audio cue per event, defaulting to Windows system sounds, configurable per-event volume.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
 ## Installation
@@ -42,7 +42,7 @@ npx streamdeck link com.nshopik.claudenotify.sdPlugin
 
 ### Add Claude hooks
 
-Run the provided installer to add hooks for all 3 event types (Stop, Permission, Task Completed) plus dismiss hooks to `~/.claude/settings.json`:
+Run the provided installer to add hooks for the 9 action events plus 6 info events to `~/.claude/settings.json`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -58,7 +58,7 @@ Install the Claude hooks that signal the plugin (3 alert-arming events plus dism
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 ```
 
-The script edits `~/.claude/settings.json` additively, marks each added hook with a versioned tag for idempotency, and offers to migrate any legacy `claude-notify-flash.sig` hook to the new naming. Re-running upgrades older marker versions in place.
+The script edits `~/.claude/settings.json` additively, marks each added hook with a versioned tag for idempotency, and upgrades older marker versions in place. Each hook is a single `curl.exe` POST to `http://127.0.0.1:9123/event/<route>` — no sig files, no toasts.
 
 ## Quick Start — Remote (Linux/macOS)
 
@@ -96,14 +96,14 @@ On the remote machine, add these hooks to `~/.claude/settings.json` under the `"
 "StopFailure": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop-failure >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
 "PermissionRequest": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-request >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
@@ -117,35 +117,35 @@ On the remote machine, add these hooks to `~/.claude/settings.json` under the `"
 "UserPromptSubmit": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/user-prompt-submit >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
 "SessionStart": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/session-start >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
 "PermissionDenied": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-denied >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
 "PostToolUse": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/post-tool-use >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
 "PostToolUseFailure": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/post-tool-use-failure >/dev/null 2>&1 &",
       "async": true }
   ]}
 ]
@@ -199,14 +199,14 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
     "StopFailure": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop-failure >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
     "PermissionRequest": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-request >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
@@ -220,35 +220,35 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
     "UserPromptSubmit": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/user-prompt-submit >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
     "SessionStart": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/session-start >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
     "PermissionDenied": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-denied >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
     "PostToolUse": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/post-tool-use >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
     "PostToolUseFailure": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/post-tool-use-failure >/dev/null 2>&1 &",
           "async": true }
       ]}
     ]
@@ -307,7 +307,7 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 ### Plugin-global settings (More Actions → plugin settings)
 
 - **HTTP listener** — toggle + port (default 9123).
-- **Audio per event** — enabled, source filter (all / remote / local), sound file (defaults to system WAVs), volume %.
+- **Audio per event** — sound file (defaults to system WAVs), volume %.
 - **▶ Test** — plays the configured sound at the configured volume.
 
 ### When alerts clear
@@ -321,6 +321,22 @@ Each armed alert button clears on a specific set of events — never on unrelate
 | `task-completed` | `TaskCompleted` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press, auto-timeout | 30,000 ms |
 
 Notable consequence: a fresh `Stop` (or `StopFailure`) cross-dismisses any armed `permission` alert because turn-end makes a pending permission request stale. `task-completed` survives `Stop` and `Permission` events and clears only on session-boundary signals or its own 30 s timeout.
+
+## Debug logging
+
+The plugin defaults to `warn` log level — only errors and listener-bind problems land in the log. To see every received HTTP event (action + info routes), set the env var and restart:
+
+```powershell
+$env:CLAUDE_NOTIFY_DEBUG = "1"
+npx streamdeck restart com.nshopik.claudenotify
+```
+
+Logs land in `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.claudenotify.sdPlugin\logs\com.nshopik.claudenotify.0.log` (newest is `.0`). To turn off:
+
+```powershell
+Remove-Item Env:CLAUDE_NOTIFY_DEBUG
+npx streamdeck restart com.nshopik.claudenotify
+```
 
 ## Development
 
