@@ -7,7 +7,7 @@ import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
-import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, STICKY_EVENT_TYPES, type GlobalSettings } from "./types.js";
+import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
 
 // Default to "warn" so the diagnostic info logs (audio: ..., http: ..., dispatcher: ...)
 // stay in code but don't fire. Bump to "info" temporarily when investigating issues.
@@ -62,7 +62,7 @@ const watcher = new SignalWatcher({
   tmpDir: os.tmpdir(),
   onSignal: (signal) => {
     if (signal === "active") dispatcher.dismissAll();
-    else if (signal === "active-soft") dispatcher.dismissAll(STICKY_EVENT_TYPES);
+    else if (signal === "active-soft") dispatcher.dismiss("permission");
     else dispatcher.dispatch(signal, "local");
   },
 });
@@ -74,7 +74,7 @@ async function startListener(): Promise<void> {
     port: HTTP_PORT,
     onEvent: (signal) => {
       if (signal === "active") dispatcher.dismissAll();
-      else if (signal === "active-soft") dispatcher.dismissAll(STICKY_EVENT_TYPES);
+      else if (signal === "active-soft") dispatcher.dismiss("permission");
       else dispatcher.dispatch(signal, "remote");
     },
     log: (msg) => streamDeck.logger.info(`http: ${msg}`),

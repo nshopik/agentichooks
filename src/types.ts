@@ -1,11 +1,6 @@
 export type EventType = "stop" | "idle" | "permission" | "task-completed";
 export type SignalType = EventType | "active" | "active-soft";
 
-// Event types that survive a "soft" dismiss. These persist through events
-// that fire continuously during a turn (PostToolUse, PostToolUseFailure,
-// PermissionDenied) and clear only on session-boundary events
-// (Stop, StopFailure, UserPromptSubmit) or their own auto-timeout.
-export const STICKY_EVENT_TYPES: ReadonlyArray<EventType> = ["task-completed"];
 export type EventSource = "local" | "remote";
 
 export type FlashSettings = {
