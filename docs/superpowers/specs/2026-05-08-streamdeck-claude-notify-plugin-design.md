@@ -154,7 +154,7 @@ type GlobalSettings = {
 
 type AudioConfig = {
   enabled: boolean;                            // default: true
-  soundPath?: string;                          // empty = bundled default WAV
+  soundPath?: string;                          // empty = use the system-sound default for this event
   volumePercent: number;                       // 0..100, default: 80
   source: "all" | "remote" | "local";          // default: "remote"
 };
@@ -283,17 +283,17 @@ Reachable from the Stream Deck software's "More Actions" → plugin settings:
 │                                                     │
 │  Stop                                               │
 │   ☑ Enabled    Source: [ Remote only ▼ ]           │
-│   Sound:  [ (bundled default) ] [ Browse… ] [▶Test]│
+│   Sound:  [ Speech On.wav (system) ]   [Browse…][▶]│
 │   Volume: [─────●────────] 80%                      │
 │                                                     │
 │  Idle                                               │
 │   ☑ Enabled    Source: [ Remote only ▼ ]           │
-│   Sound:  [ (bundled default) ] [ Browse… ] [▶Test]│
+│   Sound:  [ Notify Generic.wav (system) ][Browse…][▶]│
 │   Volume: [─────●────────] 80%                      │
 │                                                     │
 │  Permission                                         │
 │   ☑ Enabled    Source: [ Remote only ▼ ]           │
-│   Sound:  [ (bundled default) ] [ Browse… ] [▶Test]│
+│   Sound:  [ Message Nudge.wav (system) ][Browse…][▶]│
 │   Volume: [────────●─────] 90%                      │
 └─────────────────────────────────────────────────────┘
 ```
@@ -362,19 +362,23 @@ You already have local PowerShell sound hooks in `~/.claude/settings.json` (the 
 
 Permission's higher default volume reflects that it's the most attention-critical event — Claude is blocked waiting for you.
 
-### Bundled sounds
+### System sound defaults — no bundled audio
 
-Three short WAVs in `sounds/`, ~300ms each, distinct cues per event:
+The plugin ships **no** audio files. Defaults point at Windows' built-in `%WINDIR%\Media\*.wav` files, which exist on every standard Windows 10/11 install. This avoids licensing/attribution overhead, keeps the plugin tiny, and uses sounds the OS already uses elsewhere (so they feel native).
 
-| Event | Bundled file | Character |
-| --- | --- | --- |
-| Stop | `sounds/stop.wav` | Soft chime — "all done" |
-| Idle | `sounds/idle.wav` | Two-note pulse — "your turn" |
-| Permission | `sounds/permission.wav` | Sharp double-beep — "blocked, look here" |
+| Event | Default sound | Resolved path | Character |
+| --- | --- | --- | --- |
+| Stop | `Speech On.wav` | `%WINDIR%\Media\Speech On.wav` | Soft "ready" chime |
+| Idle | `Windows Notify System Generic.wav` | `%WINDIR%\Media\Windows Notify System Generic.wav` | Neutral notification |
+| Permission | `Windows Message Nudge.wav` | `%WINDIR%\Media\Windows Message Nudge.wav` | Sharp attention-grabber |
 
-Sourced from CC0 / public-domain sound packs; license attribution lives in `sounds/LICENSE.md`. Users can override any of the three with their own WAV via the file picker (including `C:\Windows\Media\*.wav`, where the user already sources `Speech On.wav` and `Windows Message Nudge.wav`).
+These match what the user already configures in their existing local PowerShell sound hooks (Stop and Permission), so plugin audio for remote events sounds identical to local for the same event types.
 
-WAV only — no MP3 or other formats. WAV has no codec dependency and Windows' built-in `System.Media.SoundPlayer` handles it natively.
+`%WINDIR%` is read at runtime from `process.env.SystemRoot` (with a `C:\Windows` fallback). Default paths are constants in `audio-player.ts`; if `soundPath` in `AudioConfig` is empty/undefined, the default for that event is used.
+
+**Resilience**: if a configured WAV file does not exist (rare — stripped-down Windows installs may omit some media files), the plugin logs a warning at first play and skips audio for that event. The visual flash still happens. Users are not blocked; they can pick a different file via the picker.
+
+**Custom sounds** — users override any default via the Property Inspector file picker. Any WAV file on disk works — including other `%WINDIR%\Media\*.wav` files, sounds copied from elsewhere, or generated cues. WAV only — no MP3 or other formats. WAV has no codec dependency and Windows' built-in `System.Media.SoundPlayer` handles it natively.
 
 ### Implementation
 
@@ -382,25 +386,31 @@ Audio playback is a one-shot child process per event:
 
 ```ts
 // pseudocode
-function playSound(path: string, volumePercent: number): void {
-  // Spawn powershell, non-blocking. PlayAsync overlaps cleanly if multiple events fire.
+function playSound(wavPath: string, volumePercent: number): void {
+  if (!fs.existsSync(wavPath)) { log.warn(`audio: file missing: ${wavPath}`); return; }
+  const playPath = volumePercent === 100 ? wavPath : ensureVolumeAdjustedCache(wavPath, volumePercent);
+  // Spawn detached PowerShell. PlaySync inside the child blocks the child until the sound finishes;
+  // the child exits cleanly afterward. Node never blocks because the child is detached + unref'd.
   child_process.spawn("powershell", ["-NoProfile", "-Command",
-    `$p = New-Object Media.SoundPlayer '${path}'; $p.PlayAsync()`
+    `(New-Object Media.SoundPlayer '${playPath.replace(/'/g, "''")}').PlaySync()`
   ], { detached: true, stdio: "ignore" }).unref();
 }
 ```
 
 Notes:
-- `PlayAsync()` returns immediately; the child PowerShell process exits once playback starts.
-- `unref()` lets the Node plugin process exit cleanly even if a child is still alive.
-- Volume is *not* set via SoundPlayer (which has no volume API). For volume control, the plugin pre-bakes a volume-adjusted copy of the WAV the first time a non-100% volume is configured for an event, caches it in `%TEMP%\claude-notify-cache\<event>-<volume>.wav`, and plays the cached file. Re-encoding is straightforward WAV manipulation (modify PCM samples) and avoids per-play CPU cost.
-- Concurrency: overlapping playback is allowed. Two events arriving within 100ms produce two overlapping sound processes; the OS mixes them.
+- **Why `PlaySync` in the child, not `PlayAsync`**: `PlayAsync` starts playback then exits PowerShell, which can prematurely garbage-collect the SoundPlayer and cut the sound. `PlaySync` keeps the child alive for the full duration of the WAV (~300ms) — the OS handles the child's lifecycle, Node never blocks because the child is detached. This is the same pattern used in the existing local `Stop` PowerShell hook.
+- `unref()` lets the Node plugin process exit cleanly even if children are still alive.
+- **Path quoting**: PowerShell single-quoted strings escape internal single quotes by doubling them (`'` → `''`). Belt-and-suspenders against weird path characters.
+- **Volume**: SoundPlayer has no volume API. The plugin pre-bakes a volume-adjusted copy of the WAV the first time a non-100% volume is configured for a path, caches it in `%TEMP%\claude-notify-cache\<hash>-<volume>.wav`, and plays the cached file thereafter. Re-encoding is straightforward WAV manipulation (multiply PCM samples by `volumePercent/100`) and avoids per-play CPU cost. Cache key is `(sha1(wavPath) + volumePercent)` so different source files don't collide.
+- **Concurrency**: overlapping playback is allowed. Two events arriving within 100ms produce two overlapping sound processes; the OS mixes them.
+- **Missing source file**: handled with a one-time warning per (event, path) pair; visual flash continues.
 
 ### Marketplace considerations
 
-- Bundled WAVs must be original / CC0 / properly licensed. We use CC0 sources and ship `sounds/LICENSE.md` with attribution. Captured in the marketplace asset checklist.
+- **No bundled audio**, so no licensing or attribution overhead. The plugin references system files at runtime; nothing audio-related ships in the package.
 - No marketplace restriction on plugins playing audio (soundboard plugins exist).
-- File size per WAV ≤ 50 KB (~300ms mono 16-bit at 22050 Hz is ~13 KB; even stereo 44.1 kHz fits comfortably). Total `sounds/` directory ≪ 200 KB — negligible to plugin distribution size.
+- Plugin distribution size is unaffected by audio (zero KB).
+- Defaults work on any standard Windows 10/11 install. Stripped installs missing the referenced WAVs degrade gracefully (warning + skip, visual flash still fires).
 
 
 
@@ -545,11 +555,6 @@ claudenotify/
 │  │  └─ flash.svg                 # 20×20 viewport, monochrome white #FFFFFF on transparent
 │  ├─ plugin-icon.png              # 256×256, colored
 │  └─ plugin-icon@2x.png           # 512×512
-├─ sounds/
-│  ├─ stop.wav                     # ~300ms cue
-│  ├─ idle.wav                     # ~300ms cue
-│  ├─ permission.wav               # ~300ms cue
-│  └─ LICENSE.md                   # CC0 attribution for bundled sounds
 ├─ previews/                       # marketplace preview screenshots (≥1)
 ├─ manifest.json                   # maintained by streamdeck CLI
 ├─ package.json
@@ -600,7 +605,8 @@ The plugin is designed from v1 to be submittable to the [Elgato Marketplace](htt
 | Action icon (`Actions[0].Icon`) | `images/actions/flash.svg` | SVG | designed at 20×20 viewport | not needed (SVG scales) |
 | Key icons (`Actions[0].States[].Image`) — 6 pairs | `images/keys/{stop\|idle\|permission}-{idle\|alert}.png` + `@2x.png` | PNG | 72×72 | 144×144 |
 | Marketplace previews | `previews/*.png` (≥1) | PNG/JPG | — | — |
-| Bundled sounds | `sounds/{stop,idle,permission}.wav` + `LICENSE.md` | WAV | — | — |
+
+(No bundled audio — defaults reference `%WINDIR%\Media\*.wav` at runtime; see "Audio feedback".)
 
 **Style rules:**
 - Plugin icon: colored, polished, distinctive.
@@ -614,7 +620,7 @@ The plugin is designed from v1 to be submittable to the [Elgato Marketplace](htt
 - **No donation / sponsor links** in the Property Inspector or plugin-global settings UI.
 - **No static action** — the action is fully configurable (event type, icons, mode, timeout). Compliant by design.
 - **Action and category names** ≤ 30 characters. "Flash" / "Claude Notify" both qualify.
-- **Bundled WAVs** are CC0 / properly licensed; attribution in `sounds/LICENSE.md`. See "Audio feedback" section.
+- **No bundled audio.** Defaults reference Windows system sounds at runtime — no licensing or attribution surface. See "Audio feedback" section.
 
 ### What is *not* a compliance concern (verified)
 
