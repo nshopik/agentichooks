@@ -4,7 +4,6 @@ import type { SignalType } from "./types.js";
 
 const ROUTES: Record<string, SignalType> = {
   "/event/stop": "stop",
-  "/event/idle": "idle",
   "/event/permission": "permission",
   "/event/task-completed": "task-completed",
   "/event/active": "active",

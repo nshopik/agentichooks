@@ -44,11 +44,10 @@ describe("HttpListener", () => {
     await listener.start();
     const port = listener.port();
     await request("POST", "/event/stop", port);
-    await request("POST", "/event/idle", port);
     await request("POST", "/event/permission", port);
     await request("POST", "/event/active", port);
     await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["stop", "idle", "permission", "active"]);
+    expect(received).toEqual(["stop", "permission", "active"]);
   });
 
   it("GET /health returns 200 OK", async () => {

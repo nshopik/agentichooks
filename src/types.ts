@@ -1,4 +1,4 @@
-export type EventType = "stop" | "idle" | "permission" | "task-completed";
+export type EventType = "stop" | "permission" | "task-completed";
 export type SignalType = EventType | "active" | "active-soft";
 
 export type EventSource = "local" | "remote";
@@ -18,7 +18,6 @@ export type AudioConfig = {
 export type GlobalSettings = {
   audio: {
     stop: AudioConfig;
-    idle: AudioConfig;
     permission: AudioConfig;
     "task-completed": AudioConfig;
   };
@@ -34,7 +33,7 @@ export type ButtonState = {
 };
 
 export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
-  eventType: "idle",
+  eventType: "stop",
   flashMode: "static",
   pulseIntervalMs: 500,
   autoTimeoutMs: 0,
@@ -45,7 +44,6 @@ export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
 // can use as a dismiss signal short of the next prompt.
 export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
   stop: 0,
-  idle: 0,
   permission: 0,
   "task-completed": 30_000,
 };
@@ -53,10 +51,9 @@ export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   audio: {
     stop: { volumePercent: 80 },
-    idle: { volumePercent: 80 },
     permission: { volumePercent: 90 },
     "task-completed": { volumePercent: 80 },
   },
 };
 
-export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "idle", "permission", "task-completed"];
+export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "permission", "task-completed"];

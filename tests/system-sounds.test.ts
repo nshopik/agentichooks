@@ -18,10 +18,6 @@ describe("defaultSoundPath", () => {
     expect(defaultSoundPath("stop")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
 
-  it("returns undefined for idle (no default — user supplies one if wanted)", () => {
-    expect(defaultSoundPath("idle")).toBeUndefined();
-  });
-
   it("returns Windows Message Nudge.wav for permission", () => {
     expect(defaultSoundPath("permission")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
   });

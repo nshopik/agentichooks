@@ -35,7 +35,6 @@ describe("SignalWatcher", () => {
     watcher = new SignalWatcher({ tmpDir, onSignal: (e) => received.push({ event: e, t: Date.now() }) });
     watcher.start();
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-stop.sig"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, "claude-notify-idle.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-permission.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-task-completed.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-active.sig"))).toBe(true);
@@ -63,13 +62,13 @@ describe("SignalWatcher", () => {
     watcher = new SignalWatcher({ tmpDir, onSignal: (e) => received.push({ event: e, t: Date.now() }) });
     watcher.start();
     await sleep(20);
-    const file = path.join(tmpDir, "claude-notify-idle.sig");
+    const file = path.join(tmpDir, "claude-notify-permission.sig");
     fs.writeFileSync(file, "1");
     fs.writeFileSync(file, "2");
     fs.writeFileSync(file, "3");
     await sleep(150);
     expect(received.length).toBe(1);
-    expect(received[0].event).toBe("idle");
+    expect(received[0].event).toBe("permission");
   });
 
   it("ignores sig file that already had a recent write before start()", async () => {
@@ -88,12 +87,10 @@ describe("SignalWatcher", () => {
     await sleep(20);
     fs.writeFileSync(path.join(tmpDir, "claude-notify-stop.sig"), "a");
     await sleep(120);
-    fs.writeFileSync(path.join(tmpDir, "claude-notify-idle.sig"), "b");
+    fs.writeFileSync(path.join(tmpDir, "claude-notify-permission.sig"), "b");
     await sleep(120);
-    fs.writeFileSync(path.join(tmpDir, "claude-notify-permission.sig"), "c");
-    await sleep(120);
-    fs.writeFileSync(path.join(tmpDir, "claude-notify-task-completed.sig"), "d");
+    fs.writeFileSync(path.join(tmpDir, "claude-notify-task-completed.sig"), "c");
     await sleep(150);
-    expect(received.map((r) => r.event)).toEqual(["stop", "idle", "permission", "task-completed"]);
+    expect(received.map((r) => r.event)).toEqual(["stop", "permission", "task-completed"]);
   });
 });
