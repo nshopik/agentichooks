@@ -4,14 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import { AudioPlayer } from "../src/audio-player.js";
 
-type SpawnCall = { cmd: string; args: string[] };
+type SpawnCall = { cmd: string; args: string[]; opts: Record<string, unknown> };
 let spawnCalls: SpawnCall[];
 let cacheDir: string;
 
-function fakeSpawn(cmd: string, args: ReadonlyArray<string>): { unref(): void } {
-  spawnCalls.push({ cmd, args: [...args] });
+const fakeSpawn: import("../src/audio-player.js").SpawnFn = (cmd, args, opts) => {
+  spawnCalls.push({ cmd, args: [...args], opts: (opts ?? {}) as Record<string, unknown> });
   return { unref() {} };
-}
+};
 
 function writeMinimalWav(filePath: string): void {
   const sampleRate = 22050;
@@ -62,7 +62,7 @@ describe("AudioPlayer", () => {
     const player = new AudioPlayer({ spawn: fakeSpawn, cacheDir });
     player.play(wav, 100);
     expect(spawnCalls.length).toBe(1);
-    expect(spawnCalls[0].cmd).toBe("powershell");
+    expect(spawnCalls[0].cmd).toMatch(/powershell\.exe$/i);
     expect(spawnCalls[0].args).toEqual([
       "-NoProfile",
       "-Command",
@@ -105,6 +105,15 @@ describe("AudioPlayer", () => {
     player.play(wav, 100);
     expect(spawnCalls[0].args[2]).toContain(wav.replace(/'/g, "''"));
     expect(spawnCalls[0].args[2]).not.toContain(`'${wav}'`);
+  });
+
+  it("does not spawn with detached:true (DETACHED_PROCESS breaks Media.SoundPlayer.PlaySync on Windows)", () => {
+    const wav = path.join(cacheDir, "src.wav");
+    writeMinimalWav(wav);
+    const player = new AudioPlayer({ spawn: fakeSpawn, cacheDir });
+    player.play(wav, 100);
+    expect(spawnCalls.length).toBe(1);
+    expect(spawnCalls[0].opts.detached).not.toBe(true);
   });
 
   it("skips non-16-bit WAVs with a warning", () => {
