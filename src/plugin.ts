@@ -51,7 +51,10 @@ const dispatcher = new Dispatcher({
 
 const watcher = new SignalWatcher({
   tmpDir: os.tmpdir(),
-  onSignal: (event) => dispatcher.dispatch(event, "local"),
+  onSignal: (signal) => {
+    if (signal === "active") dispatcher.dismissAll();
+    else dispatcher.dispatch(signal, "local");
+  },
 });
 
 let listener: HttpListener | undefined;
@@ -60,7 +63,10 @@ async function startListener(): Promise<void> {
   if (!globals.httpEnabled) return;
   listener = new HttpListener({
     port: globals.httpPort,
-    onEvent: (event) => dispatcher.dispatch(event, "remote"),
+    onEvent: (signal) => {
+      if (signal === "active") dispatcher.dismissAll();
+      else dispatcher.dispatch(signal, "remote");
+    },
   });
   try {
     await listener.start();

@@ -35,4 +35,11 @@ export class Dispatcher {
     const path = audioCfg.soundPath ?? defaultSoundPath(event);
     this.opts.audioPlayer.play(path, audioCfg.volumePercent);
   }
+
+  dismissAll(): void {
+    const buttons = this.opts.getButtons();
+    for (const [, btn] of buttons) {
+      if (btn.state.alerting) btn.dismiss();
+    }
+  }
 }

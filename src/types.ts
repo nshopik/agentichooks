@@ -1,4 +1,5 @@
 export type EventType = "stop" | "idle" | "permission";
+export type SignalType = EventType | "active";
 export type EventSource = "local" | "remote";
 
 export type FlashSettings = {

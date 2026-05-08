@@ -109,4 +109,16 @@ describe("Dispatcher", () => {
     dispatcher().dispatch("permission", "local");
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav", expect.any(Number));
   });
+
+  it("dismissAll dismisses every alerting button without arming or playing audio", () => {
+    buttons.set("a", makeButton("stop", true));
+    buttons.set("b", makeButton("idle", true));
+    buttons.set("c", makeButton("permission", false));
+    dispatcher().dismissAll();
+    expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("b")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("c")!.dismiss).not.toHaveBeenCalled();
+    expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
 });

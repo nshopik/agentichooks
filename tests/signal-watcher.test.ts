@@ -3,10 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { SignalWatcher } from "../src/signal-watcher.js";
-import type { EventType } from "../src/types.js";
+import type { SignalType } from "../src/types.js";
 
 let tmpDir: string;
-let received: Array<{ event: EventType; t: number }>;
+let received: Array<{ event: SignalType; t: number }>;
 let watcher: SignalWatcher | undefined;
 
 function mkTmp() {
@@ -37,6 +37,16 @@ describe("SignalWatcher", () => {
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-stop.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-idle.sig"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, "claude-notify-permission.sig"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "claude-notify-active.sig"))).toBe(true);
+  });
+
+  it("emits 'active' for claude-notify-active.sig", async () => {
+    watcher = new SignalWatcher({ tmpDir, onSignal: (e) => received.push({ event: e, t: Date.now() }) });
+    watcher.start();
+    await sleep(20);
+    fs.writeFileSync(path.join(tmpDir, "claude-notify-active.sig"), new Date().toISOString());
+    await sleep(150);
+    expect(received.map((r) => r.event)).toEqual(["active"]);
   });
 
   it("emits onSignal with event type when sig file changes", async () => {

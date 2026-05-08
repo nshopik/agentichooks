@@ -8,6 +8,7 @@ Flash a Stream Deck button on Claude Code hook events (task complete, idle, perm
 
 - One configurable Stream Deck action: place it as many times as you want, configure each instance for a single event type.
 - Three events covered: **Stop** (Claude finished), **Idle** (Claude waiting for input), **Permission** (Claude wants approval).
+- Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude — the deck doesn't keep glowing after you've already responded.
 - Static or pulsing flash mode, configurable per button.
 - Optional audio cue per event, defaulting to Windows system sounds, with per-event source filter (remote-only by default to avoid doubling up with local PowerShell sound hooks).
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
@@ -93,6 +94,13 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
       { "hooks": [
         { "type": "command",
           "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
           "async": true }
       ]}
     ]

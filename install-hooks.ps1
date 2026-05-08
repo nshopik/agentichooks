@@ -62,6 +62,7 @@ $events = [ordered]@{
     Stop              = "claude-notify-stop.sig"
     Notification      = "claude-notify-idle.sig"
     PermissionRequest = "claude-notify-permission.sig"
+    UserPromptSubmit  = "claude-notify-active.sig"
 }
 
 $added = @()

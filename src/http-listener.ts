@@ -1,16 +1,17 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import type { EventType } from "./types.js";
+import type { SignalType } from "./types.js";
 
-const ROUTES: Record<string, EventType> = {
+const ROUTES: Record<string, SignalType> = {
   "/event/stop": "stop",
   "/event/idle": "idle",
   "/event/permission": "permission",
+  "/event/active": "active",
 };
 
 export type HttpListenerOpts = {
   port: number;
-  onEvent: (event: EventType) => void;
+  onEvent: (signal: SignalType) => void;
 };
 
 export class HttpListener {

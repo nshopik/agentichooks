@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "node:http";
 import { HttpListener } from "../src/http-listener.js";
-import type { EventType } from "../src/types.js";
+import type { SignalType } from "../src/types.js";
 
 let listener: HttpListener | undefined;
-let received: EventType[];
+let received: SignalType[];
 
 async function request(method: string, path: string, port: number): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -46,8 +46,9 @@ describe("HttpListener", () => {
     await request("POST", "/event/stop", port);
     await request("POST", "/event/idle", port);
     await request("POST", "/event/permission", port);
+    await request("POST", "/event/active", port);
     await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["stop", "idle", "permission"]);
+    expect(received).toEqual(["stop", "idle", "permission", "active"]);
   });
 
   it("GET /health returns 200 OK", async () => {
