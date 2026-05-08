@@ -80,7 +80,7 @@
 curl -X POST http://localhost:9123/event/idle
 curl -X POST http://localhost:9123/event/permission
 curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
-      Tunnel from Linux/macOS: <code>ssh -R 9123:127.0.0.1:9123 user@host</code>
+      SSH tunnel from the remote host: <code>ssh -N -L 9123:127.0.0.1:9123 user@deck-host</code>
     </div>
   </sdpi-item>
 
