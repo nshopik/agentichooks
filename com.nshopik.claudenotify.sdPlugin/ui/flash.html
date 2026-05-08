@@ -7,9 +7,8 @@
 </head>
 <body>
   <sdpi-item label="Event type">
-    <sdpi-select setting="eventType" default="idle">
+    <sdpi-select setting="eventType" default="stop">
       <option value="stop">Stop (turn ended)</option>
-      <option value="idle">Idle / waiting</option>
       <option value="permission">Permission request</option>
       <option value="task-completed">Task completed</option>
     </sdpi-select>
@@ -48,20 +47,6 @@
     <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
-  <div id="audio-idle-section">
-    <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.idle.soundPath" accept="audio/wav,.wav" global></sdpi-file>
-    </sdpi-item>
-    <sdpi-item>
-      <sdpi-button onclick="muteAudio('idle')">Mute</sdpi-button>
-      <sdpi-button onclick="resetAudio('idle')">Reset to default</sdpi-button>
-    </sdpi-item>
-    <sdpi-item label="Volume %">
-      <sdpi-range setting="audio.idle.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
-    </sdpi-item>
-    <sdpi-item><sdpi-button onclick="testAudio('idle')">▶ Test sound</sdpi-button></sdpi-item>
-  </div>
-
   <div id="audio-permission-section">
     <sdpi-item label="Sound (WAV)">
       <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Windows Message Nudge.wav" global></sdpi-file>
@@ -95,7 +80,6 @@
       Audio plays for both local sig-file events and remote HTTP events; use <strong>Mute</strong> next to a sound to silence that event, or pick a different WAV file. HTTP listening on <code>127.0.0.1:9123</code>.
       From a remote host (SSH-tunneled), POST to one of:
       <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
-curl -X POST http://localhost:9123/event/idle
 curl -X POST http://localhost:9123/event/permission
 curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
       Add this to your outbound SSH from Windows to the remote: <code>ssh -R 9123:127.0.0.1:9123 user@remote-host</code>
@@ -133,8 +117,8 @@ curl -X POST http://localhost:9123/event/active   # dismiss alerts</pre>
     };
     const updateAudioVisibility = () => {
       const select = document.querySelector('sdpi-select[setting="eventType"]');
-      const event = (select && select.value) || "idle";
-      for (const ev of ["stop", "idle", "permission", "task-completed"]) {
+      const event = (select && select.value) || "stop";
+      for (const ev of ["stop", "permission", "task-completed"]) {
         const section = document.getElementById("audio-" + ev + "-section");
         if (section) section.style.display = ev === event ? "" : "none";
       }
