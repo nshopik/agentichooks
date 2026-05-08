@@ -1,13 +1,13 @@
 # Claude Notify — Stream Deck plugin
 
-Flash a Stream Deck button on Claude Code hook events (turn end, idle, permission request, task completed). Works for local Claude on Windows and remote Claude over SSH.
+Flash a Stream Deck button on Claude Code hook events (turn end, permission request, task completed). Works for local Claude on Windows and remote Claude over SSH.
 
 ![preview](com.nshopik.claudenotify.sdPlugin/previews/main.png)
 
 ## Features
 
 - One configurable Stream Deck action: place it as many times as you want, configure each instance for a single event type.
-- Four events covered: **Stop** (Claude finished a turn), **Idle** (Claude waiting for input), **Permission** (Claude wants approval), **Task Completed** (Claude finished a task — self-clears after 30s).
+- Three events covered: **Stop** (Claude finished a turn), **Permission** (Claude wants approval), **Task Completed** (Claude finished a task — self-clears after 30s).
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude — the deck doesn't keep glowing after you've already responded.
 - Static or pulsing flash mode, configurable per button.
 - Optional audio cue per event, defaulting to Windows system sounds, with per-event source filter (remote-only by default to avoid doubling up with local PowerShell sound hooks).
@@ -42,7 +42,7 @@ npx streamdeck link com.nshopik.claudenotify.sdPlugin
 
 ### Add Claude hooks
 
-Run the provided installer to add hooks for all 4 event types (Stop, Idle, Permission, Task Completed) to `~/.claude/settings.json`:
+Run the provided installer to add hooks for all 3 event types (Stop, Permission, Task Completed) plus dismiss hooks to `~/.claude/settings.json`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -52,15 +52,13 @@ The script is idempotent — safe to run multiple times. See [Local hook install
 
 ## Local hook installation (Windows)
 
-Install the Claude hooks that signal the plugin (4 alert-arming events plus dismiss events):
+Install the Claude hooks that signal the plugin (3 alert-arming events plus dismiss events):
 
 ```
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 ```
 
 The script edits `~/.claude/settings.json` additively, marks each added hook with a versioned tag for idempotency, and offers to migrate any legacy `claude-notify-flash.sig` hook to the new naming. Re-running upgrades older marker versions in place.
-
-Each installed hook also fires a Windows toast (via the [BurntToast](https://github.com/Windos/BurntToast) PowerShell module, auto-installed by the script) showing the event name and timestamp. Useful for debugging unexpected dismissals — Action Center keeps the history so you can see exactly which hooks fired and in what order. Cross-reference with the plugin's own log at `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.claudenotify.sdPlugin\logs\com.nshopik.claudenotify.0.log` to see which dispatches followed.
 
 ## Quick Start — Remote (Linux/macOS)
 
@@ -95,10 +93,10 @@ On the remote machine, add these hooks to `~/.claude/settings.json` under the `"
       "async": true }
   ]}
 ],
-"Notification": [
+"StopFailure": [
   { "hooks": [
     { "type": "command",
-      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/idle >/dev/null 2>&1 &",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop >/dev/null 2>&1 &",
       "async": true }
   ]}
 ],
@@ -120,6 +118,34 @@ On the remote machine, add these hooks to `~/.claude/settings.json` under the `"
   { "hooks": [
     { "type": "command",
       "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"SessionStart": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"PermissionDenied": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"PostToolUse": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+      "async": true }
+  ]}
+],
+"PostToolUseFailure": [
+  { "hooks": [
+    { "type": "command",
+      "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
       "async": true }
   ]}
 ]
@@ -170,10 +196,10 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
           "async": true }
       ]}
     ],
-    "Notification": [
+    "StopFailure": [
       { "hooks": [
         { "type": "command",
-          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/idle >/dev/null 2>&1 &",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/stop >/dev/null 2>&1 &",
           "async": true }
       ]}
     ],
@@ -195,6 +221,34 @@ For all hosts, use `Host *`. To do it ad-hoc, prepend `-R 9123:127.0.0.1:9123` t
       { "hooks": [
         { "type": "command",
           "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "SessionStart": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/active >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "PermissionDenied": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "PostToolUse": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
+          "async": true }
+      ]}
+    ],
+    "PostToolUseFailure": [
+      { "hooks": [
+        { "type": "command",
+          "command": "curl -s --max-time 1 -X POST http://localhost:9123/event/permission-resolved >/dev/null 2>&1 &",
           "async": true }
       ]}
     ]
@@ -227,7 +281,7 @@ A button on your local Stream Deck configured for Stop should flash.
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
 | `curl: connection refused` from remote | SSH session opened without `-R`; or plugin not running on Windows; or HTTP listener disabled in plugin settings | Reconnect ensuring `-R 9123:127.0.0.1:9123` is set; verify plugin's global settings show "HTTP listener: listening on 127.0.0.1:9123" |
-| Tunnel responds but deck doesn't flash | No button configured for that event type, or the button's event type is different | Open Property Inspector on a button, set Event type to match (Stop / Idle / Permission / Task Completed); use the per-button Test button to verify |
+| Tunnel responds but deck doesn't flash | No button configured for that event type, or the button's event type is different | Open Property Inspector on a button, set Event type to match (Stop / Permission / Task Completed); use the per-button Test button to verify |
 | `bind: Address already in use` warning when SSH connects | A previous SSH session to the same remote is still holding the reverse port | Disconnect the old session; or pick a different port (change plugin global setting + `-R` line + curl URLs to match) |
 | `Permission denied` or "channel 3: open failed" on `-R` | Remote sshd has `AllowTcpForwarding no` (rare, hardened servers) | Ask sysadmin to enable; or use a different transport (out of scope) |
 | `bash: curl: command not found` on remote | Minimal container/distro without curl | Install curl, or substitute the hook with `wget -q --tries=1 --timeout=1 --method=POST http://localhost:9123/event/stop -O /dev/null &` |
@@ -243,7 +297,7 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 
 ### Per-button settings (Property Inspector)
 
-- **Event type** — which Claude event this button reacts to (Stop / Idle / Permission / Task Completed). Default: Idle.
+- **Event type** — which Claude event this button reacts to (Stop / Permission / Task Completed). Default: Stop.
 - **Icons** — set via Stream Deck's native two-dot state picker below the button preview. Each dot is a state (Idle / Alert). Click a dot's icon dropdown to **Set from File**, **Create New Icon**, or **Open Stream Deck Icon Library**. The plugin ships with a default idle/alert pair; replace either as you like.
 - **Flash mode** — Static (icon swap) or Pulse (toggle every N ms).
 - **Pulse rate** — milliseconds between toggles when Pulse is selected. Min 100ms (Elgato's 10/sec key-update cap).
@@ -255,6 +309,18 @@ The plugin does not write to either machine's `~/.claude/settings.json`, does no
 - **HTTP listener** — toggle + port (default 9123).
 - **Audio per event** — enabled, source filter (all / remote / local), sound file (defaults to system WAVs), volume %.
 - **▶ Test** — plays the configured sound at the configured volume.
+
+### When alerts clear
+
+Each armed alert button clears on a specific set of events — never on unrelated activity. The dispatcher arms only the matching slot per event; other event types' alerts stay armed until their own clearing trigger fires.
+
+| Armed event | Cleared by | Auto-timeout default |
+|---|---|---|
+| `stop` | `Stop` (re-arm), `StopFailure` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press | 0 (no timeout) |
+| `permission` | `Stop`, `StopFailure`, `PermissionRequest` (re-arm), `UserPromptSubmit`, `SessionStart`, `PermissionDenied`, `PostToolUse`, `PostToolUseFailure`, manual press | 0 (no timeout) |
+| `task-completed` | `TaskCompleted` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press, auto-timeout | 30,000 ms |
+
+Notable consequence: a fresh `Stop` (or `StopFailure`) cross-dismisses any armed `permission` alert because turn-end makes a pending permission request stale. `task-completed` survives `Stop` and `Permission` events and clears only on session-boundary signals or its own 30 s timeout.
 
 ## Development
 
