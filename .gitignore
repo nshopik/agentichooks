@@ -1,0 +1,6 @@
+node_modules/
+com.nshopik.claudenotify.sdPlugin/bin/
+*.log
+coverage/
+dist/
+.DS_Store
