@@ -36,4 +36,6 @@ jobs:
             install-hooks.ps1
             install-hooks.sh
           generate_release_notes: true
-          prerelease: true
+          # Auto-detect pre-release from tag suffix: v1.0.0-beta1 → prerelease,
+          # v0.9.1 / v1.0.0 → normal release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
