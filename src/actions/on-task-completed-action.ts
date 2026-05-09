@@ -8,9 +8,48 @@ import { EventFlashAction } from "./event-flash-action.js";
 export class OnTaskCompletedAction extends EventFlashAction {
   protected readonly eventType: EventType = "task-completed";
 
+  // Corner-glyph animation frames. 8 frames at 200 ms each = 1.6 s loop;
+  // 5 fps stays well inside Stream Deck's 10 fps key-update budget. The
+  // sequence is a hand-tuned ease in/out so the glyph "pulses" rather than
+  // ticking through unrelated shapes.
+  private static readonly FRAMES = ["·", "*", "✶", "✢", "✻", "✢", "✶", "*"];
+
+  private frameIdx = 0;
+  private animInterval: ReturnType<typeof setInterval> | null = null;
+
+  private startAnimation(): void {
+    if (this.animInterval !== null) return;
+    this.animInterval = setInterval(() => {
+      this.frameIdx = (this.frameIdx + 1) % OnTaskCompletedAction.FRAMES.length;
+      const count = this.opts.currentCount?.() ?? 0;
+      if (count > 0) this.renderFrame(count);
+    }, 200);
+  }
+
+  private stopAnimation(): void {
+    if (this.animInterval !== null) {
+      clearInterval(this.animInterval);
+      this.animInterval = null;
+    }
+    this.frameIdx = 0;
+  }
+
   /**
-   * Called by TaskCounter.onCountChanged. Iterates every visible Task
-   * Completed key context and pushes the current visual.
+   * Re-render every visible Task Completed key context with the current
+   * count and frame. When animation is disabled, `frame` is undefined so
+   * renderCountIcon paints the static yellow sparkle.
+   */
+  private renderFrame(count: number): void {
+    const animEnabled = this.opts.animateEnabled?.() ?? true;
+    const frame = animEnabled ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
+    for (const [, ctx] of this.contexts) {
+      void ctx.setImage(renderCountIcon(count, frame), 0);
+    }
+  }
+
+  /**
+   * Called by TaskCounter.onCountChanged. Drives both the in-flight visual
+   * and the corner-glyph animation interval.
    *
    * setImage targets state 0 (idle) explicitly — without the state arg the
    * SDK only overrides the *current* state's image. Targeting 0 means the
@@ -18,12 +57,23 @@ export class OnTaskCompletedAction extends EventFlashAction {
    * alerting (covers the rare task-created-mid-alert race: a fresh task
    * arrives while the prior alert is still on screen; the in-flight image
    * is queued under state 0 and takes effect on the next dismiss).
+   *
+   * count=0 path clears the state-0 image override so subsequent renders
+   * fall back to the manifest-defined idle image (preserving any user
+   * customisation applied via the State Picker).
    */
   broadcastCount(count: number): void {
-    for (const [, ctx] of this.contexts) {
-      if (count > 0) {
-        void ctx.setImage(renderCountIcon(count), 0);
+    if (count > 0) {
+      const animEnabled = this.opts.animateEnabled?.() ?? true;
+      if (animEnabled) {
+        this.startAnimation();
       } else {
+        this.stopAnimation();
+      }
+      this.renderFrame(count);
+    } else {
+      this.stopAnimation();
+      for (const [, ctx] of this.contexts) {
         void ctx.setImage("", 0);
       }
     }
@@ -44,7 +94,9 @@ export class OnTaskCompletedAction extends EventFlashAction {
     if (ctx.state.alerting) return;
     const count = this.opts.currentCount?.() ?? 0;
     if (count > 0) {
-      void ctx.setImage(renderCountIcon(count), 0);
+      const animEnabled = this.opts.animateEnabled?.() ?? true;
+      const frame = animEnabled ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
+      void ctx.setImage(renderCountIcon(count, frame), 0);
     }
   }
 }

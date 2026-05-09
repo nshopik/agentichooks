@@ -39,6 +39,13 @@ export type EventFlashActionOpts = {
    * current global subagent count. Only consumed by OnTaskCompletedAction.
    */
   currentCount?: () => number;
+  /**
+   * Lazy lookup against GlobalSettings.animateCounter so OnTaskCompletedAction
+   * can decide whether to drive the corner-glyph animation interval. Returns
+   * `true` when animation should run, `false` for the static sparkle.
+   * Undefined → default true. Only consumed by OnTaskCompletedAction.
+   */
+  animateEnabled?: () => boolean;
 };
 
 type Ctx = {
