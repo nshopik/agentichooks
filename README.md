@@ -1,4 +1,4 @@
-# Claude Notify — Stream Deck plugin
+# Agent Hook Notify — Stream Deck plugin
 
 Flash a Stream Deck button on Claude Code hook events (turn end, permission request, task completed). Runs on Windows and macOS; remote Claude sessions work over SSH from any POSIX host.
 
