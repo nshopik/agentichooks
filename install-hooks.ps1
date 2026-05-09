@@ -180,4 +180,4 @@ if ($changed.Count -gt 0) {
     Write-Host ""
     Write-Host "No changes needed."
 }
-Write-Host "Each hook fire posts to http://127.0.0.1:9123/event/<route>. Set CLAUDE_NOTIFY_DEBUG=1 + restart plugin for verbose logging."
+Write-Host "Each hook fire posts to http://127.0.0.1:9123/event/<route>. Set AGENTIC_HOOKS_DEBUG=1 + restart plugin for verbose logging."
