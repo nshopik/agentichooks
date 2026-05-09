@@ -8,6 +8,7 @@ import type { EventFlashActionOpts } from "./actions/event-flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
+import { TaskCounter } from "./task-counter.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
 
@@ -42,12 +43,17 @@ const actionOpts: EventFlashActionOpts = {
   // alerting state for buttons revealed by a page or profile switch. The
   // explicit return type breaks a TS inference cycle (action ↔ dispatcher).
   armedMsAgo: (eventType): number | null => dispatcher.armedMsAgo(eventType),
+  // Lazy: taskCounter is constructed below, so this arrow captures the outer
+  // binding and resolves at willAppear time. Same indirection pattern as
+  // armedMsAgo above.
+  currentCount: (): number => taskCounter.current(),
 };
 
+const taskCompletedAction = new OnTaskCompletedAction(actionOpts);
 const actions = [
   new OnStopAction(actionOpts),
   new OnPermissionAction(actionOpts),
-  new OnTaskCompletedAction(actionOpts),
+  taskCompletedAction,
 ];
 for (const a of actions) streamDeck.actions.registerAction(a);
 
@@ -82,6 +88,15 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
   globals = mergeGlobals(ev.settings as unknown as StoredGlobalSettings);
 });
 
+// Construct the counter before the dispatcher so the dispatcher can take
+// it as an opt. onZeroReached uses a lazy arrow because dispatcher is
+// declared on the next line — same circular-reference dance as armedMsAgo.
+const taskCounter = new TaskCounter({
+  onCountChanged: (n) => taskCompletedAction.broadcastCount(n),
+  onZeroReached: () => dispatcher.fireTaskCompleted(),
+  log: (level, msg) => streamDeck.logger[level](`counter: ${msg}`),
+});
+
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
@@ -91,6 +106,7 @@ const dispatcher = new Dispatcher({
     return merged;
   },
   log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
+  taskCounter,
 });
 
 let listener: HttpListener | undefined;

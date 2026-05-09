@@ -8,7 +8,7 @@ import {
   type FlashSettings,
   type GlobalSettings,
 } from "../src/types.js";
-import type { DispatchableButton } from "../src/dispatcher.js";
+import type { DispatchableButton, DispatcherTaskCounter } from "../src/dispatcher.js";
 
 type FakeButton = {
   eventType: EventType;
@@ -165,16 +165,25 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
   });
 
-  it("/event/task-completed clears pending permission while arming task-completed", () => {
+  it("/event/task-completed clears pending permission and decrements counter; no direct alert", () => {
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
-    const d = dispatcher();
+    const counter = { increment: vi.fn(), decrement: vi.fn(), reset: vi.fn() };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/task-completed");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
-    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+    // Direct alert is gone — task-completed never reaches the button via the
+    // matrix anymore; arming is the counter's job at zero-reached.
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
   });
 
   it("/event/permission-request does not clear stop or task-completed", () => {
@@ -183,7 +192,8 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("perm", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/stop");
-    d.handleRoute("/event/task-completed");
+    // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(5000);
@@ -295,7 +305,8 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
   it("pre-tool-use does not affect a pending task-completed", () => {
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/pre-tool-use");
     vi.advanceTimersByTime(2000);
@@ -417,7 +428,8 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
   it("plays no sound for task-completed when soundPath is unset (no default)", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual flash still fires.
@@ -428,7 +440,8 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio["task-completed"].soundPath = "C:\\custom\\done.wav";
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
@@ -437,8 +450,144 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio["task-completed"].soundPath = "";
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("Dispatcher.handleRoute — counter directives", () => {
+  function fakeCounter(): DispatcherTaskCounter & { increment: ReturnType<typeof vi.fn>; decrement: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> } {
+    return {
+      increment: vi.fn(),
+      decrement: vi.fn(),
+      reset: vi.fn(),
+    };
+  }
+
+  it("calls counter.increment for /event/task-created", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-created");
+    expect(counter.increment).toHaveBeenCalledTimes(1);
+    expect(counter.decrement).not.toHaveBeenCalled();
+    expect(counter.reset).not.toHaveBeenCalled();
+  });
+
+  it("counter directives are no-ops when no taskCounter opt is supplied", () => {
+    // Existing tests construct dispatcher without taskCounter; this asserts
+    // the new task-created route is a safe no-op when the counter isn't wired.
+    const d = dispatcher();
+    expect(() => d.handleRoute("/event/task-created")).not.toThrow();
+  });
+
+  it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
+    buttons.set("task", makeButton("task-completed"));
+    const d = dispatcher();
+    d.fireTaskCompleted();
+    vi.advanceTimersByTime(999);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", () => {
+  function fakeCounter() {
+    return {
+      increment: vi.fn(),
+      decrement: vi.fn(),
+      reset: vi.fn(),
+    };
+  }
+
+  it("/event/session-start calls counter.reset after applying its existing clears", () => {
+    buttons.set("perm", makeButton("permission", true));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/session-start");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalled();
+    expect(counter.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("/event/user-prompt-submit does NOT call counter.reset (regression guard)", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/user-prompt-submit");
+    expect(counter.reset).not.toHaveBeenCalled();
+    expect(counter.increment).not.toHaveBeenCalled();
+    expect(counter.decrement).not.toHaveBeenCalled();
+  });
+
+  it("/event/task-completed does not directly arm the task-completed alert", () => {
+    buttons.set("task", makeButton("task-completed"));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-completed");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+  });
+
+  it("/event/task-created dismisses an active task-completed alert and increments counter", () => {
+    // Reproduces the cosmetic UX gap: count → 0 fires the alert, then a fresh
+    // task-created arrives. Without the cross-clear, the in-flight count visual
+    // (state-0 image) is queued but invisible behind the alert image until the
+    // 30s auto-timeout. With the cross-clear, the alert dismisses immediately
+    // and the new count shows.
+    const armedTask = makeButton("task-completed", true);
+    buttons.set("task", armedTask);
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-created");
+    expect(armedTask.dismiss).toHaveBeenCalledTimes(1);
+    expect(counter.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("/event/task-created cancels a pending task-completed alert in the pre-fire delay window", () => {
+    // Variant of the above: task-created arrives during the 1s armType delay,
+    // before fire() ran. Pending timer must be cancelled so the alert never
+    // visually fires.
+    buttons.set("task", makeButton("task-completed"));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    // Simulate the pending alert by calling fireTaskCompleted (enters PENDING).
+    d.fireTaskCompleted();
+    vi.advanceTimersByTime(500); // half the 1s delay
+    d.handleRoute("/event/task-created");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.increment).toHaveBeenCalledTimes(1);
   });
 });

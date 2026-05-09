@@ -22,6 +22,7 @@ const ACTION_ROUTES = [
   "/event/stop-failure",
   "/event/permission-request",
   "/event/task-completed",
+  "/event/task-created",
   "/event/session-start",
   "/event/user-prompt-submit",
   "/event/permission-denied",
@@ -35,7 +36,6 @@ const INFO_ROUTES = [
   "/event/post-tool-batch",
   "/event/subagent-start",
   "/event/subagent-stop",
-  "/event/task-created",
 ];
 
 const REMOVED_ROUTES = [

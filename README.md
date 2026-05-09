@@ -12,6 +12,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude.
 - Static or pulsing flash mode, configurable per button.
+- Live subagent counter: when Claude dispatches subagents (Task tool), the Task Completed button shows the in-flight count and flashes once when the run completes — no per-task noise.
 - Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
@@ -80,8 +81,8 @@ The listener accepts 15 routes. URL paths mirror Claude hook names: `/event/post
 | `/event/stop` | arms `stop`; clears `permission`, `task-completed` |
 | `/event/stop-failure` | arms `stop`; clears `permission`, `task-completed` |
 | `/event/permission-request` | arms `permission` |
-| `/event/task-completed` | arms `task-completed`; clears `permission` |
-| `/event/session-start` | clears `stop`, `permission`, `task-completed` |
+| `/event/task-completed` | decrements in-flight subagent counter; clears `permission`; arms `task-completed` (flash + audio) when counter reaches 0 |
+| `/event/session-start` | clears `stop`, `permission`, `task-completed`; resets the in-flight subagent counter |
 | `/event/user-prompt-submit` | clears `stop`, `permission`, `task-completed` |
 | `/event/permission-denied` | clears `permission` |
 | `/event/post-tool-use` | clears `permission` |
@@ -91,7 +92,7 @@ The listener accepts 15 routes. URL paths mirror Claude hook names: `/event/post
 | `/event/post-tool-batch` | log-only |
 | `/event/subagent-start` | log-only |
 | `/event/subagent-stop` | log-only |
-| `/event/task-created` | log-only |
+| `/event/task-created` | increments in-flight subagent counter (drives the Task Completed button's number display) |
 
 `GET /health` returns `200 OK`.
 
