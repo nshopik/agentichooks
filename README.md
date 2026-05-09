@@ -1,8 +1,12 @@
-# Agent Hook Notify — Stream Deck plugin
+# Agentic Hooks — Stream Deck plugin
 
 Flash a Stream Deck button on Claude Code hook events (turn end, permission request, task completed). Runs on Windows and macOS; remote Claude sessions work over SSH from any POSIX host.
 
-![preview](com.nshopik.claudenotify.sdPlugin/previews/main.png)
+![preview](com.nshopik.agentichooks.sdPlugin/previews/main.png)
+
+> **Beta — pre-1.0.** This is the first public release of Agentic Hooks. Expect rough edges; please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases (not Elgato Marketplace) until 1.0.
+
+> **macOS support is experimental.** The Windows install path is the tested one; macOS code paths exist (afplay, system sounds, hook installer) but have not yet been validated end-to-end on a real Mac. Bug reports from Mac users are very welcome.
 
 ## Features
 
@@ -11,18 +15,25 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 - Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
-## Installation
+## Install from Release
 
-Install from a release: download the latest `.streamDeckPlugin` from the [releases page](https://github.com/nshopik/claudenotify/releases) and double-click. Stream Deck installs the plugin.
+1. Go to [github.com/nshopik/agentichooks/releases/latest](https://github.com/nshopik/agentichooks/releases/latest).
+2. Download `com.nshopik.agentichooks.streamDeckPlugin`.
+3. Double-click the file. Stream Deck imports it.
+4. Add the **Flash** action from the "Agentic Hooks" category to a key. Configure event type and (optional) audio in the Property Inspector.
+5. Run the hook installer for your shell:
+   - Windows: `powershell -ExecutionPolicy Bypass -File install-hooks.ps1`
+   - macOS / Linux: `bash install-hooks.sh`
+6. (Optional, if you previously used a `_claude-notify-installer` build): edit `~/.claude/settings.json` and remove any hook entries tagged `_claude-notify-installer: "v7"` before running the new installer, to avoid duplicate hook firings.
 
-Or build from source:
+## Build from Source
 
 ```
-git clone https://github.com/nshopik/claudenotify
-cd claudenotify
+git clone https://github.com/nshopik/agentichooks
+cd agentichooks
 npm install
 npm run build
-npx streamdeck link com.nshopik.claudenotify.sdPlugin
+npx streamdeck link com.nshopik.agentichooks.sdPlugin
 ```
 
 ## Quick Start
@@ -106,7 +117,7 @@ An arming hook enters a "pending" state for the configured delay (default 1 s); 
 
 ## Debug logging
 
-Set `CLAUDE_NOTIFY_DEBUG=1` and restart the plugin to raise log level from `warn` to `info`. Logs land in `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.claudenotify.sdPlugin\logs\com.nshopik.claudenotify.0.log` (newest is `.0`).
+Set `AGENTIC_HOOKS_DEBUG=1` and restart the plugin to raise log level from `warn` to `info`. Logs land in `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.agentichooks.sdPlugin\logs\com.nshopik.agentichooks.0.log` (newest is `.0`).
 
 ## Development
 
