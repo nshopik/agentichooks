@@ -21,10 +21,10 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 2. Download `com.nshopik.agentichooks.streamDeckPlugin`.
 3. Double-click the file. Stream Deck imports it.
 4. Add the **Flash** action from the "Agentic Hooks" category to a key. Configure event type and (optional) audio in the Property Inspector.
-5. Run the hook installer for your shell:
-   - Windows: `powershell -ExecutionPolicy Bypass -File install-hooks.ps1`
-   - macOS / Linux: `bash install-hooks.sh`
-6. (Optional, if you previously used a `_claude-notify-installer` build): edit `~/.claude/settings.json` and remove any hook entries tagged `_claude-notify-installer: "v7"` before running the new installer, to avoid duplicate hook firings.
+5. Download the hook installer for your platform from the same release page and run it:
+   - Windows: download `install-hooks.ps1` then run `powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1`
+   - macOS / Linux: download `install-hooks.sh` then run `bash install-hooks.sh`
+6. (Migration only — skip unless you previously installed from the `claudenotify` repo): remove any `~/.claude/settings.json` hook entries that contain `"_claude-notify-installer": "v7"` before running the new installer, to avoid duplicate hook firings.
 
 ## Build from Source
 
@@ -35,6 +35,8 @@ npm install
 npm run build
 npx streamdeck link com.nshopik.agentichooks.sdPlugin
 ```
+
+After linking, run the hook installer (Quick Start section below) to wire up Claude Code hooks for your local environment.
 
 ## Quick Start
 
