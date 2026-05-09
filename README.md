@@ -6,6 +6,8 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 > **Beta — pre-1.0.** This is the first public release of Agentic Hooks. Expect rough edges; please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases (not Elgato Marketplace) until 1.0.
 
+> **Requires Claude Code 2.1.128+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight subagent counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Upgrade Claude Code if button responses look incomplete after running the installer.
+
 > **macOS support is experimental.** The Windows install path is the tested one; macOS code paths exist (afplay, system sounds, hook installer) but have not yet been validated end-to-end on a real Mac. Bug reports from Mac users are very welcome.
 
 ## Features
@@ -41,7 +43,7 @@ After linking, run the hook installer (Quick Start section below) to wire up Cla
 
 ## Quick Start
 
-**Local on Windows.** Run the installer to add the 15 Claude hooks to `~/.claude/settings.json`:
+**Local on Windows.** Run the installer to add the 29 Claude hook entries to `~/.claude/settings.json`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -70,11 +72,11 @@ SSH in and verify the tunnel:
 curl -i http://localhost:9123/health
 ```
 
-Expected: `HTTP/1.1 200 OK`. Then add hooks to the remote's `~/.claude/settings.json` matching the route table below — each hook is `curl -s --max-time 1 -X POST http://localhost:9123/event/<route> >/dev/null 2>&1 &` under the appropriate Claude hook key.
+Expected: `HTTP/1.1 200 OK`. Then run `bash install-hooks.sh` on the remote host — it writes the 29 native `type: "http"` hook entries that POST to `http://127.0.0.1:9123/event/<route>` (forwarded back to the Windows host by `ssh -R`). Override the URL with `AGENTIC_HOOKS_URL=http://other-host:9123 bash install-hooks.sh` if you're not using the standard tunnel.
 
 ## HTTP routes
 
-The listener accepts 15 routes. URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
+The listener accepts 29 routes (12 action + 17 info). URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
 
 | Route | Effect |
 |---|---|
@@ -117,6 +119,10 @@ An arming hook enters a "pending" state for the configured delay (default 1 s); 
 | `task-completed` | `Stop`, `StopFailure`, `TaskCompleted` (re-arm), `UserPromptSubmit`, `SessionStart`, manual press, auto-timeout | 30,000 ms |
 
 `Stop` (or `StopFailure`) ends a turn, so it dismisses both `permission` and `task-completed`. `TaskCompleted` clears `permission` because tool resolution implies the permission was settled. `PreToolUse` clears `stop` because the agentic loop has restarted without user input (auto-continue, `/continue`, compact-and-continue).
+
+## Plugin-down behavior
+
+When the Stream Deck plugin is running, hooks complete in well under a millisecond — Claude Code is unblocked immediately. When the plugin is stopped, Claude Code falls back on the per-hook `timeout: 2` (seconds) that the installer sets. On Windows, connections to a closed `127.0.0.1` port don't fast-fail — they hit the full timeout — so each blocking hook costs ~2 s while the plugin is down. The cost goes away the moment the plugin is restarted; no settings.json changes are needed.
 
 ## Debug logging
 
