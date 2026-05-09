@@ -31,3 +31,33 @@ describe("defaultSoundPath", () => {
     expect(defaultSoundPath("stop")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
 });
+
+describe("defaultSoundPath — macOS", () => {
+  let originalSystemRoot: string | undefined;
+
+  beforeEach(() => {
+    originalSystemRoot = process.env.SystemRoot;
+  });
+
+  afterEach(() => {
+    if (originalSystemRoot === undefined) delete process.env.SystemRoot;
+    else process.env.SystemRoot = originalSystemRoot;
+  });
+
+  it("returns Glass.aiff for stop", () => {
+    expect(defaultSoundPath("stop", "darwin")).toBe("/System/Library/Sounds/Glass.aiff");
+  });
+
+  it("returns Funk.aiff for permission", () => {
+    expect(defaultSoundPath("permission", "darwin")).toBe("/System/Library/Sounds/Funk.aiff");
+  });
+
+  it("returns undefined for task-completed", () => {
+    expect(defaultSoundPath("task-completed", "darwin")).toBeUndefined();
+  });
+
+  it("does not consult SystemRoot on darwin", () => {
+    process.env.SystemRoot = "C:\\nonsense";
+    expect(defaultSoundPath("stop", "darwin")).toBe("/System/Library/Sounds/Glass.aiff");
+  });
+});
