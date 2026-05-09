@@ -11,16 +11,20 @@
   "UUID": "com.nshopik.claudenotify",
   "SDKVersion": 3,
   "Software": {
-    "MinimumVersion": "6.9"
+    "MinimumVersion": "7.1"
   },
   "OS": [
     {
       "Platform": "windows",
       "MinimumVersion": "10"
+    },
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
     }
   ],
   "Nodejs": {
-    "Version": "20"
+    "Version": "24"
   },
   "Actions": [
     {
