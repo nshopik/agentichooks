@@ -5,10 +5,8 @@ Add-Type -AssemblyName System.Drawing
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $keys = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images\keys"
 $imgs = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images"
-$prev = Join-Path $root "com.nshopik.agentichooks.sdPlugin\previews"
 
 New-Item -ItemType Directory -Force -Path $keys | Out-Null
-New-Item -ItemType Directory -Force -Path $prev | Out-Null
 
 function New-RoundedRectPath {
     param([System.Drawing.Graphics]$g, [int]$w, [int]$h, [int]$radius)
@@ -202,49 +200,6 @@ function Make-PluginIcon {
 
 Make-PluginIcon -outPath (Join-Path $imgs "plugin-icon.png")    -size 256
 Make-PluginIcon -outPath (Join-Path $imgs "plugin-icon@2x.png") -size 512
-
-# Preview banner (800 x 600): title in top half, three alert-state icons in row below.
-$pw = 800; $ph = 600
-$pbmp = New-Object System.Drawing.Bitmap($pw, $ph, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-$pg = [System.Drawing.Graphics]::FromImage($pbmp)
-$pg.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-$pg.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-$pgBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml("#0f172a"))
-$pg.FillRectangle($pgBrush, 0, 0, $pw, $ph)
-$pgBrush.Dispose()
-
-# Title — centered in the top region (y = 0..360).
-$font = New-Object System.Drawing.Font("Segoe UI", 48, [System.Drawing.FontStyle]::Bold)
-$textBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-$sf = New-Object System.Drawing.StringFormat
-$sf.Alignment = [System.Drawing.StringAlignment]::Center
-$sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-$titleRect = New-Object System.Drawing.RectangleF(0, 0, $pw, 360)
-$pg.DrawString("Agentic Hooks", $font, $textBrush, $titleRect, $sf)
-$font.Dispose()
-$textBrush.Dispose()
-
-# Three alert-state icons — 144x144 each, 60 px gaps, centered horizontally at y = 380.
-$iconFiles = @(
-    (Join-Path $keys "stop-alert@2x.png"),
-    (Join-Path $keys "permission-alert@2x.png"),
-    (Join-Path $keys "task-completed-alert@2x.png")
-)
-$iconSize = 144
-$iconGap = 60
-$rowWidth = ($iconSize * $iconFiles.Length) + ($iconGap * ($iconFiles.Length - 1))
-$rowX = [int](($pw - $rowWidth) / 2)
-$rowY = 380
-for ($i = 0; $i -lt $iconFiles.Length; $i++) {
-    $iconBmp = [System.Drawing.Image]::FromFile($iconFiles[$i])
-    $iconX = $rowX + ($i * ($iconSize + $iconGap))
-    $pg.DrawImage($iconBmp, $iconX, $rowY, $iconSize, $iconSize)
-    $iconBmp.Dispose()
-}
-
-$pg.Dispose()
-$pbmp.Save((Join-Path $prev "main.png"), [System.Drawing.Imaging.ImageFormat]::Png)
-$pbmp.Dispose()
 
 Write-Host "Generated all icons:"
 Get-ChildItem (Join-Path $root "com.nshopik.agentichooks.sdPlugin") -Recurse -Include "*.png", "*.svg" | ForEach-Object { Write-Host "  $($_.FullName.Replace($root.Path, '.'))" }

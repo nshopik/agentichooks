@@ -607,10 +607,16 @@ Make-AppIcon-ClockSparkle -outPath (Join-Path $drafts "app-icon-clock-sparkle.pn
 
 # Production assets
 Make-AppIcon -outPath (Join-Path $out "app-icon-288.png")
-Make-Thumbnail -outPath (Join-Path $out "thumbnail-1920x960.png")
+$thumbPath = Join-Path $out "thumbnail-1920x960.png"
+Make-Thumbnail -outPath $thumbPath
 Make-GalleryAnatomy -outPath (Join-Path $out "gallery-1-anatomy.png")
 Make-GalleryArchitecture -outPath (Join-Path $out "gallery-2-architecture.png")
 Make-GalleryStates -outPath (Join-Path $out "gallery-3-states.png")
+
+# README hero — same content as the marketplace thumbnail. One source of truth.
+$previewDir = Join-Path $root "com.nshopik.agentichooks.sdPlugin\previews"
+New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
+Copy-Item -Path $thumbPath -Destination (Join-Path $previewDir "main.png") -Force
 
 Write-Host "Generated marketplace assets:"
 Get-ChildItem $out -Filter "*.png" | ForEach-Object { Write-Host "  $($_.FullName.Replace($root.Path, '.'))" }
