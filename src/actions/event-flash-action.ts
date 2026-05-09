@@ -33,6 +33,12 @@ export type EventFlashActionOpts = {
    * was armed, or null if not currently armed.
    */
   armedMsAgo?: (eventType: EventType) => number | null;
+  /**
+   * Lazy lookup against TaskCounter so OnTaskCompletedAction.onWillAppear can
+   * restore the in-flight visual after a page/profile switch. Returns the
+   * current global subagent count. Only consumed by OnTaskCompletedAction.
+   */
+  currentCount?: () => number;
 };
 
 type Ctx = {
@@ -40,6 +46,11 @@ type Ctx = {
   settings: FlashSettings;
   state: ButtonState;
   setState: (s: 0 | 1) => Promise<void>;
+  // Optional state targeting — pass 0 to override the idle-state image,
+  // 1 to override the alert-state image, undefined for the current state.
+  // Used by OnTaskCompletedAction for the in-flight count visual; the base
+  // class never calls it.
+  setImage: (image: string, state?: 0 | 1) => Promise<void>;
 };
 
 type RawSettings = JsonObject & {
@@ -51,8 +62,8 @@ type RawSettings = JsonObject & {
 
 export abstract class EventFlashAction extends SingletonAction<JsonObject> {
   protected abstract readonly eventType: EventType;
-  private readonly contexts = new Map<string, Ctx>();
-  private readonly opts: EventFlashActionOpts;
+  protected readonly contexts = new Map<string, Ctx>();
+  protected readonly opts: EventFlashActionOpts;
 
   constructor(opts: EventFlashActionOpts = {}) {
     super();
@@ -82,6 +93,9 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       settings,
       state: { alerting: false, pulseFrame: 0 },
       setState: isKey ? (s) => (action as KeyAction<JsonObject>).setState(s) : async () => {},
+      // state !== undefined (NOT `state ?`) — the truthy check would map state===0 to undefined,
+      // losing our explicit idle-state targeting. Pass { state } only when caller specified one.
+      setImage: isKey ? (img, state) => (action as KeyAction<JsonObject>).setImage(img, state !== undefined ? { state } : undefined) : async () => {},
     };
     this.contexts.set(action.id, ctx);
     // Stream Deck rebuilds per-key contexts on every page or profile switch.
