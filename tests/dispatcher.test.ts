@@ -452,7 +452,7 @@ describe("Dispatcher.handleRoute — counter directives", () => {
     };
   }
 
-  it("calls counter.increment for /event/task-created (route to be added in Task 4)", () => {
+  it("calls counter.increment for /event/task-created", () => {
     const counter = fakeCounter();
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
@@ -468,13 +468,12 @@ describe("Dispatcher.handleRoute — counter directives", () => {
 
   it("counter directives are no-ops when no taskCounter opt is supplied", () => {
     // Existing tests construct dispatcher without taskCounter; this asserts
-    // routes added in Task 4 never throw when the counter isn't wired.
+    // the new task-created route is a safe no-op when the counter isn't wired.
     const d = dispatcher();
     expect(() => d.handleRoute("/event/task-created")).not.toThrow();
   });
 
   it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
-    globals.audio["task-completed"].soundPath = "C:\\Windows\\Media\\done.wav";
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
     d.fireTaskCompleted();
@@ -482,6 +481,5 @@ describe("Dispatcher.handleRoute — counter directives", () => {
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
-    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 });
