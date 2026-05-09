@@ -72,7 +72,7 @@ export class Dispatcher {
     this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"}`);
   }
 
-  // Public lookup for FlashAction.onWillAppear: returns ms since this type was
+  // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was
   // armed, or null if not armed. Lets a freshly-rebuilt button context restore
   // the alert with the correct remaining auto-timeout.
   armedMsAgo(type: EventType): number | null {

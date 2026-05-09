@@ -20,7 +20,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 1. Go to [github.com/nshopik/agentichooks/releases/latest](https://github.com/nshopik/agentichooks/releases/latest).
 2. Download `com.nshopik.agentichooks.streamDeckPlugin`.
 3. Double-click the file. Stream Deck imports it.
-4. Add the **Flash** action from the "Agentic Hooks" category to a key. Configure event type and (optional) audio in the Property Inspector.
+4. Add one (or more) of the **On Stop**, **On Permission**, or **On Task Completed** actions from the "Agentic Hooks" category to keys. Configure (optional) audio in the Property Inspector.
 5. Download the hook installer for your platform from the same release page and run it:
    - Windows: download `install-hooks.ps1` then run `powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1`
    - macOS / Linux: download `install-hooks.sh` then run `bash install-hooks.sh`
