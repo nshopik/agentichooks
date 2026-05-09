@@ -1,6 +1,6 @@
 # install-hooks.ps1
 # Idempotently installs Claude Code hooks that signal the Agentic Hooks Stream Deck plugin.
-# Installs 15 Claude Code hooks: 10 action events (flash/audio/clear) + 5 info events (log-only).
+# Installs 29 Claude Code hooks: 11 action events (flash/audio/clear) + 18 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
 $ErrorActionPreference = "Stop"
@@ -99,23 +99,37 @@ if (-not ($settings.PSObject.Properties.Name -contains "hooks")) {
 $hooks = $settings.hooks
 
 $events = [ordered]@{
-    # Action events — drive button/audio behavior (10 entries)
+    # Action events — drive button/audio behavior (11 entries)
     Stop                = "stop"
     StopFailure         = "stop-failure"
     PermissionRequest   = "permission-request"
     TaskCompleted       = "task-completed"
     SessionStart        = "session-start"
+    SessionEnd          = "session-end"
     UserPromptSubmit    = "user-prompt-submit"
     PermissionDenied    = "permission-denied"
     PostToolUse         = "post-tool-use"
     PostToolUseFailure  = "post-tool-use-failure"
     PreToolUse          = "pre-tool-use"
-    # Info events — log only on the plugin side (5 entries)
+    # Info events — log only on the plugin side (18 entries)
     Notification        = "notification"
     PostToolBatch       = "post-tool-batch"
     SubagentStart       = "subagent-start"
     SubagentStop        = "subagent-stop"
     TaskCreated         = "task-created"
+    Setup               = "setup"
+    InstructionsLoaded  = "instructions-loaded"
+    UserPromptExpansion = "user-prompt-expansion"
+    TeammateIdle        = "teammate-idle"
+    ConfigChange        = "config-change"
+    CwdChanged          = "cwd-changed"
+    FileChanged         = "file-changed"
+    WorktreeCreate      = "worktree-create"
+    WorktreeRemove      = "worktree-remove"
+    PreCompact          = "pre-compact"
+    PostCompact         = "post-compact"
+    Elicitation         = "elicitation"
+    ElicitationResult   = "elicitation-result"
 }
 
 $changed = @()
