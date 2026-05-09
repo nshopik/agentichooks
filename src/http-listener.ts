@@ -6,6 +6,7 @@ const ACTION_ROUTES = new Set<string>([
   "/event/stop-failure",
   "/event/permission-request",
   "/event/task-completed",
+  "/event/task-created",
   "/event/session-start",
   "/event/user-prompt-submit",
   "/event/permission-denied",
@@ -19,7 +20,6 @@ const INFO_ROUTES = new Set<string>([
   "/event/post-tool-batch",
   "/event/subagent-start",
   "/event/subagent-stop",
-  "/event/task-created",
 ]);
 
 export type HttpListenerOpts = {
