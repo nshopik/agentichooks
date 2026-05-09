@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Claude Notify — Flash</title>
+  <title>Agent Hook Notify — Flash</title>
   <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
 </head>
 <body>
@@ -25,7 +25,7 @@
     </sdpi-radio>
   </sdpi-item>
 
-  <sdpi-item label="Pulse rate (ms)" id="pulse-rate-row">
+  <sdpi-item label="Pulse rate (ms)" id="pulse-rate-row" style="display:none">
     <sdpi-range setting="pulseIntervalMs" min="100" max="2000" step="50" default="500" showlabels></sdpi-range>
   </sdpi-item>
 
@@ -37,7 +37,7 @@
     <sdpi-button onclick="testFlash()">Test flash</sdpi-button>
   </sdpi-item>
 
-  <div id="audio-stop-section">
+  <div id="audio-stop-section" style="display:none">
     <sdpi-item label="Sound">
       <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
@@ -51,7 +51,7 @@
     <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
-  <div id="audio-permission-section">
+  <div id="audio-permission-section" style="display:none">
     <sdpi-item label="Sound">
       <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
@@ -65,7 +65,7 @@
     <sdpi-item><sdpi-button onclick="testAudio('permission')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
-  <div id="audio-task-completed-section">
+  <div id="audio-task-completed-section" style="display:none">
     <sdpi-item label="Sound">
       <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
