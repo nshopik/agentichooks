@@ -2,6 +2,7 @@ import type { EventType, GlobalSettings, FlashSettings, ButtonState } from "./ty
 import { defaultSoundPath } from "./system-sounds.js";
 
 export type DispatchableButton = {
+  eventType: EventType;
   settings: FlashSettings;
   state: ButtonState;
   alert: () => void;
@@ -89,7 +90,7 @@ export class Dispatcher {
     this.armed.delete(type);
     this.armedAt.delete(type);
     for (const [, btn] of this.opts.getButtons()) {
-      if (btn.state.alerting && btn.settings.eventType === type) btn.dismiss();
+      if (btn.state.alerting && btn.eventType === type) btn.dismiss();
     }
   }
 
@@ -117,13 +118,13 @@ export class Dispatcher {
     let dismissed = 0;
     let armed = 0;
     for (const [, btn] of buttons) {
-      if (btn.state.alerting && btn.settings.eventType === type) {
+      if (btn.state.alerting && btn.eventType === type) {
         btn.dismiss();
         dismissed++;
       }
     }
     for (const [, btn] of buttons) {
-      if (btn.settings.eventType === type) {
+      if (btn.eventType === type) {
         btn.alert();
         armed++;
       }

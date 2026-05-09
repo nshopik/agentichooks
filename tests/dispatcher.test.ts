@@ -4,20 +4,23 @@ import {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_FLASH_SETTINGS,
   type ButtonState,
+  type EventType,
   type FlashSettings,
   type GlobalSettings,
 } from "../src/types.js";
 import type { DispatchableButton } from "../src/dispatcher.js";
 
 type FakeButton = {
+  eventType: EventType;
   settings: FlashSettings;
   state: ButtonState;
   alert: ReturnType<typeof vi.fn>;
   dismiss: ReturnType<typeof vi.fn>;
 };
 
-function makeButton(eventType: FlashSettings["eventType"], alerting = false): FakeButton {
+function makeButton(eventType: EventType, alerting = false): FakeButton {
   const btn: FakeButton = {
+    eventType,
     settings: { ...DEFAULT_FLASH_SETTINGS, eventType },
     state: { alerting, pulseFrame: 0 },
     alert: vi.fn(),

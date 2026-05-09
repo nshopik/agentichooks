@@ -100,6 +100,7 @@ export class FlashAction extends SingletonAction<JsonObject> {
     const out = new Map<string, DispatchableButton>();
     for (const [k, v] of this.contexts) {
       out.set(k, {
+        eventType: v.settings.eventType,
         settings: v.settings,
         state: v.state,
         alert: () => this.alertContext(v),
