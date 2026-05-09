@@ -12,6 +12,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude.
 - Static or pulsing flash mode, configurable per button.
+- Live subagent counter: when Claude dispatches multiple subagents (Task tool), the Task Completed button shows the in-flight count and flashes once when the run completes — no per-task noise.
 - Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
