@@ -9,7 +9,7 @@ export type DispatchableButton = {
 };
 
 export type DispatcherOpts = {
-  audioPlayer: { play: (path: string, volumePercent: number) => void };
+  audioPlayer: { play: (path: string) => void };
   getGlobalSettings: () => GlobalSettings;
   getButtons: () => Map<string, DispatchableButton>;
   log?: (msg: string) => void;
@@ -114,7 +114,7 @@ export class Dispatcher {
     const path = audioCfg.soundPath ?? defaultSoundPath(type);
     this.log(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
     if (!path) return;
-    this.opts.audioPlayer.play(path, audioCfg.volumePercent);
+    this.opts.audioPlayer.play(path);
   }
 
   private isAnyArmed(type: EventType): boolean {

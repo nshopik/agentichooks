@@ -25,9 +25,9 @@ const action = new FlashAction({
     // nothing if the event was muted (soundPath = "").
     const cfg = globals.audio[eventType];
     const path = cfg.soundPath ?? defaultSoundPath(eventType);
-    streamDeck.logger.info(`onTestSound: event=${eventType} path=${path} vol=${cfg.volumePercent}`);
+    streamDeck.logger.info(`onTestSound: event=${eventType} path=${path}`);
     if (!path) return;
-    audioPlayer.play(path, cfg.volumePercent);
+    audioPlayer.play(path);
   },
 });
 streamDeck.actions.registerAction(action);

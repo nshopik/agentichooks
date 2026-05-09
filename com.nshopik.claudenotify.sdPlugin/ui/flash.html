@@ -45,9 +45,6 @@
       <sdpi-button onclick="muteAudio('stop')">Mute</sdpi-button>
       <sdpi-button onclick="resetAudio('stop')">Reset to default</sdpi-button>
     </sdpi-item>
-    <sdpi-item label="Volume %">
-      <sdpi-range setting="audio.stop.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
-    </sdpi-item>
     <sdpi-item label="Alert delay (sec)">
       <sdpi-textfield setting="alertDelay.stop.seconds" placeholder="1" default="1" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
     </sdpi-item>
@@ -62,9 +59,6 @@
       <sdpi-button onclick="muteAudio('permission')">Mute</sdpi-button>
       <sdpi-button onclick="resetAudio('permission')">Reset to default</sdpi-button>
     </sdpi-item>
-    <sdpi-item label="Volume %">
-      <sdpi-range setting="audio.permission.volumePercent" min="0" max="100" step="5" default="90" showlabels global></sdpi-range>
-    </sdpi-item>
     <sdpi-item label="Alert delay (sec)">
       <sdpi-textfield setting="alertDelay.permission.seconds" placeholder="1" default="1" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
     </sdpi-item>
@@ -78,9 +72,6 @@
     <sdpi-item>
       <sdpi-button onclick="muteAudio('task-completed')">Mute</sdpi-button>
       <sdpi-button onclick="resetAudio('task-completed')">Reset to default</sdpi-button>
-    </sdpi-item>
-    <sdpi-item label="Volume %">
-      <sdpi-range setting="audio.task-completed.volumePercent" min="0" max="100" step="5" default="80" showlabels global></sdpi-range>
     </sdpi-item>
     <sdpi-item label="Alert delay (sec)">
       <sdpi-textfield setting="alertDelay.task-completed.seconds" placeholder="1" default="1" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>

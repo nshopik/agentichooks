@@ -47,7 +47,7 @@ afterEach(() => {
 
 function dispatcher() {
   return new Dispatcher({
-    audioPlayer: audioPlayer as unknown as { play: (p: string, v: number) => void },
+    audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
     getGlobalSettings: () => globals,
     getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
   });
@@ -324,12 +324,11 @@ describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
 describe("Dispatcher.handleRoute — audio behavior preserved", () => {
   it("plays the configured soundPath at fire time", () => {
     globals.audio.permission.soundPath = "C:\\custom\\alert.wav";
-    globals.audio.permission.volumePercent = 75;
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(1000);
-    expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav", 75);
+    expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav");
   });
 
   it("skips audio when soundPath is the empty string (explicit mute)", () => {

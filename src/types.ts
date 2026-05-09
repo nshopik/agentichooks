@@ -7,10 +7,7 @@ export type FlashSettings = {
   autoTimeoutMs: number;
 };
 
-export type AudioConfig = {
-  soundPath?: string;
-  volumePercent: number;
-};
+export type AudioConfig = { soundPath?: string };
 
 export type GlobalSettings = {
   audio: {
@@ -58,9 +55,9 @@ export const DEFAULT_ALERT_DELAY_MS = 1000;
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   audio: {
-    stop: { volumePercent: 80 },
-    permission: { volumePercent: 90 },
-    "task-completed": { volumePercent: 80 },
+    stop: {},
+    permission: {},
+    "task-completed": {},
   },
   alertDelay: {
     stop: DEFAULT_ALERT_DELAY_MS,
