@@ -549,4 +549,45 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(counter.decrement).toHaveBeenCalledTimes(1);
   });
+
+  it("/event/task-created dismisses an active task-completed alert and increments counter", () => {
+    // Reproduces the cosmetic UX gap: count → 0 fires the alert, then a fresh
+    // task-created arrives. Without the cross-clear, the in-flight count visual
+    // (state-0 image) is queued but invisible behind the alert image until the
+    // 30s auto-timeout. With the cross-clear, the alert dismisses immediately
+    // and the new count shows.
+    const armedTask = makeButton("task-completed", true);
+    buttons.set("task", armedTask);
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-created");
+    expect(armedTask.dismiss).toHaveBeenCalledTimes(1);
+    expect(counter.increment).toHaveBeenCalledTimes(1);
+  });
+
+  it("/event/task-created cancels a pending task-completed alert in the pre-fire delay window", () => {
+    // Variant of the above: task-created arrives during the 1s armType delay,
+    // before fire() ran. Pending timer must be cancelled so the alert never
+    // visually fires.
+    buttons.set("task", makeButton("task-completed"));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    // Simulate the pending alert by calling fireTaskCompleted (enters PENDING).
+    d.fireTaskCompleted();
+    vi.advanceTimersByTime(500); // half the 1s delay
+    d.handleRoute("/event/task-created");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.increment).toHaveBeenCalledTimes(1);
+  });
 });

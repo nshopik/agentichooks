@@ -43,7 +43,10 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
   "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/permission-request":    { arms: "permission",     clears: [] },
-  "/event/task-created":          {                         clears: [], counter: "increment" },
+  // Clears task-completed so a fresh task arriving during the post-zero alert (or its 1s
+  // pre-fire delay) dismisses the alert immediately and lets the in-flight count visual
+  // take over — without this, the count "1" only appears after the 30s auto-timeout.
+  "/event/task-created":          {                         clears: ["task-completed"], counter: "increment" },
   // arms: "task-completed" REMOVED — arming is now indirect, driven by
   // TaskCounter.onZeroReached → dispatcher.fireTaskCompleted().
   "/event/task-completed":        {                         clears: ["permission"], counter: "decrement" },
