@@ -1,6 +1,6 @@
 node_modules/
 __pycache__/
-com.nshopik.claudenotify.sdPlugin/bin/
+com.nshopik.agentichooks.sdPlugin/bin/
 *.streamDeckPlugin
 *.log
 coverage/
@@ -10,6 +10,9 @@ dist/
 TODO.md
 CLAUDE.md
 docs/superpowers/
+docs/elgato-plugin-guidelines.md
+docs/elgato-product-guidelines.md
+docs/*_files/
 docs/*.html
 docs/*.pdf
 # Docusaurus chrome assets shipped alongside saved Elgato pages — keep only the screenshots

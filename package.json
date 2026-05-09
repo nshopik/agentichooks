@@ -1,7 +1,7 @@
 {
-  "name": "claudenotify",
-  "version": "1.0.0",
-  "description": "Stream Deck plugin that flashes on Claude Code hook events",
+  "name": "agentichooks",
+  "version": "0.9.0",
+  "description": "Stream Deck plugin that flashes on agent hook events",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "pack": "streamdeck pack com.nshopik.claudenotify.sdPlugin",
+    "pack": "streamdeck pack com.nshopik.agentichooks.sdPlugin",
     "check-version": "node scripts/check-version.mjs"
   },
   "dependencies": {

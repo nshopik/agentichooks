@@ -31,7 +31,7 @@ export class AudioPlayer {
 
   constructor(opts: AudioPlayerOpts = {}) {
     this.spawn = opts.spawn ?? ((cmd, args, o) => cp.spawn(cmd, args as string[], o ?? {}) as unknown as SpawnedChild);
-    this.log = opts.log ?? ((level, msg) => { (level === "info" ? console.info : level === "warn" ? console.warn : console.error)(`[claude-notify] audio: ${msg}`); });
+    this.log = opts.log ?? ((level, msg) => { (level === "info" ? console.info : level === "warn" ? console.warn : console.error)(`[agentic-hooks] audio: ${msg}`); });
     this.platform = opts.platform ?? process.platform;
   }
 
