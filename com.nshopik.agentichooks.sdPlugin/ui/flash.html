@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Agent Hook Notify — Flash</title>
-  <script src="https://sdpi-components.dev/releases/v3/sdpi-components.js"></script>
+  <title>Agentic Hooks — Flash</title>
+  <script src="sdpi-components.js" type="module"></script>
 </head>
 <body>
   <sdpi-item label="Event type">
@@ -118,7 +118,7 @@
       const select = document.querySelector('sdpi-select[setting="eventType"]');
       const event = (select && select.value) || "stop";
       const cmd = document.getElementById("trigger-cmd");
-      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[event] || "stop");
+      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[event]);
     };
     const updateAudioVisibility = () => {
       const select = document.querySelector('sdpi-select[setting="eventType"]');
