@@ -43,7 +43,7 @@ afterEach(() => {
 describe("AudioPlayer", () => {
   it("does not spawn when file is missing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const player = new AudioPlayer({ spawn: fakeSpawn });
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play("C:\\nope\\nothing.wav");
     expect(spawnCalls.length).toBe(0);
     expect(warn).toHaveBeenCalledTimes(1);
@@ -52,7 +52,7 @@ describe("AudioPlayer", () => {
 
   it("warns once per missing path, not on every call", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const player = new AudioPlayer({ spawn: fakeSpawn });
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play("C:\\nope\\nothing.wav");
     player.play("C:\\nope\\nothing.wav");
     expect(warn).toHaveBeenCalledTimes(1);
@@ -62,7 +62,7 @@ describe("AudioPlayer", () => {
   it("spawns powershell with the wav path on Windows", () => {
     const wav = path.join(tmpDir, "src.wav");
     writeMinimalWav(wav);
-    const player = new AudioPlayer({ spawn: fakeSpawn });
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
     expect(spawnCalls.length).toBe(1);
     expect(spawnCalls[0].cmd).toMatch(/powershell\.exe$/i);
@@ -77,7 +77,7 @@ describe("AudioPlayer", () => {
     const wavName = "with's quote.wav";
     const wav = path.join(tmpDir, wavName);
     writeMinimalWav(wav);
-    const player = new AudioPlayer({ spawn: fakeSpawn });
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
     expect(spawnCalls[0].args[2]).toContain(wav.replace(/'/g, "''"));
     expect(spawnCalls[0].args[2]).not.toContain(`'${wav}'`);
@@ -86,9 +86,49 @@ describe("AudioPlayer", () => {
   it("does not spawn with detached:true (DETACHED_PROCESS breaks Media.SoundPlayer.PlaySync on Windows)", () => {
     const wav = path.join(tmpDir, "src.wav");
     writeMinimalWav(wav);
-    const player = new AudioPlayer({ spawn: fakeSpawn });
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
     expect(spawnCalls.length).toBe(1);
     expect(spawnCalls[0].opts.detached).not.toBe(true);
+  });
+});
+
+describe("AudioPlayer — macOS", () => {
+  it("spawns afplay with the path as a single argv element", () => {
+    const wav = path.join(tmpDir, "src.wav");
+    writeMinimalWav(wav);
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
+    player.play(wav);
+    expect(spawnCalls.length).toBe(1);
+    expect(spawnCalls[0].cmd).toBe("/usr/bin/afplay");
+    expect(spawnCalls[0].args).toEqual([wav]);
+  });
+
+  it("does not spawn when file is missing on darwin", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
+    player.play("/nope/nothing.aiff");
+    expect(spawnCalls.length).toBe(0);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("spawns afplay exactly once with no side-effect files", () => {
+    const wav = path.join(tmpDir, "src.wav");
+    writeMinimalWav(wav);
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
+    player.play(wav);
+    expect(spawnCalls.length).toBe(1);
+    const entries = fs.readdirSync(tmpDir);
+    expect(entries).toEqual(["src.wav"]);
+  });
+
+  it("does not pass paths through powershell quote-doubling on darwin", () => {
+    const wavName = "with's quote.wav";
+    const wav = path.join(tmpDir, wavName);
+    writeMinimalWav(wav);
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
+    player.play(wav);
+    expect(spawnCalls[0].args).toEqual([wav]);
   });
 });
