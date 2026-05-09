@@ -343,14 +343,13 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to the default sound when soundPath is unset", () => {
+  it("plays no sound for task-completed when soundPath is unset (no default)", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     d.handleRoute("/event/task-completed");
     vi.advanceTimersByTime(1000);
-    expect(audioPlayer.play).toHaveBeenCalledWith(
-      expect.stringContaining("Windows Notify System Generic.wav"),
-      expect.any(Number),
-    );
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    // Visual flash still fires.
+    expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
 });

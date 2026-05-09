@@ -4,7 +4,6 @@ import type { EventType } from "./types.js";
 const FILENAMES: Partial<Record<EventType, string>> = {
   stop: "Speech On.wav",
   permission: "Windows Message Nudge.wav",
-  "task-completed": "Windows Notify System Generic.wav",
 };
 
 export function defaultSoundPath(event: EventType): string | undefined {

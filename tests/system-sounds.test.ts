@@ -22,8 +22,8 @@ describe("defaultSoundPath", () => {
     expect(defaultSoundPath("permission")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
   });
 
-  it("returns Windows Notify System Generic.wav for task-completed", () => {
-    expect(defaultSoundPath("task-completed")).toBe("C:\\Windows\\Media\\Windows Notify System Generic.wav");
+  it("returns undefined for task-completed (no default sound)", () => {
+    expect(defaultSoundPath("task-completed")).toBeUndefined();
   });
 
   it("falls back to C:\\Windows when SystemRoot unset", () => {
