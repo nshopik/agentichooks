@@ -44,8 +44,10 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
   "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/permission-request":    { arms: "permission",     clears: [] },
   "/event/task-created":          {                         clears: [], counter: "increment" },
-  "/event/task-completed":        { arms: "task-completed", clears: ["permission"] },
-  "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"] },
+  // arms: "task-completed" REMOVED — arming is now indirect, driven by
+  // TaskCounter.onZeroReached → dispatcher.fireTaskCompleted().
+  "/event/task-completed":        {                         clears: ["permission"], counter: "decrement" },
+  "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"], counter: "reset" },
   "/event/user-prompt-submit":    {                         clears: ["stop", "permission", "task-completed"] },
   "/event/permission-denied":     {                         clears: ["permission"] },
   "/event/post-tool-use":         {                         clears: ["permission"] },

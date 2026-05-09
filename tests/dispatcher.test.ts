@@ -165,16 +165,25 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
   });
 
-  it("/event/task-completed clears pending permission while arming task-completed", () => {
+  it("/event/task-completed clears pending permission and decrements counter; no direct alert", () => {
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
-    const d = dispatcher();
+    const counter = { increment: vi.fn(), decrement: vi.fn(), reset: vi.fn() };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/task-completed");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
-    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+    // Direct alert is gone — task-completed never reaches the button via the
+    // matrix anymore; arming is the counter's job at zero-reached.
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
   });
 
   it("/event/permission-request does not clear stop or task-completed", () => {
@@ -183,7 +192,8 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("perm", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/stop");
-    d.handleRoute("/event/task-completed");
+    // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(5000);
@@ -295,7 +305,8 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
   it("pre-tool-use does not affect a pending task-completed", () => {
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/pre-tool-use");
     vi.advanceTimersByTime(2000);
@@ -417,7 +428,8 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
   it("plays no sound for task-completed when soundPath is unset (no default)", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual flash still fires.
@@ -428,7 +440,8 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio["task-completed"].soundPath = "C:\\custom\\done.wav";
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
@@ -437,7 +450,8 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio["task-completed"].soundPath = "";
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/task-completed");
+    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -481,5 +495,58 @@ describe("Dispatcher.handleRoute — counter directives", () => {
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", () => {
+  function fakeCounter() {
+    return {
+      increment: vi.fn(),
+      decrement: vi.fn(),
+      reset: vi.fn(),
+    };
+  }
+
+  it("/event/session-start calls counter.reset after applying its existing clears", () => {
+    buttons.set("perm", makeButton("permission", true));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/session-start");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalled();
+    expect(counter.reset).toHaveBeenCalledTimes(1);
+  });
+
+  it("/event/user-prompt-submit does NOT call counter.reset (regression guard)", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/user-prompt-submit");
+    expect(counter.reset).not.toHaveBeenCalled();
+    expect(counter.increment).not.toHaveBeenCalled();
+    expect(counter.decrement).not.toHaveBeenCalled();
+  });
+
+  it("/event/task-completed does not directly arm the task-completed alert", () => {
+    buttons.set("task", makeButton("task-completed"));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-completed");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
   });
 });
