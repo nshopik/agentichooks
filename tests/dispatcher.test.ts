@@ -244,6 +244,34 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
   });
+
+  it("session-end cancels all pending alerts", () => {
+    buttons.set("stop", makeButton("stop"));
+    buttons.set("perm", makeButton("permission"));
+    buttons.set("task", makeButton("task-completed"));
+    const d = dispatcher();
+    d.handleRoute("/event/stop");
+    d.handleRoute("/event/permission-request");
+    d.fireTaskCompleted();
+    vi.advanceTimersByTime(500);
+    d.handleRoute("/event/session-end");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("session-end dismisses already-armed buttons too", () => {
+    buttons.set("stop", makeButton("stop", true));
+    buttons.set("perm", makeButton("permission", true));
+    buttons.set("task", makeButton("task-completed", true));
+    const d = dispatcher();
+    d.handleRoute("/event/session-end");
+    expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("task")!.dismiss).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Dispatcher.handleRoute — re-fire when already ARMED", () => {
@@ -533,6 +561,20 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
     expect(counter.reset).not.toHaveBeenCalled();
     expect(counter.increment).not.toHaveBeenCalled();
     expect(counter.decrement).not.toHaveBeenCalled();
+  });
+
+  it("/event/session-end calls counter.reset after applying its existing clears", () => {
+    buttons.set("perm", makeButton("permission", true));
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/session-end");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalled();
+    expect(counter.reset).toHaveBeenCalledTimes(1);
   });
 
   it("/event/task-completed does not directly arm the task-completed alert", () => {

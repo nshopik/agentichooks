@@ -51,6 +51,7 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
   // TaskCounter.onZeroReached → dispatcher.fireTaskCompleted().
   "/event/task-completed":        {                         clears: ["permission"], counter: "decrement" },
   "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"], counter: "reset" },
+  "/event/session-end":           {                         clears: ["stop", "permission", "task-completed"], counter: "reset" },
   "/event/user-prompt-submit":    {                         clears: ["stop", "permission", "task-completed"] },
   "/event/permission-denied":     {                         clears: ["permission"] },
   "/event/post-tool-use":         {                         clears: ["permission"] },

@@ -13,6 +13,7 @@ const ACTION_ROUTES = new Set<string>([
   "/event/post-tool-use",
   "/event/post-tool-use-failure",
   "/event/pre-tool-use",
+  "/event/session-end",
 ]);
 
 const INFO_ROUTES = new Set<string>([
@@ -20,6 +21,19 @@ const INFO_ROUTES = new Set<string>([
   "/event/post-tool-batch",
   "/event/subagent-start",
   "/event/subagent-stop",
+  "/event/setup",
+  "/event/instructions-loaded",
+  "/event/user-prompt-expansion",
+  "/event/teammate-idle",
+  "/event/config-change",
+  "/event/cwd-changed",
+  "/event/file-changed",
+  "/event/worktree-create",
+  "/event/worktree-remove",
+  "/event/pre-compact",
+  "/event/post-compact",
+  "/event/elicitation",
+  "/event/elicitation-result",
 ]);
 
 export type HttpListenerOpts = {
