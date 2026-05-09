@@ -2,6 +2,7 @@ import type { EventType, GlobalSettings, FlashSettings, ButtonState } from "./ty
 import { defaultSoundPath } from "./system-sounds.js";
 
 export type DispatchableButton = {
+  eventType: EventType;
   settings: FlashSettings;
   state: ButtonState;
   alert: () => void;
@@ -71,7 +72,7 @@ export class Dispatcher {
     this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"}`);
   }
 
-  // Public lookup for FlashAction.onWillAppear: returns ms since this type was
+  // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was
   // armed, or null if not armed. Lets a freshly-rebuilt button context restore
   // the alert with the correct remaining auto-timeout.
   armedMsAgo(type: EventType): number | null {
@@ -89,7 +90,7 @@ export class Dispatcher {
     this.armed.delete(type);
     this.armedAt.delete(type);
     for (const [, btn] of this.opts.getButtons()) {
-      if (btn.state.alerting && btn.settings.eventType === type) btn.dismiss();
+      if (btn.state.alerting && btn.eventType === type) btn.dismiss();
     }
   }
 
@@ -117,13 +118,13 @@ export class Dispatcher {
     let dismissed = 0;
     let armed = 0;
     for (const [, btn] of buttons) {
-      if (btn.state.alerting && btn.settings.eventType === type) {
+      if (btn.state.alerting && btn.eventType === type) {
         btn.dismiss();
         dismissed++;
       }
     }
     for (const [, btn] of buttons) {
-      if (btn.settings.eventType === type) {
+      if (btn.eventType === type) {
         btn.alert();
         armed++;
       }

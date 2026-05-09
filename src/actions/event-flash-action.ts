@@ -1,5 +1,4 @@
 import streamDeck, {
-  action,
   SingletonAction,
   type DidReceiveSettingsEvent,
   type KeyAction,
@@ -9,24 +8,29 @@ import streamDeck, {
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { JsonObject, JsonValue } from "@elgato/utils";
-import { ALL_EVENT_TYPES, DEFAULT_AUTO_TIMEOUT_BY_EVENT, DEFAULT_FLASH_SETTINGS, type EventType, type FlashSettings, type ButtonState } from "../types.js";
+import {
+  DEFAULT_AUTO_TIMEOUT_BY_EVENT,
+  DEFAULT_FLASH_SETTINGS,
+  type EventType,
+  type FlashSettings,
+  type ButtonState,
+} from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
 
 const STATE_IDLE = 0;
 const STATE_ALERT = 1;
 
-export type FlashActionOpts = {
+export type EventFlashActionOpts = {
   /**
    * Returns `true` when audio actually started, `false` when the resolved
-   * sound path was empty or the file does not exist. The caller (the test-audio
-   * PI button) uses the `false` result to surface `showAlert()` so the user
-   * knows the press failed instead of seeing nothing.
+   * sound path was empty or the file does not exist. The PI's "Test sound"
+   * button uses the `false` result to surface `showAlert()`.
    */
   onTestSound?: (eventType: EventType) => boolean;
   /**
-   * Lazy lookup against the Dispatcher so onWillAppear can restore alerting state
-   * after a Stream Deck page/profile switch. Returns ms since the type was armed,
-   * or null if not currently armed.
+   * Lazy lookup against the Dispatcher so onWillAppear can restore alerting
+   * state after a Stream Deck page/profile switch. Returns ms since the type
+   * was armed, or null if not currently armed.
    */
   armedMsAgo?: (eventType: EventType) => number | null;
 };
@@ -36,62 +40,21 @@ type Ctx = {
   settings: FlashSettings;
   state: ButtonState;
   setState: (s: 0 | 1) => Promise<void>;
-  setImage: (image: string, state: 0 | 1) => Promise<void>;
 };
 
 type RawSettings = JsonObject & {
-  eventType?: FlashSettings["eventType"];
   flashMode?: FlashSettings["flashMode"];
   pulseIntervalMs?: number;
   autoTimeoutMs?: number;
   autoTimeoutSeconds?: number | string;
 };
 
-function isEventType(value: unknown): value is EventType {
-  return typeof value === "string" && (ALL_EVENT_TYPES as ReadonlyArray<string>).includes(value);
-}
-
-function mergeSettings(raw: JsonObject | undefined): FlashSettings {
-  const r = (raw ?? {}) as RawSettings;
-  // Guard against stale persisted eventType values (e.g. "idle" from pre-v6 profiles).
-  // Without this, a button with an unknown eventType becomes a permanently-silent
-  // ghost: the dispatcher never matches it, and setImage builds a missing path.
-  let eventType: EventType;
-  if (r.eventType === undefined) {
-    eventType = DEFAULT_FLASH_SETTINGS.eventType;
-  } else if (isEventType(r.eventType)) {
-    eventType = r.eventType;
-  } else {
-    streamDeck.logger.warn(`flash-action: unknown eventType ${JSON.stringify(r.eventType)}, falling back to ${DEFAULT_FLASH_SETTINGS.eventType}`);
-    eventType = DEFAULT_FLASH_SETTINGS.eventType;
-  }
-  let timeoutMs: number;
-  if (r.autoTimeoutSeconds !== undefined) {
-    const seconds = Number(r.autoTimeoutSeconds);
-    timeoutMs = Number.isNaN(seconds) ? DEFAULT_AUTO_TIMEOUT_BY_EVENT[eventType] : seconds * 1000;
-  } else if (typeof r.autoTimeoutMs === "number") {
-    timeoutMs = r.autoTimeoutMs;
-  } else {
-    timeoutMs = DEFAULT_AUTO_TIMEOUT_BY_EVENT[eventType];
-  }
-  return {
-    eventType,
-    flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
-    pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
-    autoTimeoutMs: timeoutMs,
-  };
-}
-
-function defaultImageForState(event: EventType, state: 0 | 1): string {
-  return `images/keys/${event}-${state === STATE_IDLE ? "idle" : "alert"}.png`;
-}
-
-@action({ UUID: "com.nshopik.agentichooks.flash" })
-export class FlashAction extends SingletonAction<JsonObject> {
+export abstract class EventFlashAction extends SingletonAction<JsonObject> {
+  protected abstract readonly eventType: EventType;
   private readonly contexts = new Map<string, Ctx>();
-  private readonly opts: FlashActionOpts;
+  private readonly opts: EventFlashActionOpts;
 
-  constructor(opts: FlashActionOpts = {}) {
+  constructor(opts: EventFlashActionOpts = {}) {
     super();
     this.opts = opts;
   }
@@ -100,6 +63,7 @@ export class FlashAction extends SingletonAction<JsonObject> {
     const out = new Map<string, DispatchableButton>();
     for (const [k, v] of this.contexts) {
       out.set(k, {
+        eventType: this.eventType,
         settings: v.settings,
         state: v.state,
         alert: () => this.alertContext(v),
@@ -110,7 +74,7 @@ export class FlashAction extends SingletonAction<JsonObject> {
   }
 
   override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
-    const settings = mergeSettings(ev.payload.settings);
+    const settings = this.mergeSettings(ev.payload.settings);
     const action = ev.action;
     const isKey = action.isKey();
     const ctx: Ctx = {
@@ -118,16 +82,12 @@ export class FlashAction extends SingletonAction<JsonObject> {
       settings,
       state: { alerting: false, pulseFrame: 0 },
       setState: isKey ? (s) => (action as KeyAction<JsonObject>).setState(s) : async () => {},
-      setImage: isKey
-        ? (image, state) => (action as KeyAction<JsonObject>).setImage(image, { state })
-        : async () => {},
     };
     this.contexts.set(action.id, ctx);
-    await this.applyEventTypeDefaults(ctx);
     // Stream Deck rebuilds per-key contexts on every page or profile switch.
-    // If the dispatcher still considers this event type armed, resume the alert
-    // with the auto-timeout's remaining budget instead of resetting to idle.
-    const msAgo = this.opts.armedMsAgo?.(settings.eventType) ?? null;
+    // If the dispatcher still considers this event type armed, resume the
+    // alert with the auto-timeout's remaining budget.
+    const msAgo = this.opts.armedMsAgo?.(this.eventType) ?? null;
     if (msAgo === null) {
       await ctx.setState(STATE_IDLE);
       return;
@@ -159,11 +119,7 @@ export class FlashAction extends SingletonAction<JsonObject> {
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<JsonObject>): Promise<void> {
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
-    const prev = ctx.settings;
-    ctx.settings = mergeSettings(ev.payload.settings);
-    if (ctx.settings.eventType !== prev.eventType) {
-      await this.applyEventTypeDefaults(ctx);
-    }
+    ctx.settings = this.mergeSettings(ev.payload.settings);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
@@ -173,10 +129,10 @@ export class FlashAction extends SingletonAction<JsonObject> {
       return;
     }
     const payload = ev.payload as { kind?: string; event?: EventType } | null;
-    streamDeck.logger.info(`onSendToPlugin: kind=${payload?.kind} event=${payload?.event ?? ctx.settings.eventType}`);
+    streamDeck.logger.info(`onSendToPlugin: kind=${payload?.kind} event=${payload?.event ?? this.eventType}`);
     if (payload?.kind === "test-flash") {
       this.alertContext(ctx);
-      this.opts.onTestSound?.(ctx.settings.eventType);
+      this.opts.onTestSound?.(this.eventType);
       return;
     }
     if (payload?.kind === "test-audio" && payload.event) {
@@ -185,12 +141,22 @@ export class FlashAction extends SingletonAction<JsonObject> {
     }
   }
 
-  private async applyEventTypeDefaults(ctx: Ctx): Promise<void> {
-    // setImage per state seeds the manifest defaults to match the chosen event type.
-    // The SDK silently no-ops when the user has set a custom image via the State Picker,
-    // so user customizations always win over these defaults.
-    await ctx.setImage(defaultImageForState(ctx.settings.eventType, STATE_IDLE), STATE_IDLE);
-    await ctx.setImage(defaultImageForState(ctx.settings.eventType, STATE_ALERT), STATE_ALERT);
+  private mergeSettings(raw: JsonObject | undefined): FlashSettings {
+    const r = (raw ?? {}) as RawSettings;
+    let timeoutMs: number;
+    if (r.autoTimeoutSeconds !== undefined) {
+      const seconds = Number(r.autoTimeoutSeconds);
+      timeoutMs = Number.isNaN(seconds) ? DEFAULT_AUTO_TIMEOUT_BY_EVENT[this.eventType] : seconds * 1000;
+    } else if (typeof r.autoTimeoutMs === "number") {
+      timeoutMs = r.autoTimeoutMs;
+    } else {
+      timeoutMs = DEFAULT_AUTO_TIMEOUT_BY_EVENT[this.eventType];
+    }
+    return {
+      flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
+      pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
+      autoTimeoutMs: timeoutMs,
+    };
   }
 
   private alertContext(ctx: Ctx, timeoutOverrideMs?: number): void {

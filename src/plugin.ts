@@ -1,7 +1,10 @@
 import streamDeck from "@elgato/streamdeck";
 import fs from "node:fs";
 import type { JsonObject } from "@elgato/utils";
-import { FlashAction } from "./actions/flash-action.js";
+import { OnStopAction } from "./actions/on-stop-action.js";
+import { OnPermissionAction } from "./actions/on-permission-action.js";
+import { OnTaskCompletedAction } from "./actions/on-task-completed-action.js";
+import type { EventFlashActionOpts } from "./actions/event-flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
@@ -20,7 +23,7 @@ const audioPlayer = new AudioPlayer({
 
 let globals: GlobalSettings = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
 
-const action = new FlashAction({
+const actionOpts: EventFlashActionOpts = {
   onTestSound: (eventType): boolean => {
     // Plays whatever soundPath resolves to: user pick, runtime default, or
     // nothing if the event was muted (soundPath = "") or the file is gone.
@@ -39,8 +42,14 @@ const action = new FlashAction({
   // alerting state for buttons revealed by a page or profile switch. The
   // explicit return type breaks a TS inference cycle (action ↔ dispatcher).
   armedMsAgo: (eventType): number | null => dispatcher.armedMsAgo(eventType),
-});
-streamDeck.actions.registerAction(action);
+};
+
+const actions = [
+  new OnStopAction(actionOpts),
+  new OnPermissionAction(actionOpts),
+  new OnTaskCompletedAction(actionOpts),
+];
+for (const a of actions) streamDeck.actions.registerAction(a);
 
 // PI persists alertDelay as { stop: { seconds: 1 }, ... } for human readability,
 // matching the autoTimeoutSeconds precedent. Convert to ms once at load time.
@@ -76,7 +85,11 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
-  getButtons: (): Map<string, DispatchableButton> => action.buttonsForDispatcher(),
+  getButtons: (): Map<string, DispatchableButton> => {
+    const merged = new Map<string, DispatchableButton>();
+    for (const a of actions) for (const [k, v] of a.buttonsForDispatcher()) merged.set(k, v);
+    return merged;
+  },
   log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
 });
 

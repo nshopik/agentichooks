@@ -1,7 +1,6 @@
 export type EventType = "stop" | "permission" | "task-completed";
 
 export type FlashSettings = {
-  eventType: EventType;
   flashMode: "static" | "pulse";
   pulseIntervalMs: number;
   autoTimeoutMs: number;
@@ -32,7 +31,6 @@ export type ButtonState = {
 };
 
 export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
-  eventType: "stop",
   flashMode: "static",
   pulseIntervalMs: 500,
   autoTimeoutMs: 0,

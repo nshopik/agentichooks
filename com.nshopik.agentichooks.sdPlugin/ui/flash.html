@@ -6,14 +6,6 @@
   <script src="sdpi-components.js"></script>
 </head>
 <body>
-  <sdpi-item label="Event type">
-    <sdpi-select setting="eventType" default="stop">
-      <option value="stop">Stop (turn ended)</option>
-      <option value="permission">Permission request</option>
-      <option value="task-completed">Task completed</option>
-    </sdpi-select>
-  </sdpi-item>
-
   <sdpi-item>
     <code id="trigger-cmd" style="font-size:11px;user-select:all;display:block;padding:4px 0;">curl -X POST http://localhost:9123/event/stop</code>
   </sdpi-item>
@@ -86,6 +78,17 @@
       "task-completed": "task-completed",
     };
 
+    const UUID_TO_EVENT = {
+      "com.nshopik.agentichooks.stop": "stop",
+      "com.nshopik.agentichooks.permission": "permission",
+      "com.nshopik.agentichooks.task-completed": "task-completed",
+    };
+
+    // Resolved from the action UUID at connect time. Defaults to "stop" only as a
+    // safety net for the brief window before getConnectionInfo() resolves; the
+    // audio sections stay inline-hidden until updateAudioVisibility() reveals the right one.
+    let eventType = "stop";
+
     function testFlash() {
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
       if (!client) return;
@@ -115,30 +118,37 @@
       if (row) row.style.display = mode === "pulse" ? "" : "none";
     };
     const updateTriggerCommand = () => {
-      const select = document.querySelector('sdpi-select[setting="eventType"]');
-      const event = (select && select.value) || "stop";
       const cmd = document.getElementById("trigger-cmd");
-      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[event]);
+      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[eventType]);
     };
     const updateAudioVisibility = () => {
-      const select = document.querySelector('sdpi-select[setting="eventType"]');
-      const event = (select && select.value) || "stop";
       for (const ev of ["stop", "permission", "task-completed"]) {
         const section = document.getElementById("audio-" + ev + "-section");
-        if (section) section.style.display = ev === event ? "" : "none";
+        if (section) section.style.display = ev === eventType ? "" : "none";
       }
     };
+    async function resolveEventType() {
+      const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
+      if (!client) return;
+      try {
+        const info = await client.getConnectionInfo();
+        const actionId = info && info.actionInfo && info.actionInfo.action;
+        if (actionId && UUID_TO_EVENT[actionId]) {
+          eventType = UUID_TO_EVENT[actionId];
+        }
+      } catch (e) {
+        // Stay on the "stop" default; the worst case is the wrong audio section is
+        // visible briefly, which is no worse than the current single-action UX.
+        console.warn("resolveEventType: getConnectionInfo failed", e);
+      }
+      updateAudioVisibility();
+      updateTriggerCommand();
+    }
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(updatePulseVisibility, 100);
-      setTimeout(updateAudioVisibility, 100);
-      setTimeout(updateTriggerCommand, 100);
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
       if (radio) radio.addEventListener("valuechange", updatePulseVisibility);
-      const eventSelect = document.querySelector('sdpi-select[setting="eventType"]');
-      if (eventSelect) {
-        eventSelect.addEventListener("valuechange", updateAudioVisibility);
-        eventSelect.addEventListener("valuechange", updateTriggerCommand);
-      }
+      resolveEventType();
     });
   </script>
 </body>

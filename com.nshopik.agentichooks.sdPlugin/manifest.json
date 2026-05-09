@@ -28,22 +28,42 @@
   },
   "Actions": [
     {
-      "Name": "Flash",
-      "UUID": "com.nshopik.agentichooks.flash",
-      "Icon": "images/actions/flash",
-      "Tooltip": "Flash on a Claude Code hook event",
+      "Name": "On Stop",
+      "UUID": "com.nshopik.agentichooks.stop",
+      "Icon": "images/actions/stop",
+      "Tooltip": "Flash on a Claude Code Stop hook",
       "PropertyInspectorPath": "ui/flash.html",
       "SupportedInMultiActions": false,
       "DisableAutomaticStates": true,
       "States": [
-        {
-          "Image": "images/keys/stop-idle",
-          "Name": "Idle"
-        },
-        {
-          "Image": "images/keys/stop-alert",
-          "Name": "Alert"
-        }
+        { "Image": "images/keys/stop-idle",  "Name": "Idle"  },
+        { "Image": "images/keys/stop-alert", "Name": "Alert" }
+      ]
+    },
+    {
+      "Name": "On Permission",
+      "UUID": "com.nshopik.agentichooks.permission",
+      "Icon": "images/actions/permission",
+      "Tooltip": "Flash on a Claude Code Permission Request hook",
+      "PropertyInspectorPath": "ui/flash.html",
+      "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
+      "States": [
+        { "Image": "images/keys/permission-idle",  "Name": "Idle"  },
+        { "Image": "images/keys/permission-alert", "Name": "Alert" }
+      ]
+    },
+    {
+      "Name": "On Task Completed",
+      "UUID": "com.nshopik.agentichooks.task-completed",
+      "Icon": "images/actions/task-completed",
+      "Tooltip": "Flash on a Claude Code Task Completed hook",
+      "PropertyInspectorPath": "ui/flash.html",
+      "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
+      "States": [
+        { "Image": "images/keys/task-completed-idle",  "Name": "Idle"  },
+        { "Image": "images/keys/task-completed-alert", "Name": "Alert" }
       ]
     }
   ]

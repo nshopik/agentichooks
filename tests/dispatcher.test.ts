@@ -4,27 +4,30 @@ import {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_FLASH_SETTINGS,
   type ButtonState,
+  type EventType,
   type FlashSettings,
   type GlobalSettings,
 } from "../src/types.js";
 import type { DispatchableButton } from "../src/dispatcher.js";
 
 type FakeButton = {
+  eventType: EventType;
   settings: FlashSettings;
   state: ButtonState;
   alert: ReturnType<typeof vi.fn>;
   dismiss: ReturnType<typeof vi.fn>;
 };
 
-function makeButton(eventType: FlashSettings["eventType"], alerting = false): FakeButton {
+function makeButton(eventType: EventType, alerting = false): FakeButton {
   const btn: FakeButton = {
-    settings: { ...DEFAULT_FLASH_SETTINGS, eventType },
+    eventType,
+    settings: { ...DEFAULT_FLASH_SETTINGS },
     state: { alerting, pulseFrame: 0 },
     alert: vi.fn(),
     dismiss: vi.fn(),
   };
-  // Keep the alerting bit in sync with what FlashAction would do, so isAnyArmed
-  // reflects reality across re-fires within a single test.
+  // Keep the alerting bit in sync with what EventFlashAction would do, so the
+  // dispatcher's behaviour reflects reality across re-fires within a test.
   btn.alert.mockImplementation(() => { btn.state.alerting = true; });
   btn.dismiss.mockImplementation(() => { btn.state.alerting = false; });
   return btn;
