@@ -3,9 +3,9 @@ $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
-$keys = Join-Path $root "com.nshopik.claudenotify.sdPlugin\images\keys"
-$imgs = Join-Path $root "com.nshopik.claudenotify.sdPlugin\images"
-$prev = Join-Path $root "com.nshopik.claudenotify.sdPlugin\previews"
+$keys = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images\keys"
+$imgs = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images"
+$prev = Join-Path $root "com.nshopik.agentichooks.sdPlugin\previews"
 
 New-Item -ItemType Directory -Force -Path $keys | Out-Null
 New-Item -ItemType Directory -Force -Path $prev | Out-Null
@@ -214,7 +214,7 @@ $sf = New-Object System.Drawing.StringFormat
 $sf.Alignment = [System.Drawing.StringAlignment]::Center
 $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
 $titleRect = New-Object System.Drawing.RectangleF(0, 0, $pw, 360)
-$pg.DrawString("Agent Hook Notify", $font, $textBrush, $titleRect, $sf)
+$pg.DrawString("Agentic Hooks", $font, $textBrush, $titleRect, $sf)
 $font.Dispose()
 $textBrush.Dispose()
 
@@ -241,4 +241,4 @@ $pbmp.Save((Join-Path $prev "main.png"), [System.Drawing.Imaging.ImageFormat]::P
 $pbmp.Dispose()
 
 Write-Host "Generated all icons:"
-Get-ChildItem (Join-Path $root "com.nshopik.claudenotify.sdPlugin") -Recurse -Include "*.png", "*.svg" | ForEach-Object { Write-Host "  $($_.FullName.Replace($root.Path, '.'))" }
+Get-ChildItem (Join-Path $root "com.nshopik.agentichooks.sdPlugin") -Recurse -Include "*.png", "*.svg" | ForEach-Object { Write-Host "  $($_.FullName.Replace($root.Path, '.'))" }
