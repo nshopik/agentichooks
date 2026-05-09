@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # install-hooks.sh
-# Idempotently installs Claude Code hooks that POST to a Stream Deck plugin
-# running on a Windows host (over an SSH reverse tunnel by default).
+# Idempotently installs Claude Code hooks that POST to a Stream Deck plugin.
+# Use it locally on a macOS plugin host (POSTs to localhost:9123 on the same
+# machine), or remotely from a Linux/macOS box via an SSH reverse tunnel.
 #
 # Run with:
 #   bash install-hooks.sh                    # default: http://localhost:9123
