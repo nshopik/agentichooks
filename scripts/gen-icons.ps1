@@ -212,7 +212,7 @@ $sf = New-Object System.Drawing.StringFormat
 $sf.Alignment = [System.Drawing.StringAlignment]::Center
 $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
 $rect = New-Object System.Drawing.RectangleF(0, 0, $pw, $ph)
-$pg.DrawString("Claude Notify", $font, $textBrush, $rect, $sf)
+$pg.DrawString("Agent Hook Notify", $font, $textBrush, $rect, $sf)
 
 $font.Dispose()
 $textBrush.Dispose()
