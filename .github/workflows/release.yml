@@ -31,5 +31,6 @@ jobs:
       - run: npm run pack
       - uses: softprops/action-gh-release@v2
         with:
-          files: com.nshopik.claudenotify.streamDeckPlugin
+          files: com.nshopik.agentichooks.streamDeckPlugin
           generate_release_notes: true
+          prerelease: true
