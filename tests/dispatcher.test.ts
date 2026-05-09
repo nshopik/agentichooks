@@ -351,4 +351,13 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     // Visual flash still fires.
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
+
+  it("plays the configured soundPath for task-completed when set (no default exists)", () => {
+    globals.audio["task-completed"].soundPath = "C:\\custom\\done.wav";
+    buttons.set("a", makeButton("task-completed"));
+    const d = dispatcher();
+    d.handleRoute("/event/task-completed");
+    vi.advanceTimersByTime(1000);
+    expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
+  });
 });
