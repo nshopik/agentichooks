@@ -139,6 +139,7 @@
       } catch (e) {
         // Stay on the "stop" default; the worst case is the wrong audio section is
         // visible briefly, which is no worse than the current single-action UX.
+        console.warn("resolveEventType: getConnectionInfo failed", e);
       }
       updateAudioVisibility();
       updateTriggerCommand();

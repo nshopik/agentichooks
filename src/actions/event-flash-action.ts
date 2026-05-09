@@ -51,7 +51,7 @@ type RawSettings = JsonObject & {
 
 export abstract class EventFlashAction extends SingletonAction<JsonObject> {
   protected abstract readonly eventType: EventType;
-  protected readonly contexts = new Map<string, Ctx>();
+  private readonly contexts = new Map<string, Ctx>();
   private readonly opts: EventFlashActionOpts;
 
   constructor(opts: EventFlashActionOpts = {}) {
