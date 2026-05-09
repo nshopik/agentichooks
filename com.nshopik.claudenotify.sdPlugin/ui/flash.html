@@ -38,8 +38,8 @@
   </sdpi-item>
 
   <div id="audio-stop-section">
-    <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Speech On.wav" global></sdpi-file>
+    <sdpi-item label="Sound">
+      <sdpi-file setting="audio.stop.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
     <sdpi-item>
       <sdpi-button onclick="muteAudio('stop')">Mute</sdpi-button>
@@ -52,8 +52,8 @@
   </div>
 
   <div id="audio-permission-section">
-    <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,.wav" default="C:\Windows\Media\Windows Message Nudge.wav" global></sdpi-file>
+    <sdpi-item label="Sound">
+      <sdpi-file setting="audio.permission.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
     <sdpi-item>
       <sdpi-button onclick="muteAudio('permission')">Mute</sdpi-button>
@@ -66,8 +66,8 @@
   </div>
 
   <div id="audio-task-completed-section">
-    <sdpi-item label="Sound (WAV)">
-      <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,.wav" global></sdpi-file>
+    <sdpi-item label="Sound">
+      <sdpi-file setting="audio.task-completed.soundPath" accept="audio/wav,audio/aiff,audio/x-aiff,.wav,.aiff,.aif" global></sdpi-file>
     </sdpi-item>
     <sdpi-item>
       <sdpi-button onclick="muteAudio('task-completed')">Mute</sdpi-button>
