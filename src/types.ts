@@ -19,6 +19,7 @@ export type GlobalSettings = {
     permission: number;
     "task-completed": number;
   };
+  animateCounter?: boolean; // default true — animate corner glyph with Claude Code spinner frames
 };
 
 export const HTTP_PORT = 9123;
