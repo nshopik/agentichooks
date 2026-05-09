@@ -6,7 +6,7 @@
 $ErrorActionPreference = "Stop"
 $settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
 $marker = "_agentic-hooks-installer"
-$CURRENT_VERSION = "v1"
+$CURRENT_VERSION = "v2"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
 
 function Read-Settings {
@@ -67,16 +67,13 @@ function Remove-OurHooks($hooksArray) {
 }
 
 function Make-Hook($routeName) {
-    # v1: hook fires a single curl.exe POST to the local plugin listener.
-    # No sig file, no toast, no AUMID. async=$true means Claude Code does
-    # not wait on the curl call. --max-time 2 keeps a stuck listener from
-    # hanging the hook. -s silences progress output.
-    $cmd = "curl.exe -X POST -s --max-time 2 http://127.0.0.1:9123/event/$routeName"
+    # v2: native Claude Code type:"http" hook. Claude Code makes the request
+    # itself; no shell, no curl. timeout is in seconds. The listener replies
+    # 204 before doing the actual work so localhost round-trip is sub-ms.
     $h = [ordered]@{
-        type    = "command"
-        command = $cmd
-        shell   = "powershell"
-        async   = $true
+        type    = "http"
+        url     = "http://127.0.0.1:9123/event/$routeName"
+        timeout = 2
     }
     $h[$marker] = $CURRENT_VERSION
     return [pscustomobject]$h
