@@ -15,20 +15,20 @@ describe("defaultSoundPath", () => {
   });
 
   it("returns Speech On.wav for stop", () => {
-    expect(defaultSoundPath("stop")).toBe("C:\\Windows\\Media\\Speech On.wav");
+    expect(defaultSoundPath("stop", "win32")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
 
   it("returns Windows Message Nudge.wav for permission", () => {
-    expect(defaultSoundPath("permission")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
+    expect(defaultSoundPath("permission", "win32")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
   });
 
   it("returns undefined for task-completed (no default sound)", () => {
-    expect(defaultSoundPath("task-completed")).toBeUndefined();
+    expect(defaultSoundPath("task-completed", "win32")).toBeUndefined();
   });
 
   it("falls back to C:\\Windows when SystemRoot unset", () => {
     delete process.env.SystemRoot;
-    expect(defaultSoundPath("stop")).toBe("C:\\Windows\\Media\\Speech On.wav");
+    expect(defaultSoundPath("stop", "win32")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
 });
 
