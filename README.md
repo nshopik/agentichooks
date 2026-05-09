@@ -83,7 +83,7 @@ Per-button settings are exposed in the Property Inspector and self-describing.
 Plugin-global settings (More Actions → plugin settings):
 
 - **Audio per event** — sound file + volume. Stop and Permission default to Windows system WAVs; Task Completed has no default sound.
-- **Alert delay per event** — seconds between an arming hook and the alert firing. Default `1`. Set to `0` to fire immediately.
+- **Alert delay per event** — seconds between an arming hook and the alert firing. Default `1 s`. Set to `0` to fire immediately.
 - **▶ Test** — plays the configured sound at the configured volume.
 
 ## Alert delay window and clear matrix
