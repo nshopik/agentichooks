@@ -21,3 +21,4 @@ docs/*_files/*.js
 docs/*_files/*.js.download
 docs/*_files/logo.png
 marketplace/
+.superpowers/
