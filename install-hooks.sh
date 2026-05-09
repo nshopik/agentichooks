@@ -64,7 +64,7 @@ for entry in "${EVENTS[@]}"; do
   ' "$tmp")
 
   if [[ "$has_ours" == "true" ]]; then
-    echo "[skip] $evt already has Claude Notify hook"
+    echo "[skip] $evt already has Agent Hook Notify hook"
     continue
   fi
 

@@ -1,5 +1,5 @@
 # install-hooks.ps1
-# Idempotently installs Claude Code hooks that signal the Claude Notify Stream Deck plugin.
+# Idempotently installs Claude Code hooks that signal the Agent Hook Notify Stream Deck plugin.
 # Installs 15 Claude Code hooks: 10 action events (flash/audio/clear) + 5 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
 
