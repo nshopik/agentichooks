@@ -43,7 +43,7 @@ After linking, run the hook installer (Quick Start section below) to wire up Cla
 
 ## Quick Start
 
-**Local on Windows.** Run the installer to add the 15 Claude hooks to `~/.claude/settings.json`:
+**Local on Windows.** Run the installer to add the 29 Claude hook entries to `~/.claude/settings.json`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
@@ -76,7 +76,7 @@ Expected: `HTTP/1.1 200 OK`. Then run `bash install-hooks.sh` on the remote host
 
 ## HTTP routes
 
-The listener accepts 15 routes. URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
+The listener accepts 29 routes (12 action + 17 info). URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
 
 | Route | Effect |
 |---|---|
