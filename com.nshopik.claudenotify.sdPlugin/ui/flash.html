@@ -14,6 +14,10 @@
     </sdpi-select>
   </sdpi-item>
 
+  <sdpi-item>
+    <code id="trigger-cmd" style="font-size:11px;user-select:all;display:block;padding:4px 0;">curl -X POST http://localhost:9123/event/stop</code>
+  </sdpi-item>
+
   <sdpi-item label="Flash mode">
     <sdpi-radio setting="flashMode" default="static">
       <option value="static">Static</option>
@@ -84,21 +88,13 @@
     <sdpi-item><sdpi-button onclick="testAudio('task-completed')">▶ Test sound</sdpi-button></sdpi-item>
   </div>
 
-  <sdpi-item>
-    <div style="font-size:11px;line-height:1.5;color:var(--sdpi-color);padding:6px 0;">
-      <strong>Alert delay</strong> defers the alert (audio + flash) by N seconds; if a clearing event arrives during that window the alert is cancelled silently. Set to <code>0</code> to fire immediately. Default <code>1.5</code> covers fast PermissionRequest → PostToolUse races.
-      <br><br>
-      <strong>HTTP listener</strong> on <code>127.0.0.1:9123</code>. From a remote host (SSH-tunneled), POST to:
-      <pre style="margin:6px 0;padding:6px;background:rgba(0,0,0,0.25);border-radius:3px;font-size:11px;white-space:pre-wrap;">curl -X POST http://localhost:9123/event/stop
-curl -X POST http://localhost:9123/event/permission-request
-curl -X POST http://localhost:9123/event/task-completed
-curl -X POST http://localhost:9123/event/post-tool-use      # clears permission
-curl -X POST http://localhost:9123/event/user-prompt-submit # clears all</pre>
-      Add this to your outbound SSH from Windows to the remote: <code>ssh -R 9123:127.0.0.1:9123 user@remote-host</code>
-    </div>
-  </sdpi-item>
-
   <script>
+    const ROUTE_BY_EVENT = {
+      stop: "stop",
+      permission: "permission-request",
+      "task-completed": "task-completed",
+    };
+
     function testFlash() {
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
       if (!client) return;
@@ -127,6 +123,12 @@ curl -X POST http://localhost:9123/event/user-prompt-submit # clears all</pre>
       const mode = radio && radio.value;
       if (row) row.style.display = mode === "pulse" ? "" : "none";
     };
+    const updateTriggerCommand = () => {
+      const select = document.querySelector('sdpi-select[setting="eventType"]');
+      const event = (select && select.value) || "stop";
+      const cmd = document.getElementById("trigger-cmd");
+      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[event] || "stop");
+    };
     const updateAudioVisibility = () => {
       const select = document.querySelector('sdpi-select[setting="eventType"]');
       const event = (select && select.value) || "stop";
@@ -138,10 +140,14 @@ curl -X POST http://localhost:9123/event/user-prompt-submit # clears all</pre>
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(updatePulseVisibility, 100);
       setTimeout(updateAudioVisibility, 100);
+      setTimeout(updateTriggerCommand, 100);
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
       if (radio) radio.addEventListener("valuechange", updatePulseVisibility);
       const eventSelect = document.querySelector('sdpi-select[setting="eventType"]');
-      if (eventSelect) eventSelect.addEventListener("valuechange", updateAudioVisibility);
+      if (eventSelect) {
+        eventSelect.addEventListener("valuechange", updateAudioVisibility);
+        eventSelect.addEventListener("valuechange", updateTriggerCommand);
+      }
     });
   </script>
 </body>
