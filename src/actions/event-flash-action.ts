@@ -153,7 +153,6 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       timeoutMs = DEFAULT_AUTO_TIMEOUT_BY_EVENT[this.eventType];
     }
     return {
-      eventType: this.eventType,
       flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
       pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
       autoTimeoutMs: timeoutMs,

@@ -21,13 +21,13 @@ type FakeButton = {
 function makeButton(eventType: EventType, alerting = false): FakeButton {
   const btn: FakeButton = {
     eventType,
-    settings: { ...DEFAULT_FLASH_SETTINGS, eventType },
+    settings: { ...DEFAULT_FLASH_SETTINGS },
     state: { alerting, pulseFrame: 0 },
     alert: vi.fn(),
     dismiss: vi.fn(),
   };
-  // Keep the alerting bit in sync with what FlashAction would do, so isAnyArmed
-  // reflects reality across re-fires within a single test.
+  // Keep the alerting bit in sync with what EventFlashAction would do, so the
+  // dispatcher's behaviour reflects reality across re-fires within a test.
   btn.alert.mockImplementation(() => { btn.state.alerting = true; });
   btn.dismiss.mockImplementation(() => { btn.state.alerting = false; });
   return btn;
