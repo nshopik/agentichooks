@@ -40,6 +40,12 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
 export class Dispatcher {
   private opts: DispatcherOpts;
   private pending = new Map<EventType, NodeJS.Timeout>();
+  // ARMED state lives on the dispatcher, not on the visible buttons. Stream Deck
+  // tears down (willDisappear) and rebuilds (willAppear) per-key contexts on every
+  // page or profile switch, which would otherwise wipe alerting state. Tracking
+  // armed types here lets onWillAppear restore the visual + remaining timeout.
+  private armed = new Set<EventType>();
+  private armedAt = new Map<EventType, number>();
 
   constructor(opts: DispatcherOpts) {
     this.opts = opts;
@@ -51,9 +57,10 @@ export class Dispatcher {
 
   // Single matrix-driven entry point. Replaces dispatch / dismiss / dismissAll.
   // For each event type, the dispatcher tracks one of three states:
-  //   IDLE     — nothing pending, no alerting buttons
+  //   IDLE     — nothing pending, not armed
   //   PENDING  — delay timer running; will fire (audio + flash) on expiry
-  //   ARMED    — delay elapsed; one or more buttons of that type are alerting
+  //   ARMED    — delay elapsed; alert is active for this type (independent of
+  //              whether any button is currently visible to render it)
   // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
   // extension), so a burst of arming events still produces exactly one alert.
   handleRoute(route: string): void {
@@ -64,12 +71,23 @@ export class Dispatcher {
     this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"}`);
   }
 
+  // Public lookup for FlashAction.onWillAppear: returns ms since this type was
+  // armed, or null if not armed. Lets a freshly-rebuilt button context restore
+  // the alert with the correct remaining auto-timeout.
+  armedMsAgo(type: EventType): number | null {
+    const at = this.armedAt.get(type);
+    if (at === undefined) return null;
+    return Date.now() - at;
+  }
+
   private clearType(type: EventType): void {
     const timer = this.pending.get(type);
     if (timer) {
       clearTimeout(timer);
       this.pending.delete(type);
     }
+    this.armed.delete(type);
+    this.armedAt.delete(type);
     for (const [, btn] of this.opts.getButtons()) {
       if (btn.state.alerting && btn.settings.eventType === type) btn.dismiss();
     }
@@ -77,7 +95,7 @@ export class Dispatcher {
 
   private armType(type: EventType): void {
     if (this.pending.has(type)) return;
-    if (this.isAnyArmed(type)) {
+    if (this.armed.has(type)) {
       this.fire(type);
       return;
     }
@@ -110,17 +128,12 @@ export class Dispatcher {
         armed++;
       }
     }
+    this.armed.add(type);
+    this.armedAt.set(type, Date.now());
     const audioCfg = this.opts.getGlobalSettings().audio[type];
     const path = audioCfg.soundPath ?? defaultSoundPath(type);
     this.log(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
     if (!path) return;
     this.opts.audioPlayer.play(path);
-  }
-
-  private isAnyArmed(type: EventType): boolean {
-    for (const [, btn] of this.opts.getButtons()) {
-      if (btn.state.alerting && btn.settings.eventType === type) return true;
-    }
-    return false;
   }
 }

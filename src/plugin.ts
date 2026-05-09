@@ -4,7 +4,7 @@ import type { JsonObject } from "@elgato/utils";
 import { FlashAction } from "./actions/flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
-import { Dispatcher } from "./dispatcher.js";
+import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
 
@@ -34,6 +34,11 @@ const action = new FlashAction({
     audioPlayer.play(soundPath);
     return true;
   },
+  // Lazy lookup: dispatcher is constructed below, so this arrow captures the
+  // outer binding and resolves at willAppear time. Lets the action restore
+  // alerting state for buttons revealed by a page or profile switch. The
+  // explicit return type breaks a TS inference cycle (action ↔ dispatcher).
+  armedMsAgo: (eventType): number | null => dispatcher.armedMsAgo(eventType),
 });
 streamDeck.actions.registerAction(action);
 
@@ -71,7 +76,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
-  getButtons: () => action.buttonsForDispatcher(),
+  getButtons: (): Map<string, DispatchableButton> => action.buttonsForDispatcher(),
   log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
 });
 
