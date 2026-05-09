@@ -22,7 +22,7 @@
   </sdpi-item>
 
   <sdpi-item label="Auto-dismiss (sec)">
-    <sdpi-textfield setting="autoTimeoutSeconds" placeholder="0 = never" default="0" pattern="[0-9]+"></sdpi-textfield>
+    <sdpi-textfield id="auto-dismiss-field" setting="autoTimeoutSeconds" placeholder="0 = never" default="0" pattern="[0-9]+"></sdpi-textfield>
   </sdpi-item>
 
   <sdpi-item>
@@ -127,6 +127,23 @@
         if (section) section.style.display = ev === eventType ? "" : "none";
       }
     };
+    // Per-event auto-dismiss default. The plugin code uses 30s for task-completed
+    // (no Claude Code hook reliably fires after task completion to dismiss it) and
+    // 0 = never for stop/permission. Reflect that in the PI so what the user sees
+    // matches what the code does — instead of always showing 0.
+    const AUTO_DISMISS_DEFAULT_BY_EVENT = {
+      stop: { default: "0", placeholder: "0 = never" },
+      permission: { default: "0", placeholder: "0 = never" },
+      "task-completed": { default: "30", placeholder: "30 = default" },
+    };
+    const updateAutoDismissDefault = () => {
+      const field = document.getElementById("auto-dismiss-field");
+      if (!field) return;
+      const cfg = AUTO_DISMISS_DEFAULT_BY_EVENT[eventType];
+      if (!cfg) return;
+      field.setAttribute("default", cfg.default);
+      field.setAttribute("placeholder", cfg.placeholder);
+    };
     async function resolveEventType() {
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
       if (!client) return;
@@ -143,6 +160,7 @@
       }
       updateAudioVisibility();
       updateTriggerCommand();
+      updateAutoDismissDefault();
     }
     document.addEventListener("DOMContentLoaded", () => {
       setTimeout(updatePulseVisibility, 100);
