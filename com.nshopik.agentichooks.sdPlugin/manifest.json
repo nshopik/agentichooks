@@ -1,14 +1,14 @@
 {
-  "Name": "Agent Hook Notify",
-  "Version": "1.0.0.0",
+  "Name": "Agentic Hooks",
+  "Version": "0.9.0.0",
   "Author": "Nikolay Shopik",
-  "Category": "Agent Hook Notify",
+  "Category": "Agentic Hooks",
   "CategoryIcon": "images/actions/category",
-  "Description": "Flashes a Stream Deck button on agent hook events. Works with Anthropic Claude Code: shows a visible (and optional audible) alert when a turn ends, a permission is requested, or a task completes. Local Windows/macOS and remote sessions over SSH.",
-  "URL": "https://github.com/nshopik/claudenotify",
+  "Description": "Stream Deck plugin that flashes a button on agent hook events. Works with Anthropic Claude Code: shows a visible (and optional audible) alert when a turn ends, a permission is requested, or a task completes. Local Windows/macOS and remote sessions over SSH.",
+  "URL": "https://github.com/nshopik/agentichooks",
   "Icon": "images/plugin-icon",
   "CodePath": "bin/plugin.js",
-  "UUID": "com.nshopik.claudenotify",
+  "UUID": "com.nshopik.agentichooks",
   "SDKVersion": 3,
   "Software": {
     "MinimumVersion": "7.1"
@@ -29,7 +29,7 @@
   "Actions": [
     {
       "Name": "Flash",
-      "UUID": "com.nshopik.claudenotify.flash",
+      "UUID": "com.nshopik.agentichooks.flash",
       "Icon": "images/actions/flash",
       "Tooltip": "Flash on a Claude Code hook event",
       "PropertyInspectorPath": "ui/flash.html",

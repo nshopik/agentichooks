@@ -5,7 +5,7 @@ import commonjs from "@rollup/plugin-commonjs";
 export default {
   input: "src/plugin.ts",
   output: {
-    file: "com.nshopik.claudenotify.sdPlugin/bin/plugin.js",
+    file: "com.nshopik.agentichooks.sdPlugin/bin/plugin.js",
     format: "es",
     sourcemap: true,
   },

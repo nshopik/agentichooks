@@ -7,7 +7,7 @@ if (!tag?.startsWith("v")) {
 }
 const tagVersion = tag.slice(1);
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-const mf = JSON.parse(readFileSync("com.nshopik.claudenotify.sdPlugin/manifest.json", "utf8"));
+const mf = JSON.parse(readFileSync("com.nshopik.agentichooks.sdPlugin/manifest.json", "utf8"));
 const expectedManifest = `${tagVersion}.0`;
 const errs = [];
 if (pkg.version !== tagVersion) {

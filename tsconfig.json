@@ -9,11 +9,11 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": false,
     "sourceMap": true,
-    "outDir": "./com.nshopik.claudenotify.sdPlugin/bin",
+    "outDir": "./com.nshopik.agentichooks.sdPlugin/bin",
     "resolveJsonModule": true,
     "noEmit": true,
     "types": ["node"]
   },
   "include": ["src/**/*", "tests/**/*"],
-  "exclude": ["node_modules", "com.nshopik.claudenotify.sdPlugin/bin"]
+  "exclude": ["node_modules", "com.nshopik.agentichooks.sdPlugin/bin"]
 }

@@ -1,6 +1,6 @@
 node_modules/
 __pycache__/
-com.nshopik.claudenotify.sdPlugin/bin/
+com.nshopik.agentichooks.sdPlugin/bin/
 *.streamDeckPlugin
 *.log
 coverage/
