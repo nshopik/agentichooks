@@ -16,7 +16,7 @@ set -euo pipefail
 
 URL="${CLAUDE_NOTIFY_URL:-http://localhost:9123}"
 SETTINGS="${HOME}/.claude/settings.json"
-MARKER="_claude-notify-installer"
+MARKER="_agentic-hooks-installer"
 
 if ! command -v jq >/dev/null 2>&1; then
   echo "error: jq is required (apt install jq / brew install jq)" >&2
@@ -64,7 +64,7 @@ for entry in "${EVENTS[@]}"; do
   ' "$tmp")
 
   if [[ "$has_ours" == "true" ]]; then
-    echo "[skip] $evt already has Agent Hook Notify hook"
+    echo "[skip] $evt already has Agentic Hooks hook"
     continue
   fi
 
