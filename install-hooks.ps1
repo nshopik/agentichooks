@@ -86,7 +86,7 @@ if (Test-Path $staleHelperPath) {
 }
 
 # v6 left stub claude-notify-*.sig files in %TEMP% (created by SignalWatcher).
-# v1 doesn't use them; clean up so they don't linger.
+# Current versions don't use them; clean up so they don't linger.
 Remove-Item "$env:TEMP\claude-notify-*.sig" -Force -ErrorAction SilentlyContinue
 
 $settings = Read-Settings
@@ -155,7 +155,7 @@ foreach ($evt in $events.Keys) {
 
 # Orphan cleanup: remove our managed hooks from event keys we no longer install.
 # Only entries carrying our marker are removed; user-added hooks under the same key remain.
-# The list is empty in v1; the loop is kept for future drops.
+# The list is currently empty; the loop is kept for future drops.
 $droppedEvents = @()
 foreach ($evt in $droppedEvents) {
     if (-not ($hooks.PSObject.Properties.Name -contains $evt)) { continue }
