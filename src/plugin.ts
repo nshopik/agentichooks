@@ -32,7 +32,7 @@ const action = new FlashAction({
 });
 streamDeck.actions.registerAction(action);
 
-// PI persists alertDelay as { stop: { seconds: 1.5 }, ... } for human readability,
+// PI persists alertDelay as { stop: { seconds: 1 }, ... } for human readability,
 // matching the autoTimeoutSeconds precedent. Convert to ms once at load time.
 type StoredAlertDelay = Partial<Record<typeof ALL_EVENT_TYPES[number], { seconds?: number | string }>>;
 type StoredGlobalSettings = Partial<GlobalSettings> & { alertDelay?: StoredAlertDelay };

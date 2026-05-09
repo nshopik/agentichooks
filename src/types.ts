@@ -54,7 +54,7 @@ export const DEFAULT_AUTO_TIMEOUT_BY_EVENT: Record<EventType, number> = {
 // alert (audio + flash) actually firing. A clearing route arriving inside this
 // window cancels the pending alert entirely — fixes the false-positive sound
 // when PermissionRequest → PostToolUse fires within ~1s.
-export const DEFAULT_ALERT_DELAY_MS = 1500;
+export const DEFAULT_ALERT_DELAY_MS = 1000;
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   audio: {

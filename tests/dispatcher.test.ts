@@ -58,7 +58,7 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1499);
+    vi.advanceTimersByTime(999);
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -67,7 +67,7 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
@@ -118,16 +118,16 @@ describe("Dispatcher.handleRoute — pending cancelled by clearing route (the bu
 });
 
 describe("Dispatcher.handleRoute — same-type arm during PENDING is no-op (no timer extension)", () => {
-  it("two permission-requests 500ms apart fire exactly one alert at t=1500", () => {
+  it("two permission-requests 500ms apart fire exactly one alert at t=1000", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1000); // total 1500 from first arm
+    vi.advanceTimersByTime(500); // total 1000 from first arm
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(1000); // would be t=2500 — no second fire
+    vi.advanceTimersByTime(1000); // would be t=2000 — no second fire
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 });
@@ -238,7 +238,7 @@ describe("Dispatcher.handleRoute — re-fire when already ARMED", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
     // Now ARMED. Another permission-request fires immediately, no fresh wait.
@@ -306,7 +306,7 @@ describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
     d.handleRoute("/event/this-does-not-exist");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     // The pending permission still fires; the unknown route had no effect.
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
@@ -328,7 +328,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav", 75);
   });
 
@@ -337,7 +337,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual still fires though.
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
@@ -347,7 +347,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     d.handleRoute("/event/task-completed");
-    vi.advanceTimersByTime(1500);
+    vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith(
       expect.stringContaining("Windows Notify System Generic.wav"),
       expect.any(Number),
