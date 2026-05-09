@@ -10,3 +10,10 @@ dist/
 TODO.md
 CLAUDE.md
 docs/superpowers/
+docs/*.html
+docs/*.pdf
+# Docusaurus chrome assets shipped alongside saved Elgato pages — keep only the screenshots
+docs/*_files/*.css
+docs/*_files/*.js
+docs/*_files/*.js.download
+docs/*_files/logo.png
