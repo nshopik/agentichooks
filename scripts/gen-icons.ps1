@@ -140,7 +140,7 @@ foreach ($e in $events) {
     }
 }
 
-# Plugin icon (256 + 512): dark rounded square with bell glyph
+# Plugin icon (256 + 512): clock + sparkle on navy → blue gradient. Matches marketplace app icon.
 function Make-PluginIcon {
     param([string]$outPath, [int]$size)
     $bmp = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -148,45 +148,51 @@ function Make-PluginIcon {
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
     $g.Clear([System.Drawing.Color]::Transparent)
 
-    $bg = [System.Drawing.ColorTranslator]::FromHtml("#0f172a")
-    $bgBrush = New-Object System.Drawing.SolidBrush($bg)
+    # Background — navy → blue diagonal gradient
+    $bgRect = New-Object System.Drawing.RectangleF(0, 0, $size, $size)
+    $c1 = [System.Drawing.ColorTranslator]::FromHtml("#0f172a")
+    $c2 = [System.Drawing.ColorTranslator]::FromHtml("#3b82f6")
+    $bgBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($bgRect, $c1, $c2, [single]135)
     $radius = [int]($size * 0.16)
     $rect = New-RoundedRectPath $g $size $size $radius
     $g.FillPath($bgBrush, $rect)
 
-    $blue = [System.Drawing.ColorTranslator]::FromHtml("#3b82f6")
-    $brush = New-Object System.Drawing.SolidBrush($blue)
-    $pen = New-Object System.Drawing.Pen($blue, [single]($size * 0.04))
-    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-
-    # Bell shape: ellipse top + flared trapezoid + clapper
+    $white = [System.Drawing.Color]::White
     $s = [single]$size
-    $cx = $s * 0.5
-    # bell body (rounded triangle)
-    $top = $s * 0.28
-    $bottom = $s * 0.66
-    $halfTopW = $s * 0.10
-    $halfBotW = $s * 0.22
-    $points = @(
-        (New-Object System.Drawing.PointF(($cx - $halfTopW), $top)),
-        (New-Object System.Drawing.PointF(($cx + $halfTopW), $top)),
-        (New-Object System.Drawing.PointF(($cx + $halfBotW), $bottom)),
-        (New-Object System.Drawing.PointF(($cx - $halfBotW), $bottom))
-    )
-    $g.FillPolygon($brush, [System.Drawing.PointF[]]$points)
-    # rounded top cap
-    $capR = $halfTopW
-    $g.FillEllipse($brush, ($cx - $capR), ($top - $capR), ($capR * 2), ($capR * 2))
-    # base bar
-    $baseW = $s * 0.50
-    $baseH = $s * 0.045
-    $g.FillRectangle($brush, ($cx - $baseW / 2), $bottom, $baseW, $baseH)
-    # clapper
-    $clapperR = $s * 0.05
-    $g.FillEllipse($brush, ($cx - $clapperR), ($bottom + $baseH + $clapperR * 0.4), ($clapperR * 2), ($clapperR * 2))
 
+    # Clock centered
+    $clockCx = $s * 0.5
+    $clockCy = $s * 0.5
+    $clockR = $s * 0.275
+    $strokeWidth = [single]($s * 0.07)
+    $pen = New-Object System.Drawing.Pen($white, $strokeWidth)
+    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
+    $g.DrawEllipse($pen, ($clockCx - $clockR), ($clockCy - $clockR), ($clockR * 2), ($clockR * 2))
+    $g.DrawLine($pen, $clockCx, $clockCy, $clockCx, ($clockCy - $clockR * 0.6))
+    $g.DrawLine($pen, $clockCx, $clockCy, ($clockCx + $clockR * 0.5), $clockCy)
     $pen.Dispose()
-    $brush.Dispose()
+
+    # Sparkle pushed further into upper-right corner to clear the centered clock
+    $sparkSize = $s * 0.20
+    $sparkCx = $s * 0.83
+    $sparkCy = $s * 0.20
+    $r1 = $sparkSize * 0.50
+    $r2 = $sparkSize * 0.14
+    $pi4 = [Math]::PI / 4
+    $sparkPoints = @()
+    for ($i = 0; $i -lt 8; $i++) {
+        $angle = $i * $pi4 - [Math]::PI / 2
+        $r = if ($i % 2 -eq 0) { $r1 } else { $r2 }
+        $x = $sparkCx + $r * [Math]::Cos($angle)
+        $y = $sparkCy + $r * [Math]::Sin($angle)
+        $sparkPoints += New-Object System.Drawing.PointF($x, $y)
+    }
+    $sparkBrush = New-Object System.Drawing.SolidBrush($white)
+    $g.FillPolygon($sparkBrush, [System.Drawing.PointF[]]$sparkPoints)
+    $sparkBrush.Dispose()
+
     $bgBrush.Dispose()
     $g.Dispose()
 
