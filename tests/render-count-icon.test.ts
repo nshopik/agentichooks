@@ -3,7 +3,7 @@ import { renderCountIcon } from "../src/render-count-icon.js";
 
 function decodeDataUri(uri: string): string {
   const prefix = "data:image/svg+xml;base64,";
-  expect(uri.startsWith(prefix)).toBe(true);
+  if (!uri.startsWith(prefix)) throw new Error(`Expected data URI, got: ${uri.slice(0, 60)}`);
   return Buffer.from(uri.slice(prefix.length), "base64").toString("utf-8");
 }
 
