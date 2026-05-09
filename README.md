@@ -1,6 +1,6 @@
 # Claude Notify — Stream Deck plugin
 
-Flash a Stream Deck button on Claude Code hook events (turn end, permission request, task completed). Works for local Claude on Windows and remote Claude over SSH.
+Flash a Stream Deck button on Claude Code hook events (turn end, permission request, task completed). Runs on Windows and macOS; remote Claude sessions work over SSH from any POSIX host.
 
 ![preview](com.nshopik.claudenotify.sdPlugin/previews/main.png)
 
@@ -8,7 +8,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude.
 - Static or pulsing flash mode, configurable per button.
-- Optional audio cue per event. Stop and Permission default to Windows system sounds; Task Completed has no default sound (silent unless you pick a WAV). Volume configurable per event.
+- Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
 ## Installation
@@ -27,15 +27,21 @@ npx streamdeck link com.nshopik.claudenotify.sdPlugin
 
 ## Quick Start
 
-**Local (Windows).** Run the installer to add the 15 Claude hooks to `~/.claude/settings.json`:
+**Local on Windows.** Run the installer to add the 15 Claude hooks to `~/.claude/settings.json`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install-hooks.ps1
 ```
 
-The script is idempotent — safe to run multiple times.
+**Local on macOS.** Run the POSIX installer (also used for remote hosts; it points at `localhost:9123` by default):
 
-**Remote (Linux/macOS).** Add a reverse-forward to `~/.ssh/config` on your **Windows** machine:
+```bash
+bash install-hooks.sh
+```
+
+Both installers are idempotent — safe to run multiple times.
+
+**Remote (Linux/macOS).** Add a reverse-forward to `~/.ssh/config` on the machine running the Stream Deck plugin:
 
 ```
 Host my-dev-vm
@@ -82,9 +88,9 @@ Per-button settings are exposed in the Property Inspector and self-describing.
 
 Plugin-global settings (More Actions → plugin settings):
 
-- **Audio per event** — sound file + volume. Stop and Permission default to Windows system WAVs; Task Completed has no default sound.
+- **Audio per event** — sound file. Stop and Permission default to system sounds; Task Completed has no default. Set the path to empty (Mute button) to silence an event without removing the configured sound.
 - **Alert delay per event** — seconds between an arming hook and the alert firing. Default `1 s`. Set to `0` to fire immediately.
-- **▶ Test** — plays the configured sound at the configured volume.
+- **▶ Test** — plays the configured sound.
 
 ## Alert delay window and clear matrix
 
