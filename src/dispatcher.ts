@@ -9,23 +9,41 @@ export type DispatchableButton = {
   dismiss: () => void;
 };
 
+// Minimal interface — the dispatcher only mutates the counter; reads happen
+// via the counter's own callbacks wired into the action layer.
+export type DispatcherTaskCounter = {
+  increment(): void;
+  decrement(): void;
+  reset(): void;
+};
+
 export type DispatcherOpts = {
   audioPlayer: { play: (path: string) => void };
   getGlobalSettings: () => GlobalSettings;
   getButtons: () => Map<string, DispatchableButton>;
   log?: (msg: string) => void;
+  taskCounter?: DispatcherTaskCounter;
 };
 
 // Each incoming HTTP route maps to a set of event types whose alerts it clears
 // and (optionally) the event type it arms. Apply order is clears-first then arm,
 // so a fresh stop cancels stale permission/task-completed before entering its
 // own pending window.
-type RouteSpec = { clears: ReadonlyArray<EventType>; arms?: EventType };
+type CounterDirective = "increment" | "decrement" | "reset";
+type RouteSpec = {
+  clears: ReadonlyArray<EventType>;
+  arms?: EventType;
+  // Counter directive applied AFTER clears/arms. No-op if no taskCounter
+  // is wired into the Dispatcher (kept optional so unit tests targeting
+  // unrelated routes don't need a stub).
+  counter?: CounterDirective;
+};
 
 const ROUTES: Readonly<Record<string, RouteSpec>> = {
   "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/permission-request":    { arms: "permission",     clears: [] },
+  "/event/task-created":          {                         clears: [], counter: "increment" },
   "/event/task-completed":        { arms: "task-completed", clears: ["permission"] },
   "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"] },
   "/event/user-prompt-submit":    {                         clears: ["stop", "permission", "task-completed"] },
@@ -69,7 +87,23 @@ export class Dispatcher {
     if (!spec) return;
     for (const t of spec.clears) this.clearType(t);
     if (spec.arms) this.armType(spec.arms);
-    this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"}`);
+    if (spec.counter) this.applyCounter(spec.counter);
+    this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
+  }
+
+  // Public seam used by TaskCounter.onZeroReached. Wraps the existing
+  // private armType so external callers can fire only the task-completed
+  // alert and cannot bypass the matrix for arbitrary types.
+  fireTaskCompleted(): void {
+    this.armType("task-completed");
+  }
+
+  private applyCounter(directive: CounterDirective): void {
+    const c = this.opts.taskCounter;
+    if (!c) return;
+    if (directive === "increment") c.increment();
+    else if (directive === "decrement") c.decrement();
+    else if (directive === "reset") c.reset();
   }
 
   // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was

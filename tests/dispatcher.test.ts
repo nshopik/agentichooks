@@ -8,7 +8,7 @@ import {
   type FlashSettings,
   type GlobalSettings,
 } from "../src/types.js";
-import type { DispatchableButton } from "../src/dispatcher.js";
+import type { DispatchableButton, DispatcherTaskCounter } from "../src/dispatcher.js";
 
 type FakeButton = {
   eventType: EventType;
@@ -440,5 +440,48 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     d.handleRoute("/event/task-completed");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+});
+
+describe("Dispatcher.handleRoute — counter directives", () => {
+  function fakeCounter(): DispatcherTaskCounter & { increment: ReturnType<typeof vi.fn>; decrement: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> } {
+    return {
+      increment: vi.fn(),
+      decrement: vi.fn(),
+      reset: vi.fn(),
+    };
+  }
+
+  it("calls counter.increment for /event/task-created (route to be added in Task 4)", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-created");
+    expect(counter.increment).toHaveBeenCalledTimes(1);
+    expect(counter.decrement).not.toHaveBeenCalled();
+    expect(counter.reset).not.toHaveBeenCalled();
+  });
+
+  it("counter directives are no-ops when no taskCounter opt is supplied", () => {
+    // Existing tests construct dispatcher without taskCounter; this asserts
+    // routes added in Task 4 never throw when the counter isn't wired.
+    const d = dispatcher();
+    expect(() => d.handleRoute("/event/task-created")).not.toThrow();
+  });
+
+  it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
+    globals.audio["task-completed"].soundPath = "C:\\Windows\\Media\\done.wav";
+    buttons.set("task", makeButton("task-completed"));
+    const d = dispatcher();
+    d.fireTaskCompleted();
+    vi.advanceTimersByTime(999);
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 });
