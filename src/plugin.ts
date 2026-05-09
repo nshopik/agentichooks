@@ -1,4 +1,5 @@
 import streamDeck from "@elgato/streamdeck";
+import fs from "node:fs";
 import type { JsonObject } from "@elgato/utils";
 import { FlashAction } from "./actions/flash-action.js";
 import { HttpListener } from "./http-listener.js";
@@ -20,14 +21,18 @@ const audioPlayer = new AudioPlayer({
 let globals: GlobalSettings = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
 
 const action = new FlashAction({
-  onTestSound: (eventType) => {
+  onTestSound: (eventType): boolean => {
     // Plays whatever soundPath resolves to: user pick, runtime default, or
-    // nothing if the event was muted (soundPath = "").
+    // nothing if the event was muted (soundPath = "") or the file is gone.
+    // Returns true when playback actually started, false otherwise — the PI's
+    // ▶ Test sound button uses the false result to call showAlert().
     const cfg = globals.audio[eventType];
-    const path = cfg.soundPath ?? defaultSoundPath(eventType);
-    streamDeck.logger.info(`onTestSound: event=${eventType} path=${path}`);
-    if (!path) return;
-    audioPlayer.play(path);
+    const soundPath = cfg.soundPath ?? defaultSoundPath(eventType);
+    streamDeck.logger.info(`onTestSound: event=${eventType} path=${soundPath}`);
+    if (!soundPath) return false;
+    if (!fs.existsSync(soundPath)) return false;
+    audioPlayer.play(soundPath);
+    return true;
   },
 });
 streamDeck.actions.registerAction(action);
@@ -97,7 +102,7 @@ process.on("SIGTERM", () => { void shutdown().then(() => process.exit(0)); });
   await streamDeck.connect();
   await loadGlobals();
   await startListener();
-  streamDeck.logger.info("Claude Notify plugin started");
+  streamDeck.logger.info("Agent Hook Notify plugin started");
 })().catch((err) => {
   streamDeck.logger.error(`Plugin startup failed: ${err}`);
   process.exit(1);

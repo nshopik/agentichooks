@@ -17,11 +17,12 @@ const STATE_ALERT = 1;
 
 export type FlashActionOpts = {
   /**
-   * Invoked when the user clicks Test flash or ▶ Test sound in the per-button PI.
-   * Plays whatever soundPath resolves to for the event type — user pick, runtime
-   * default, or silent if muted (soundPath = "").
+   * Returns `true` when audio actually started, `false` when the resolved
+   * sound path was empty or the file does not exist. The caller (the test-audio
+   * PI button) uses the `false` result to surface `showAlert()` so the user
+   * knows the press failed instead of seeing nothing.
    */
-  onTestSound?: (eventType: EventType) => void;
+  onTestSound?: (eventType: EventType) => boolean;
 };
 
 type Ctx = {
@@ -156,7 +157,8 @@ export class FlashAction extends SingletonAction<JsonObject> {
       return;
     }
     if (payload?.kind === "test-audio" && payload.event) {
-      this.opts.onTestSound?.(payload.event);
+      const ok = this.opts.onTestSound?.(payload.event);
+      if (ok === false) await ev.action.showAlert();
     }
   }
 
