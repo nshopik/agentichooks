@@ -23,6 +23,12 @@ export type FlashActionOpts = {
    * knows the press failed instead of seeing nothing.
    */
   onTestSound?: (eventType: EventType) => boolean;
+  /**
+   * Lazy lookup against the Dispatcher so onWillAppear can restore alerting state
+   * after a Stream Deck page/profile switch. Returns ms since the type was armed,
+   * or null if not currently armed.
+   */
+  armedMsAgo?: (eventType: EventType) => number | null;
 };
 
 type Ctx = {
@@ -118,7 +124,24 @@ export class FlashAction extends SingletonAction<JsonObject> {
     };
     this.contexts.set(action.id, ctx);
     await this.applyEventTypeDefaults(ctx);
-    await ctx.setState(STATE_IDLE);
+    // Stream Deck rebuilds per-key contexts on every page or profile switch.
+    // If the dispatcher still considers this event type armed, resume the alert
+    // with the auto-timeout's remaining budget instead of resetting to idle.
+    const msAgo = this.opts.armedMsAgo?.(settings.eventType) ?? null;
+    if (msAgo === null) {
+      await ctx.setState(STATE_IDLE);
+      return;
+    }
+    if (settings.autoTimeoutMs > 0) {
+      const remaining = settings.autoTimeoutMs - msAgo;
+      if (remaining <= 0) {
+        await ctx.setState(STATE_IDLE);
+        return;
+      }
+      this.alertContext(ctx, remaining);
+      return;
+    }
+    this.alertContext(ctx);
   }
 
   override async onWillDisappear(ev: WillDisappearEvent<JsonObject>): Promise<void> {
@@ -170,7 +193,7 @@ export class FlashAction extends SingletonAction<JsonObject> {
     await ctx.setImage(defaultImageForState(ctx.settings.eventType, STATE_ALERT), STATE_ALERT);
   }
 
-  private alertContext(ctx: Ctx): void {
+  private alertContext(ctx: Ctx, timeoutOverrideMs?: number): void {
     this.clearTimers(ctx);
     ctx.state.alerting = true;
     ctx.state.pulseFrame = 1;
@@ -182,8 +205,9 @@ export class FlashAction extends SingletonAction<JsonObject> {
         void ctx.setState(ctx.state.pulseFrame === 1 ? STATE_ALERT : STATE_IDLE);
       }, interval);
     }
-    if (ctx.settings.autoTimeoutMs > 0) {
-      ctx.state.timeoutTimer = setTimeout(() => this.dismissContext(ctx), ctx.settings.autoTimeoutMs);
+    const timeoutMs = timeoutOverrideMs ?? ctx.settings.autoTimeoutMs;
+    if (timeoutMs > 0) {
+      ctx.state.timeoutTimer = setTimeout(() => this.dismissContext(ctx), timeoutMs);
     }
   }
 

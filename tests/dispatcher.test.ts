@@ -321,6 +321,75 @@ describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
   });
 });
 
+describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile switch", () => {
+  it("returns null when nothing has been armed", () => {
+    const d = dispatcher();
+    expect(d.armedMsAgo("permission")).toBeNull();
+    expect(d.armedMsAgo("stop")).toBeNull();
+    expect(d.armedMsAgo("task-completed")).toBeNull();
+  });
+
+  it("returns null while pending (delay timer not yet elapsed)", () => {
+    buttons.set("a", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request");
+    vi.advanceTimersByTime(500);
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  it("returns elapsed ms after fire, regardless of whether buttons are still in the map", () => {
+    vi.setSystemTime(new Date("2026-05-09T00:00:00Z"));
+    buttons.set("a", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request");
+    vi.advanceTimersByTime(1000); // fire at t=1000
+    // Simulate Stream Deck page switch: button context is torn down.
+    buttons.clear();
+    vi.advanceTimersByTime(7000); // user reads email, comes back 7s later
+    expect(d.armedMsAgo("permission")).toBe(7000);
+  });
+
+  it("clearType wipes armed state even if the alerting button was off-page", () => {
+    buttons.set("a", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request");
+    vi.advanceTimersByTime(1000);
+    // Page switched away — buttons disappeared.
+    buttons.clear();
+    // Then a clearing route arrives (post-tool-use).
+    d.handleRoute("/event/post-tool-use");
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  it("session-start clears armedMsAgo for every armed type", () => {
+    buttons.set("s", makeButton("stop"));
+    buttons.set("p", makeButton("permission"));
+    globals.alertDelay.stop = 0;
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/stop");
+    d.handleRoute("/event/permission-request");
+    expect(d.armedMsAgo("stop")).not.toBeNull();
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    d.handleRoute("/event/session-start");
+    expect(d.armedMsAgo("stop")).toBeNull();
+    expect(d.armedMsAgo("permission")).toBeNull();
+    expect(d.armedMsAgo("task-completed")).toBeNull();
+  });
+
+  it("re-fire on already-armed type refreshes the timestamp", () => {
+    vi.setSystemTime(new Date("2026-05-09T00:00:00Z"));
+    buttons.set("a", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request");
+    vi.advanceTimersByTime(1000); // first fire at t=1000
+    vi.advanceTimersByTime(3000); // t=4000, msAgo=3000
+    expect(d.armedMsAgo("permission")).toBe(3000);
+    d.handleRoute("/event/permission-request"); // re-fire (already armed) → resets timestamp
+    expect(d.armedMsAgo("permission")).toBe(0);
+  });
+});
+
 describe("Dispatcher.handleRoute — audio behavior preserved", () => {
   it("plays the configured soundPath at fire time", () => {
     globals.audio.permission.soundPath = "C:\\custom\\alert.wav";
