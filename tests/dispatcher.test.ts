@@ -360,4 +360,13 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
+
+  it("skips audio when task-completed soundPath is the empty string (explicit mute)", () => {
+    globals.audio["task-completed"].soundPath = "";
+    buttons.set("a", makeButton("task-completed"));
+    const d = dispatcher();
+    d.handleRoute("/event/task-completed");
+    vi.advanceTimersByTime(1000);
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
 });
