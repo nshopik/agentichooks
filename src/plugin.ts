@@ -8,11 +8,11 @@ import { Dispatcher } from "./dispatcher.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
 
-// CLAUDE_NOTIFY_DEBUG=1 in the plugin's env raises log level from "warn" to "info",
+// AGENTIC_HOOKS_DEBUG=1 in the plugin's env raises log level from "warn" to "info",
 // surfacing every received HTTP event (action + info routes) plus dispatcher and
 // audio diagnostic lines. Toggle requires plugin restart:
-//   $env:CLAUDE_NOTIFY_DEBUG = "1"; npx streamdeck restart com.nshopik.claudenotify
-streamDeck.logger.setLevel(process.env.CLAUDE_NOTIFY_DEBUG ? "info" : "warn");
+//   $env:AGENTIC_HOOKS_DEBUG = "1"; npx streamdeck restart com.nshopik.agentichooks
+streamDeck.logger.setLevel(process.env.AGENTIC_HOOKS_DEBUG ? "info" : "warn");
 
 const audioPlayer = new AudioPlayer({
   log: (level, msg) => streamDeck.logger[level](`audio: ${msg}`),
@@ -102,7 +102,7 @@ process.on("SIGTERM", () => { void shutdown().then(() => process.exit(0)); });
   await streamDeck.connect();
   await loadGlobals();
   await startListener();
-  streamDeck.logger.info("Agent Hook Notify plugin started");
+  streamDeck.logger.info("Agentic Hooks plugin started");
 })().catch((err) => {
   streamDeck.logger.error(`Plugin startup failed: ${err}`);
   process.exit(1);

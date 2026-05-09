@@ -80,7 +80,7 @@ function defaultImageForState(event: EventType, state: 0 | 1): string {
   return `images/keys/${event}-${state === STATE_IDLE ? "idle" : "alert"}.png`;
 }
 
-@action({ UUID: "com.nshopik.claudenotify.flash" })
+@action({ UUID: "com.nshopik.agentichooks.flash" })
 export class FlashAction extends SingletonAction<JsonObject> {
   private readonly contexts = new Map<string, Ctx>();
   private readonly opts: FlashActionOpts;
