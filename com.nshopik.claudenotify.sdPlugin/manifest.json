@@ -1,10 +1,10 @@
 {
-  "Name": "Claude Notify",
+  "Name": "Agent Hook Notify",
   "Version": "1.0.0.0",
   "Author": "Nikolay Shopik",
-  "Category": "Claude Notify",
+  "Category": "Agent Hook Notify",
   "CategoryIcon": "images/actions/category",
-  "Description": "Flash a Stream Deck button on Claude Code hook events (turn complete, task complete, permission request). Works for local Claude on Windows and macOS, and remote Claude over SSH from any host.",
+  "Description": "Flashes a Stream Deck button on agent hook events. Works with Anthropic Claude Code: shows a visible (and optional audible) alert when a turn ends, a permission is requested, or a task completes. Local Windows/macOS and remote sessions over SSH.",
   "URL": "https://github.com/nshopik/claudenotify",
   "Icon": "images/plugin-icon",
   "CodePath": "bin/plugin.js",
