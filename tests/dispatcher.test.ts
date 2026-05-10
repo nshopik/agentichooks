@@ -142,7 +142,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("stop", makeButton("stop"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request");
-    d.handleRoute("/event/task-completed");
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/stop");
     vi.advanceTimersByTime(5000);
@@ -212,7 +212,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop");
     d.handleRoute("/event/permission-request");
-    d.handleRoute("/event/task-completed");
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/session-start");
     vi.advanceTimersByTime(5000);
@@ -229,10 +229,13 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop");
     d.handleRoute("/event/permission-request");
-    d.handleRoute("/event/task-completed");
+    d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/user-prompt-submit");
     vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
 
