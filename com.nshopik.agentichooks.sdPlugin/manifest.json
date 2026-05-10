@@ -7,6 +7,7 @@
   "CategoryIcon": "images/actions/category",
   "Description": "Stream Deck plugin that flashes a button on agent hook events. Works with Anthropic Claude Code: shows a visible (and optional audible) alert when a turn ends, a permission is requested, or a task completes. Local Windows/macOS and remote sessions over SSH.",
   "URL": "https://github.com/nshopik/agentichooks",
+  "SupportURL": "https://github.com/nshopik/agentichooks/issues",
   "Icon": "images/plugin-icon",
   "CodePath": "bin/plugin.js",
   "UUID": "com.nshopik.agentichooks",
