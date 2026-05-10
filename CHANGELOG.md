@@ -26,6 +26,18 @@ All notable changes to this project will be documented in this file.
   count-icon SVG that fills the button face (the title was already visually
   occluded; this just stops Stream Deck from rendering it underneath) (#10)
 
+### Fixed
+
+- Dev-mode log-level detection: replace the broken `NODE_ENV !== "development"`
+  conditional in `src/plugin.ts` (which checked a signal nobody sets) with
+  `--inspect*` execArgv detection mirroring the SDK's own `isDebugMode()`.
+  Empirically verified that `npx streamdeck dev` provides no runtime signal to
+  the plugin process — it only enables Property Inspector inspection — so the
+  dev branch is dormant under normal Stream Deck launches but fires correctly
+  when the plugin is launched via `node --inspect=...`. Production behavior
+  (`AGENTIC_HOOKS_DEBUG=1` → `debug`, `=trace` → `trace`) is unchanged. Logic
+  extracted into a tested pure module `src/log-level.ts` (#12)
+
 ## 0.9.1 — 2026-05-10
 
 ### Added
