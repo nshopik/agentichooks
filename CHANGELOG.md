@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
   must re-toggle once per Task Completed button. Fixes the ~500 ms
   checked→unchecked PI checkbox flicker that occurred because the global
   settings fetch is async. Each Task Completed button now independently controls
-  its own animation. (#PR-N)
+  its own animation. (#13)
 
 ### Fixed
 
