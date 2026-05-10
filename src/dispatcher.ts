@@ -88,7 +88,7 @@ export class Dispatcher {
     const spec = ROUTES[route];
     if (!spec) {
       this.opts.log?.debug(`unknown route=${route}`);
-      return;
+      return; // no state change; skip trace dump
     }
     this.opts.log?.debug(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
     for (const t of spec.clears) this.clearType(t);
