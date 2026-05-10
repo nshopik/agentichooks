@@ -1,5 +1,6 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Logger } from "./types.js";
 
 const ACTION_ROUTES = new Set<string>([
   "/event/stop",
@@ -41,7 +42,7 @@ export type HttpListenerOpts = {
   // Called for every action route; the URL path is forwarded to the dispatcher's
   // matrix lookup. Info routes log + 204 only and never invoke this callback.
   onEvent: (route: string) => void;
-  log?: (msg: string) => void;
+  log?: Logger;
 };
 
 export class HttpListener {
@@ -50,10 +51,6 @@ export class HttpListener {
 
   constructor(opts: HttpListenerOpts) {
     this.opts = opts;
-  }
-
-  private log(msg: string): void {
-    this.opts.log?.(msg);
   }
 
   start(): Promise<void> {
@@ -84,7 +81,7 @@ export class HttpListener {
   private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     const url = req.url ?? "";
     const peer = req.socket.remoteAddress ?? "?";
-    this.log(`${req.method ?? "?"} ${url} from=${peer}`);
+    this.opts.log?.debug(`${req.method ?? "?"} ${url} from=${peer}`);
     if (req.method === "GET" && url === "/health") {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("OK");
@@ -104,10 +101,10 @@ export class HttpListener {
         res.end();
         setImmediate(() => {
           if (isAction) {
-            this.log(`action route=${url}`);
+            this.opts.log?.debug(`action route=${url}`);
             this.opts.onEvent(url);
           } else {
-            this.log(`info-only route=${url}`);
+            this.opts.log?.debug(`info-only route=${url}`);
           }
         });
       });
