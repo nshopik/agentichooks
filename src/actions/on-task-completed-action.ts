@@ -40,9 +40,9 @@ export class OnTaskCompletedAction extends EventFlashAction {
    * renderCountIcon paints the static yellow sparkle.
    */
   private renderFrame(count: number): void {
-    const animEnabled = this.opts.animateEnabled?.() ?? true;
-    const frame = animEnabled ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
+    const frameGlyph = OnTaskCompletedAction.FRAMES[this.frameIdx];
     for (const [, ctx] of this.contexts) {
+      const frame = ctx.settings.animateCounter !== false ? frameGlyph : undefined;
       void ctx.setImage(renderCountIcon(count, frame), 0);
     }
   }
@@ -64,12 +64,7 @@ export class OnTaskCompletedAction extends EventFlashAction {
    */
   broadcastCount(count: number): void {
     if (count > 0) {
-      const animEnabled = this.opts.animateEnabled?.() ?? true;
-      if (animEnabled) {
-        this.startAnimation();
-      } else {
-        this.stopAnimation();
-      }
+      this.startAnimation();
       this.renderFrame(count);
     } else {
       this.stopAnimation();
@@ -94,8 +89,7 @@ export class OnTaskCompletedAction extends EventFlashAction {
     if (ctx.state.alerting) return;
     const count = this.opts.currentCount?.() ?? 0;
     if (count > 0) {
-      const animEnabled = this.opts.animateEnabled?.() ?? true;
-      const frame = animEnabled ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
+      const frame = ctx.settings.animateCounter !== false ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
       void ctx.setImage(renderCountIcon(count, frame), 0);
     }
   }

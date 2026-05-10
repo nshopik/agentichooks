@@ -39,13 +39,6 @@ export type EventFlashActionOpts = {
    * current global subagent count. Only consumed by OnTaskCompletedAction.
    */
   currentCount?: () => number;
-  /**
-   * Lazy lookup against GlobalSettings.animateCounter so OnTaskCompletedAction
-   * can decide whether to drive the corner-glyph animation interval. Returns
-   * `true` when animation should run, `false` for the static sparkle.
-   * Undefined → default true. Only consumed by OnTaskCompletedAction.
-   */
-  animateEnabled?: () => boolean;
 };
 
 type Ctx = {
@@ -65,6 +58,7 @@ type RawSettings = JsonObject & {
   pulseIntervalMs?: number;
   autoTimeoutMs?: number;
   autoTimeoutSeconds?: number | string;
+  animateCounter?: boolean;
 };
 
 export abstract class EventFlashAction extends SingletonAction<JsonObject> {
@@ -182,6 +176,7 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
       pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
       autoTimeoutMs: timeoutMs,
+      animateCounter: r.animateCounter,
     };
   }
 

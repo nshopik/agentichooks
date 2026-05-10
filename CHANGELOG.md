@@ -25,6 +25,13 @@ All notable changes to this project will be documented in this file.
   previously set on a Task Completed button will be silently hidden by the
   count-icon SVG that fills the button face (the title was already visually
   occluded; this just stops Stream Deck from rendering it underneath) (#10)
+- `animateCounter` converted from a global setting to a per-action setting on
+  the Task Completed button. Existing `animateCounter: false` in global settings
+  is silently dropped on upgrade — affected users see animation re-enable and
+  must re-toggle once per Task Completed button. Fixes the ~500 ms
+  checked→unchecked PI checkbox flicker that occurred because the global
+  settings fetch is async. Each Task Completed button now independently controls
+  its own animation. (#PR-N)
 
 ### Fixed
 
