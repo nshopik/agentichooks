@@ -1,9 +1,9 @@
-export type TaskCounterLogLevel = "info" | "warn";
+import type { Logger } from "./types.js";
 
 export type TaskCounterOpts = {
   onCountChanged: (count: number) => void;
   onZeroReached: () => void;
-  log?: (level: TaskCounterLogLevel, msg: string) => void;
+  log?: Logger;
 };
 
 // Single shared in-flight subagent counter for the Task Completed action.
@@ -29,7 +29,7 @@ export class TaskCounter {
 
   increment(): void {
     this.count++;
-    this.opts.log?.("info", `increment count=${this.count}`);
+    this.opts.log?.info(`increment count=${this.count}`);
     this.opts.onCountChanged(this.count);
   }
 
@@ -38,12 +38,13 @@ export class TaskCounter {
   // onCountChanged(0) (so the in-flight image is cleared after).
   decrement(): void {
     if (this.count === 0) {
-      this.opts.log?.("warn", "task-completed received with count=0 — floored, no alert");
+      this.opts.log?.warn("task-completed received with count=0 — floored, no alert");
       return;
     }
     this.count--;
-    this.opts.log?.("info", `decrement count=${this.count}`);
+    this.opts.log?.info(`decrement count=${this.count}`);
     if (this.count === 0) {
+      this.opts.log?.debug("onZeroReached firing");
       this.opts.onZeroReached();
     }
     this.opts.onCountChanged(this.count);
@@ -55,7 +56,7 @@ export class TaskCounter {
   reset(): void {
     if (this.count === 0) return;
     this.count = 0;
-    this.opts.log?.("info", "reset");
+    this.opts.log?.info("reset");
     this.opts.onCountChanged(0);
   }
 }

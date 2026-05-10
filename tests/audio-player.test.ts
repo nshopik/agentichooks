@@ -42,21 +42,19 @@ afterEach(() => {
 
 describe("AudioPlayer", () => {
   it("does not spawn when file is missing", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
+    const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32", log: mockLog });
     player.play("C:\\nope\\nothing.wav");
     expect(spawnCalls.length).toBe(0);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+    expect(mockLog.warn).toHaveBeenCalledTimes(1);
   });
 
   it("warns once per missing path, not on every call", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
+    const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32", log: mockLog });
     player.play("C:\\nope\\nothing.wav");
     player.play("C:\\nope\\nothing.wav");
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+    expect(mockLog.warn).toHaveBeenCalledTimes(1);
   });
 
   it("spawns powershell with the wav path on Windows", () => {
@@ -105,12 +103,11 @@ describe("AudioPlayer — macOS", () => {
   });
 
   it("does not spawn when file is missing on darwin", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
+    const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
+    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin", log: mockLog });
     player.play("/nope/nothing.aiff");
     expect(spawnCalls.length).toBe(0);
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+    expect(mockLog.warn).toHaveBeenCalledTimes(1);
   });
 
   it("spawns afplay exactly once with no side-effect files", () => {
