@@ -13,9 +13,12 @@ import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
 import { pickLogLevel } from "./log-level.js";
 
-// Out of dev: default info, AGENTIC_HOOKS_DEBUG=1 → debug, =trace → trace.
-// In dev (Stream Deck launches plugin with --inspect*), the SDK seeds debug;
-// we only override when AGENTIC_HOOKS_DEBUG=trace asks for trace dumps.
+// Default: info. AGENTIC_HOOKS_DEBUG=1 → debug, =trace → trace. When a debugger
+// is attached (--inspect* in execArgv), the SDK seeds debug and we leave it
+// alone unless AGENTIC_HOOKS_DEBUG=trace upgrades. Note: `npx streamdeck dev`
+// does NOT inject --inspect* into the plugin process (verified 2026-05-10) —
+// it only enables PI inspection — so the dev branch fires only when the plugin
+// is launched via `node --inspect=...`, which is rare in normal use.
 const level = pickLogLevel(process.execArgv, process.env);
 if (level) streamDeck.logger.setLevel(level);
 
