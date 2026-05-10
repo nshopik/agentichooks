@@ -1,9 +1,11 @@
 param()
-# Determinism note (2026-05-10): System.Drawing's PNG encoder writes only
-# IHDR + IDAT + IEND — no tIME or metadata chunks. Same-session output is
-# byte-stable (SHA-1 verified). If output ever drifts across machines or
-# .NET updates, evaluate SVG-source + resvg-cli rasterization or drop PNGs
-# from git rather than chasing encoder determinism.
+# Determinism note (2026-05-10): System.Drawing's PNG encoder writes
+# IHDR + sRGB + gAMA + pHYs + IDAT + IEND. The ancillary chunks carry
+# fixed values (sRGB rendering intent, gamma 2.2, 96 dpi) — no tIME or
+# session-varying metadata. Same-session output is byte-stable (SHA-1
+# verified). If output ever drifts across machines or .NET updates,
+# evaluate SVG-source + resvg-cli rasterization or drop PNGs from git
+# rather than chasing encoder determinism.
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
