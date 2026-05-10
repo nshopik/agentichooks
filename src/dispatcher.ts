@@ -1,4 +1,4 @@
-import type { EventType, GlobalSettings, FlashSettings, ButtonState } from "./types.js";
+import type { EventType, GlobalSettings, FlashSettings, ButtonState, Logger } from "./types.js";
 import { defaultSoundPath } from "./system-sounds.js";
 
 export type DispatchableButton = {
@@ -21,7 +21,7 @@ export type DispatcherOpts = {
   audioPlayer: { play: (path: string) => void };
   getGlobalSettings: () => GlobalSettings;
   getButtons: () => Map<string, DispatchableButton>;
-  log?: (msg: string) => void;
+  log?: Logger;
   taskCounter?: DispatcherTaskCounter;
 };
 
@@ -76,10 +76,6 @@ export class Dispatcher {
     this.opts = opts;
   }
 
-  private log(msg: string): void {
-    this.opts.log?.(msg);
-  }
-
   // Single matrix-driven entry point. Replaces dispatch / dismiss / dismissAll.
   // For each event type, the dispatcher tracks one of three states:
   //   IDLE     — nothing pending, not armed
@@ -90,11 +86,15 @@ export class Dispatcher {
   // extension), so a burst of arming events still produces exactly one alert.
   handleRoute(route: string): void {
     const spec = ROUTES[route];
-    if (!spec) return;
+    if (!spec) {
+      this.opts.log?.debug(`unknown route=${route}`);
+      return;
+    }
+    this.opts.log?.debug(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
     for (const t of spec.clears) this.clearType(t);
     if (spec.arms) this.armType(spec.arms);
     if (spec.counter) this.applyCounter(spec.counter);
-    this.log(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
+    this.opts.log?.trace(`state stop=${this.stateOf("stop")} permission=${this.stateOf("permission")} task-completed=${this.stateOf("task-completed")}`);
   }
 
   // Public seam used by TaskCounter.onZeroReached. Wraps the existing
@@ -121,6 +121,12 @@ export class Dispatcher {
     return Date.now() - at;
   }
 
+  private stateOf(type: EventType): "IDLE" | "PENDING" | "ARMED" {
+    if (this.pending.has(type)) return "PENDING";
+    if (this.armed.has(type)) return "ARMED";
+    return "IDLE";
+  }
+
   private clearType(type: EventType): void {
     const timer = this.pending.get(type);
     if (timer) {
@@ -135,7 +141,10 @@ export class Dispatcher {
   }
 
   private armType(type: EventType): void {
-    if (this.pending.has(type)) return;
+    if (this.pending.has(type)) {
+      this.opts.log?.debug(`arm skip: type=${type} already PENDING`);
+      return;
+    }
     if (this.armed.has(type)) {
       this.fire(type);
       return;
@@ -150,7 +159,7 @@ export class Dispatcher {
       this.fire(type);
     }, delayMs);
     this.pending.set(type, timer);
-    this.log(`pending type=${type} delayMs=${delayMs}`);
+    this.opts.log?.info(`pending type=${type} delayMs=${delayMs}`);
   }
 
   private fire(type: EventType): void {
@@ -173,7 +182,7 @@ export class Dispatcher {
     this.armedAt.set(type, Date.now());
     const audioCfg = this.opts.getGlobalSettings().audio[type];
     const path = audioCfg.soundPath ?? defaultSoundPath(type);
-    this.log(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
+    this.opts.log?.info(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
     if (!path) return;
     this.opts.audioPlayer.play(path);
   }
