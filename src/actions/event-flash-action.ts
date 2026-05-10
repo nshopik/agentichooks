@@ -158,7 +158,12 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     }
     if (payload?.kind === "test-audio" && payload.event) {
       const ok = this.opts.onTestSound?.(payload.event);
-      if (ok === false) await ev.action.showAlert();
+      if (ok === false) {
+        streamDeck.logger.warn(
+          `test-audio failed: event=${payload.event} (showing key alert)`,
+        );
+        await ev.action.showAlert();
+      }
     }
   }
 
