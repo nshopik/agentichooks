@@ -233,6 +233,9 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/user-prompt-submit");
     vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
+    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
 
