@@ -10,16 +10,38 @@ import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
 import { TaskCounter } from "./task-counter.js";
 import { defaultSoundPath } from "./system-sounds.js";
-import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings } from "./types.js";
+import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
 
-// AGENTIC_HOOKS_DEBUG=1 in the plugin's env raises log level from "warn" to "info",
-// surfacing every received HTTP event (action + info routes) plus dispatcher and
-// audio diagnostic lines. Toggle requires plugin restart:
-//   $env:AGENTIC_HOOKS_DEBUG = "1"; npx streamdeck restart com.nshopik.agentichooks
-streamDeck.logger.setLevel(process.env.AGENTIC_HOOKS_DEBUG ? "info" : "warn");
+// In production builds, set log level explicitly:
+//   - default: info (always-visible startup, fire, counter lines)
+//   - AGENTIC_HOOKS_DEBUG=1 → debug (per-request HTTP, route matrix detail, arm no-ops)
+//   - AGENTIC_HOOKS_DEBUG=trace → trace (also state dump after each route)
+// In dev (`npx streamdeck dev`, NODE_ENV=development) the SDK's own debug default
+// applies — skip setLevel so the platform decides.
+if (process.env.NODE_ENV !== "development") {
+  const level = process.env.AGENTIC_HOOKS_DEBUG === "trace" ? "trace"
+    : process.env.AGENTIC_HOOKS_DEBUG ? "debug"
+    : "info";
+  streamDeck.logger.setLevel(level);
+}
+
+// Builds a scoped Logger that mirrors debug/trace calls to console.debug, so a
+// dev with a terminal open sees them immediately without restarting the plugin
+// to bump the log file's level. info/warn/error stay log-file-only (the SDK's
+// defaults already write them to terminal at debug level in dev mode).
+function makeLogger(scope: string): Logger {
+  const scoped = streamDeck.logger.createScope(scope);
+  return {
+    info:  (msg) => scoped.info(msg),
+    warn:  (msg) => scoped.warn(msg),
+    error: (msg) => scoped.error(msg),
+    debug: (msg) => { scoped.debug(msg); console.debug(`[${scope}] ${msg}`); },
+    trace: (msg) => { scoped.trace(msg); console.debug(`[${scope}] TRACE ${msg}`); },
+  };
+}
 
 const audioPlayer = new AudioPlayer({
-  log: (level, msg) => streamDeck.logger[level](`audio: ${msg}`),
+  log: makeLogger("audio"),
 });
 
 let globals: GlobalSettings = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS));
@@ -97,7 +119,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
 const taskCounter = new TaskCounter({
   onCountChanged: (n) => taskCompletedAction.broadcastCount(n),
   onZeroReached: () => dispatcher.fireTaskCompleted(),
-  log: (level, msg) => streamDeck.logger[level](`counter: ${msg}`),
+  log: makeLogger("counter"),
 });
 
 const dispatcher = new Dispatcher({
@@ -108,7 +130,7 @@ const dispatcher = new Dispatcher({
     for (const a of actions) for (const [k, v] of a.buttonsForDispatcher()) merged.set(k, v);
     return merged;
   },
-  log: (msg) => streamDeck.logger.info(`dispatcher: ${msg}`),
+  log: makeLogger("dispatch"),
   taskCounter,
 });
 
@@ -118,7 +140,7 @@ async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
     onEvent: (route) => dispatcher.handleRoute(route),
-    log: (msg) => streamDeck.logger.info(`http: ${msg}`),
+    log: makeLogger("http"),
   });
   try {
     await listener.start();
