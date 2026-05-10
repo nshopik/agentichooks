@@ -66,3 +66,11 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
 };
 
 export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "permission", "task-completed"];
+
+export interface Logger {
+  info(msg: string): void;
+  warn(msg: string): void;
+  error(msg: string): void;
+  debug(msg: string): void;
+  trace(msg: string): void;
+}
