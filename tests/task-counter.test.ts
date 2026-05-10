@@ -3,12 +3,12 @@ import { TaskCounter } from "../src/task-counter.js";
 
 let onCountChanged: ReturnType<typeof vi.fn>;
 let onZeroReached: ReturnType<typeof vi.fn>;
-let log: ReturnType<typeof vi.fn>;
+let log: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn>; trace: ReturnType<typeof vi.fn> };
 
 beforeEach(() => {
   onCountChanged = vi.fn();
   onZeroReached = vi.fn();
-  log = vi.fn();
+  log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
 });
 
 function newCounter() {
@@ -61,7 +61,7 @@ describe("TaskCounter", () => {
     expect(c.current()).toBe(0);
     expect(onCountChanged).not.toHaveBeenCalled();
     expect(onZeroReached).not.toHaveBeenCalled();
-    expect(log).toHaveBeenCalledWith("warn", expect.stringContaining("count=0"));
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining("count=0"));
   });
 
   it("reset from >0 zeros count, fires onCountChanged(0), does NOT fire onZeroReached (silent)", () => {
