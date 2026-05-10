@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Animated Claude-spinner corner glyph on the in-flight Task Completed icon —
+  coral spinner cycling at 5 fps over a yellow count on black. New
+  `animateCounter` global setting (default on) with a Property Inspector
+  toggle that swaps the spinner for a static yellow sparkle when disabled (#7)
+
+### Changed
+
+- Logging refactor: per-module scoped loggers (`[http]`, `[dispatch]`,
+  `[audio]`, `[counter]`) via the SDK's `createScope()`, with `debug` and
+  `trace` levels added throughout. `AGENTIC_HOOKS_DEBUG=1` now raises the log
+  level to `debug` (previously bumped `warn` → `info`); `AGENTIC_HOOKS_DEBUG=trace`
+  enables the per-route state-dump trace line. Default level is `info` (#8)
+- Stream Deck SDK alignment audit follow-up — paired `showAlert()` with a
+  diagnostic log line, declared `Controllers`, `SupportURL`, and `$schema` in
+  `manifest.json`, opted into `useExperimentalMessageIdentifiers`. Set
+  `UserTitleEnabled: false` on the Task Completed action: any custom title
+  previously set on a Task Completed button will be silently hidden by the
+  count-icon SVG that fills the button face (the title was already visually
+  occluded; this just stops Stream Deck from rendering it underneath). (#PR-N)
+
 ## 0.9.1 — 2026-05-10
 
 ### Added
