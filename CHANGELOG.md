@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+## [0.9.2] - 2026-MM-DD
+
+### Added
+
+- `parseHookBody` module (`src/parse-hook-body.ts`) — pure chunk buffer with a `BodyOutcome`
+  discriminated union (`empty` / `unparseable` / `oversize` / `parsed`) for
+  clean caller branching without re-inspection
+- `session_id` (truncated to 8 chars) and `cwd` (basename only) now appear in
+  every `[http]` result log line: `session=<8char> cwd=<basename>` for parsed
+  bodies, `session=? cwd=?` when the body is absent or malformed
+- `[http]` INFO line for `/event/notification` `message` field when present,
+  e.g. `notification message="Claude Code needs your attention"`
+- WARN-level diagnostics for empty, unparseable, and oversize POST bodies on
+  any route — fires regardless of route classification so misconfigured
+  installers are immediately visible in the log
+
 - Animated Claude-spinner corner glyph on the in-flight Task Completed icon —
   coral spinner cycling at 5 fps over a yellow count on black. New
   `animateCounter` global setting (default on) with a Property Inspector
