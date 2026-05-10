@@ -11,19 +11,13 @@ import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
 import { TaskCounter } from "./task-counter.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
+import { pickLogLevel } from "./log-level.js";
 
-// In production builds, set log level explicitly:
-//   - default: info (always-visible startup, fire, counter lines)
-//   - AGENTIC_HOOKS_DEBUG=1 → debug (per-request HTTP, route matrix detail, arm no-ops)
-//   - AGENTIC_HOOKS_DEBUG=trace → trace (also state dump after each route)
-// In dev (`npx streamdeck dev`, NODE_ENV=development) the SDK's own debug default
-// applies — skip setLevel so the platform decides.
-if (process.env.NODE_ENV !== "development") {
-  const level = process.env.AGENTIC_HOOKS_DEBUG === "trace" ? "trace"
-    : process.env.AGENTIC_HOOKS_DEBUG ? "debug"
-    : "info";
-  streamDeck.logger.setLevel(level);
-}
+// Out of dev: default info, AGENTIC_HOOKS_DEBUG=1 → debug, =trace → trace.
+// In dev (Stream Deck launches plugin with --inspect*), the SDK seeds debug;
+// we only override when AGENTIC_HOOKS_DEBUG=trace asks for trace dumps.
+const level = pickLogLevel(process.execArgv, process.env);
+if (level) streamDeck.logger.setLevel(level);
 
 // Builds a scoped Logger that mirrors debug/trace calls to console.debug, so a
 // dev with a terminal open sees them immediately without restarting the plugin
