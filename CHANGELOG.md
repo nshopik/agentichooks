@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
   `UserTitleEnabled: false` on the Task Completed action: any custom title
   previously set on a Task Completed button will be silently hidden by the
   count-icon SVG that fills the button face (the title was already visually
-  occluded; this just stops Stream Deck from rendering it underneath). (#PR-N)
+  occluded; this just stops Stream Deck from rendering it underneath) (#10)
 
 ## 0.9.1 — 2026-05-10
 
