@@ -10,6 +10,7 @@ dist/
 TODO.md
 CLAUDE.md
 docs/superpowers/
+docs/claude-code-hooks/
 docs/elgato-plugin-guidelines.md
 docs/elgato-product-guidelines.md
 docs/*_files/
