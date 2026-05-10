@@ -4,6 +4,9 @@ export type FlashSettings = {
   flashMode: "static" | "pulse";
   pulseIntervalMs: number;
   autoTimeoutMs: number;
+  // Only read by OnTaskCompletedAction; stop and permission contexts carry the
+  // field but ignore it. Undefined is treated as true (animation on by default).
+  animateCounter?: boolean;
 };
 
 export type AudioConfig = { soundPath?: string };
@@ -19,7 +22,6 @@ export type GlobalSettings = {
     permission: number;
     "task-completed": number;
   };
-  animateCounter?: boolean; // default true — animate corner glyph with Claude Code spinner frames
 };
 
 export const HTTP_PORT = 9123;

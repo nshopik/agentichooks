@@ -66,8 +66,6 @@ const actionOpts: EventFlashActionOpts = {
   // binding and resolves at willAppear time. Same indirection pattern as
   // armedMsAgo above.
   currentCount: (): number => taskCounter.current(),
-  // !==false treats both undefined (not yet set) and true as enabled — default on.
-  animateEnabled: (): boolean => globals.animateCounter !== false,
 };
 
 const taskCompletedAction = new OnTaskCompletedAction(actionOpts);
@@ -97,7 +95,6 @@ function mergeGlobals(stored: StoredGlobalSettings | undefined): GlobalSettings 
       if (Number.isFinite(sec)) base.alertDelay[ev] = Math.max(0, sec * 1000);
     }
   }
-  if (stored.animateCounter !== undefined) base.animateCounter = stored.animateCounter;
   return base;
 }
 
