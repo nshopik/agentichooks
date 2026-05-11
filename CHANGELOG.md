@@ -53,6 +53,7 @@ All notable changes to this project will be documented in this file.
 
 - SHA-pin all GitHub Actions to immutable commits (#16)
 - reject cross-origin and non-loopback Host requests in HttpListener (#17)
+- upgrade vitest 2.x → 4.x to clear dev-only CVEs (#18)
 
 ### Fixed
 
