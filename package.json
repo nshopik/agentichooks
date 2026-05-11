@@ -1,6 +1,6 @@
 {
   "name": "agentichooks",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "Stream Deck plugin that flashes on agent hook events",
   "type": "module",
   "scripts": {
