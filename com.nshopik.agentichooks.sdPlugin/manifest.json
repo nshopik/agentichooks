@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "Agentic Hooks",
-  "Version": "0.9.1.0",
+  "Version": "0.9.2.0",
   "Author": "Nikolay Shopik",
   "Category": "Agentic Hooks",
   "CategoryIcon": "images/actions/category",

@@ -11,7 +11,7 @@
 const SIZE = 144;
 const RADIUS = 20;
 const BG = "#000000";
-const FG = "#facc15";          // number + static sparkle
+const FG = "#fde047";          // number + static sparkle
 const GLYPH_COLOR = "#da7756"; // coral — animated frame glyphs
 
 // Font sizes tuned by inspection on a real Stream Deck XL key. 1-digit is
@@ -34,8 +34,8 @@ function buildSvg(display: string, fontSize: number, frame?: string): string {
     `<rect width="${SIZE}" height="${SIZE}" rx="${RADIUS}" fill="${BG}"/>`,
     // Corner glyph: animated Unicode frame (coral) or static sparkle polygon (yellow)
     frame
-      ? `<text x="22" y="31" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="700" fill="${GLYPH_COLOR}">${frame}</text>`
-      : `<polygon points="22,8.25 24.65,19.35 35.75,22 24.65,24.65 22,35.75 19.35,24.65 8.25,22 19.35,19.35" fill="${FG}"/>`,
+      ? `<text x="22" y="34" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="33" font-weight="700" fill="${GLYPH_COLOR}">${frame}</text>`
+      : `<polygon points="22,1.375 25.975,18.025 42.625,22 25.975,25.975 22,42.625 18.025,25.975 1.375,22 18.025,18.025" fill="${FG}"/>`,
     // y is the alphabetic baseline (Stream Deck's SVG renderer ignores
     // dominant-baseline AND dy, so we compute the baseline explicitly).
     // For a digit with cap-height ≈ 0.7×fontSize, baseline at SIZE/2 + 0.35×fontSize
