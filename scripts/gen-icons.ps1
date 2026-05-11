@@ -132,9 +132,9 @@ function Make-KeyIcon {
 }
 
 $events = @(
-    @{ name = "stop";           glyph = "check"; idle = "#1f2937"; alert = "#16a34a" },
-    @{ name = "permission";     glyph = "perm";  idle = "#1f2937"; alert = "#dc2626" },
-    @{ name = "task-completed"; glyph = "idle";  idle = "#1f2937"; alert = "#3b82f6" }
+    @{ name = "stop";           glyph = "check"; idle = "#000000"; alert = "#16a34a" },
+    @{ name = "permission";     glyph = "perm";  idle = "#000000"; alert = "#dc2626" },
+    @{ name = "task-completed"; glyph = "idle";  idle = "#000000"; alert = "#3b82f6" }
 )
 
 foreach ($e in $events) {
