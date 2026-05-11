@@ -49,6 +49,10 @@ All notable changes to this project will be documented in this file.
   settings fetch is async. Each Task Completed button now independently controls
   its own animation. (#13)
 
+### Security
+
+- SHA-pin all GitHub Actions to immutable commits (#16)
+
 ### Fixed
 
 - Dev-mode log-level detection: replace the broken `NODE_ENV !== "development"`
