@@ -59,6 +59,26 @@ async function request(method: string, path: string, port: number): Promise<{ st
   });
 }
 
+async function requestWithHeaders(
+  method: string,
+  path: string,
+  port: number,
+  headers: Record<string, string>,
+): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: "127.0.0.1", port, method, path, headers },
+      (res) => {
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => resolve({ status: res.statusCode ?? 0, body }));
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 const ACTION_ROUTES = [
   "/event/stop",
   "/event/stop-failure",
@@ -268,5 +288,54 @@ describe("HttpListener", () => {
     await new Promise((r) => setTimeout(r, 20));
     const notifLine = logs.find((l) => l.level === "info" && l.msg.includes("notification message="));
     expect(notifLine?.msg).toContain('"Claude needs \\"your\\" attention"');
+  });
+
+  it("POST /event/stop with Origin header returns 403 and does not call onEvent", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const res = await requestWithHeaders("POST", "/event/stop", listener.port(), {
+      "Origin": "http://attacker.example",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(res.status).toBe(403);
+    expect(received).toEqual([]);
+    const warns = logs.filter((l) => l.level === "warn");
+    expect(warns).toHaveLength(1);
+    expect(warns[0].msg).toContain("reason=origin");
+  });
+
+  it("POST /event/stop with non-loopback Host header returns 403 and does not call onEvent", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const res = await requestWithHeaders("POST", "/event/stop", listener.port(), {
+      "Host": "attacker.example",
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(res.status).toBe(403);
+    expect(received).toEqual([]);
+    const warns = logs.filter((l) => l.level === "warn");
+    expect(warns).toHaveLength(1);
+    expect(warns[0].msg).toContain("reason=host");
+  });
+
+  it("POST /event/stop with Host: localhost:<port> returns 204 and calls onEvent", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const port = listener.port();
+    const res = await requestWithHeaders("POST", "/event/stop", port, {
+      "Host": `localhost:${port}`,
+    });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(res.status).toBe(204);
+    expect(received).toEqual(["/event/stop"]);
+  });
+
+  it("GET /health with Origin header returns 403", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const res = await requestWithHeaders("GET", "/health", listener.port(), {
+      "Origin": "http://attacker.example",
+    });
+    expect(res.status).toBe(403);
   });
 });

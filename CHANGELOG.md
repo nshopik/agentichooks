@@ -52,6 +52,7 @@ All notable changes to this project will be documented in this file.
 ### Security
 
 - SHA-pin all GitHub Actions to immutable commits (#16)
+- reject cross-origin and non-loopback Host requests in HttpListener (#17)
 
 ### Fixed
 
