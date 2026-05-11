@@ -103,6 +103,20 @@ export class HttpListener {
     const peer = req.socket.remoteAddress ?? "?";
     this.opts.log?.debug(`${req.method ?? "?"} ${url} from=${peer}`);
 
+    if (req.headers.origin) {
+      this.opts.log?.warn(`rejected from=${peer} url=${url} reason=origin origin=${req.headers.origin}`);
+      res.writeHead(403); res.end();
+      return;
+    }
+
+    const expectedPort = this.port();
+    const allowedHosts = [`127.0.0.1:${expectedPort}`, `localhost:${expectedPort}`];
+    if (!allowedHosts.includes(req.headers.host ?? "")) {
+      this.opts.log?.warn(`rejected from=${peer} url=${url} reason=host host=${req.headers.host ?? "(none)"}`);
+      res.writeHead(403); res.end();
+      return;
+    }
+
     if (req.method === "GET" && url === "/health") {
       res.writeHead(200, { "Content-Type": "text/plain" });
       res.end("OK");
