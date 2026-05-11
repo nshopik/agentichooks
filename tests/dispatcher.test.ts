@@ -14,8 +14,8 @@ type FakeButton = {
   eventType: EventType;
   settings: FlashSettings;
   state: ButtonState;
-  alert: ReturnType<typeof vi.fn>;
-  dismiss: ReturnType<typeof vi.fn>;
+  alert: ReturnType<typeof vi.fn<() => void>>;
+  dismiss: ReturnType<typeof vi.fn<() => void>>;
 };
 
 function makeButton(eventType: EventType, alerting = false): FakeButton {
@@ -23,8 +23,8 @@ function makeButton(eventType: EventType, alerting = false): FakeButton {
     eventType,
     settings: { ...DEFAULT_FLASH_SETTINGS },
     state: { alerting, pulseFrame: 0 },
-    alert: vi.fn(),
-    dismiss: vi.fn(),
+    alert: vi.fn<() => void>(),
+    dismiss: vi.fn<() => void>(),
   };
   // Keep the alerting bit in sync with what EventFlashAction would do, so the
   // dispatcher's behaviour reflects reality across re-fires within a test.
@@ -489,11 +489,11 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
 });
 
 describe("Dispatcher.handleRoute — counter directives", () => {
-  function fakeCounter(): DispatcherTaskCounter & { increment: ReturnType<typeof vi.fn>; decrement: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> } {
+  function fakeCounter(): DispatcherTaskCounter & { increment: ReturnType<typeof vi.fn<() => void>>; decrement: ReturnType<typeof vi.fn<() => void>>; reset: ReturnType<typeof vi.fn<() => void>> } {
     return {
-      increment: vi.fn(),
-      decrement: vi.fn(),
-      reset: vi.fn(),
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
     };
   }
 

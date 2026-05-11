@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { TaskCounter } from "../src/task-counter.js";
 
-let onCountChanged: ReturnType<typeof vi.fn>;
-let onZeroReached: ReturnType<typeof vi.fn>;
-let log: { info: ReturnType<typeof vi.fn>; warn: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn>; debug: ReturnType<typeof vi.fn>; trace: ReturnType<typeof vi.fn> };
+let onCountChanged: ReturnType<typeof vi.fn<(count: number) => void>>;
+let onZeroReached: ReturnType<typeof vi.fn<() => void>>;
+let log: { info: ReturnType<typeof vi.fn<(msg: string) => void>>; warn: ReturnType<typeof vi.fn<(msg: string) => void>>; error: ReturnType<typeof vi.fn<(msg: string) => void>>; debug: ReturnType<typeof vi.fn<(msg: string) => void>>; trace: ReturnType<typeof vi.fn<(msg: string) => void>> };
 
 beforeEach(() => {
-  onCountChanged = vi.fn();
-  onZeroReached = vi.fn();
-  log = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
+  onCountChanged = vi.fn<(count: number) => void>();
+  onZeroReached = vi.fn<() => void>();
+  log = { info: vi.fn<(msg: string) => void>(), warn: vi.fn<(msg: string) => void>(), error: vi.fn<(msg: string) => void>(), debug: vi.fn<(msg: string) => void>(), trace: vi.fn<(msg: string) => void>() };
 });
 
 function newCounter() {
