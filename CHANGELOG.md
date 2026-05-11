@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-## [0.9.2] - 2026-MM-DD
+## [0.9.2] - 2026-05-11
 
 ### Added
 
