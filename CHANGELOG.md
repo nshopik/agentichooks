@@ -48,6 +48,9 @@ All notable changes to this project will be documented in this file.
   checked→unchecked PI checkbox flicker that occurred because the global
   settings fetch is async. Each Task Completed button now independently controls
   its own animation. (#13)
+- Idle key PNG backgrounds changed from slate-800 (`#1f2937`) to pure black (`#000000`) — eliminates the visible hue shift when the in-flight count icon (which already used `#000000`) drains back to the idle manifest PNG
+- In-flight count digit color changed from Tailwind yellow-400 (`#facc15`) to yellow-300 (`#fde047`) — brighter at desk distance without losing the muted-modern palette
+- Corner sparkle (static polygon and animated Unicode glyph) scaled to 150% of original size, anchored at center (22, 22) — makes the star a clear sibling of the digit rather than incidental decoration
 
 ### Security
 
