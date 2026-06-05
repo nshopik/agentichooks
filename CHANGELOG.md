@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+### Fixed
+
+- `SessionStart` from auto-compaction (`source: "compact"`) or `--resume`/`/resume`
+  (`source: "resume"`) no longer clears alerts or resets the in-flight task
+  counter — previously a mid-run compaction silently zeroed the count and the
+  task-completed alert never fired. The hook body's `source` field now routes
+  those two cases to a synthetic no-op matrix row (`/event/session-start-soft`);
+  `startup`, `clear`, and bodyless manual POSTs keep the full clear-all + reset
+  behavior. `[http]` result lines now include `source=<value>` when present (#23)
+
 ## [0.9.2] - 2026-05-11
 
 ### Added
