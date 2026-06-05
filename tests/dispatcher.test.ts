@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Dispatcher } from "../src/dispatcher.js";
+import { Dispatcher, deriveRoute } from "../src/dispatcher.js";
 import {
   DEFAULT_GLOBAL_SETTINGS,
   DEFAULT_FLASH_SETTINGS,
@@ -634,5 +634,120 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
     vi.advanceTimersByTime(5000);
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(counter.increment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("deriveRoute — pure route derivation", () => {
+  it("passes through any route that is not /event/session-start regardless of source", () => {
+    expect(deriveRoute("/event/stop", undefined)).toBe("/event/stop");
+    expect(deriveRoute("/event/stop", "compact")).toBe("/event/stop");
+    expect(deriveRoute("/event/permission-request", "resume")).toBe("/event/permission-request");
+    expect(deriveRoute("/event/user-prompt-submit", "startup")).toBe("/event/user-prompt-submit");
+    expect(deriveRoute("/event/task-created", undefined)).toBe("/event/task-created");
+  });
+
+  it("passes through /event/session-start for source=startup", () => {
+    expect(deriveRoute("/event/session-start", "startup")).toBe("/event/session-start");
+  });
+
+  it("passes through /event/session-start for source=clear", () => {
+    expect(deriveRoute("/event/session-start", "clear")).toBe("/event/session-start");
+  });
+
+  it("passes through /event/session-start for source=undefined (missing body)", () => {
+    expect(deriveRoute("/event/session-start", undefined)).toBe("/event/session-start");
+  });
+
+  it("passes through /event/session-start for an unknown future source value", () => {
+    expect(deriveRoute("/event/session-start", "rewind")).toBe("/event/session-start");
+  });
+
+  it("returns /event/session-start-soft for source=compact", () => {
+    expect(deriveRoute("/event/session-start", "compact")).toBe("/event/session-start-soft");
+  });
+
+  it("returns /event/session-start-soft for source=resume", () => {
+    expect(deriveRoute("/event/session-start", "resume")).toBe("/event/session-start-soft");
+  });
+});
+
+describe("deriveRoute invariant — every emission is a known matrix key", () => {
+  // Drift insurance: if the SESSION_START_SOFT constant and the ROUTES matrix
+  // row ever diverge, the soft route falls into handleRoute's `unknown route=`
+  // debug path and silently becomes a no-op "for the wrong reason". An injected
+  // log stub is the ONLY observable that distinguishes "found in ROUTES" from
+  // "unknown route" — every behavioral signal (counter calls, dismisses, PENDING
+  // timers) is identical for both states, because the soft row is {clears: []}.
+  it("every deriveRoute emission for session-start is a known ROUTES key (no `unknown route` log)", () => {
+    const debug = vi.fn<(msg: string) => void>();
+    const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      log,
+    });
+    for (const source of ["startup", "clear", "compact", "resume", undefined, "rewind"]) {
+      d.handleRoute(deriveRoute("/event/session-start", source));
+    }
+    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
+  });
+
+  it("handleRoute(/event/session-start-soft) makes zero counter calls and leaves ARMED state intact", () => {
+    buttons.set("perm", makeButton("permission"));
+    const counter = {
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    };
+    globals.alertDelay.permission = 0; // permission fires immediately on arm
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/permission-request"); // delay=0 → fires → ARMED (makeButton's
+    // alert mock sets state.alerting = true, mirroring the real action)
+    // Fire the soft route.
+    d.handleRoute("/event/session-start-soft");
+    // Zero counter calls.
+    expect(counter.increment).not.toHaveBeenCalled();
+    expect(counter.decrement).not.toHaveBeenCalled();
+    expect(counter.reset).not.toHaveBeenCalled();
+    // ARMED permission is NOT dismissed (clears: []).
+    expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
+    // Contrast: the hard route DOES dismiss it.
+    d.handleRoute("/event/session-start");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("deriveRoute bug-repro regression — hard vs soft session-start counter behavior", () => {
+  it("hard session-start calls counter.reset; soft session-start-soft does not", () => {
+    const counter = {
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    // Simulate three increments (in-flight subagents).
+    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created");
+    expect(counter.increment).toHaveBeenCalledTimes(3);
+
+    // A compact/resume fires the soft route — must not reset.
+    d.handleRoute(deriveRoute("/event/session-start", "compact"));
+    expect(counter.reset).not.toHaveBeenCalled();
+
+    // A genuine new session fires the hard route — must reset.
+    d.handleRoute(deriveRoute("/event/session-start", "startup"));
+    expect(counter.reset).toHaveBeenCalledTimes(1);
   });
 });

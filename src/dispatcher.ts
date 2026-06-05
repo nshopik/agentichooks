@@ -39,6 +39,8 @@ type RouteSpec = {
   counter?: CounterDirective;
 };
 
+const SESSION_START_SOFT = "/event/session-start-soft";
+
 const ROUTES: Readonly<Record<string, RouteSpec>> = {
   "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
@@ -60,7 +62,23 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
   // /continue, compact-and-continue). A fresh PreToolUse means the agent is working
   // again, so a still-armed stop alert is stale.
   "/event/pre-tool-use":          {                         clears: ["stop"] },
+  // Synthetic route — never registered in ACTION_ROUTES (a direct POST 404s).
+  // Reachable only via deriveRoute() for SessionStart source=compact|resume:
+  // mid-run compaction / resume must not clear alerts or reset the counter.
+  [SESSION_START_SOFT]:           {                         clears: [] },
 };
+
+// Maps an incoming route + the body's source field to the effective ROUTES key.
+// Only /event/session-start is affected: source="compact" or "resume" redirects
+// to the synthetic no-op row so mid-run compaction and --resume do not clear
+// alerts or reset the task counter. All other routes pass through unchanged.
+// Unknown / missing source values default to the existing full-reset behavior.
+export function deriveRoute(route: string, source: string | undefined): string {
+  if (route === "/event/session-start" && (source === "compact" || source === "resume")) {
+    return SESSION_START_SOFT;
+  }
+  return route;
+}
 
 export class Dispatcher {
   private opts: DispatcherOpts;
