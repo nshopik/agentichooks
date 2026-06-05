@@ -429,4 +429,33 @@ describe("HttpListener — onEvent body forwarding", () => {
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).not.toContain("source=");
   });
+
+  it("appends agent= suffix (8-char truncation) when agent_id is present in the parsed body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj", agent_id: "agt-001-xyz-full" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).toContain("agent=agt-001-");
+    expect(info?.msg).not.toContain("agent=agt-001-x"); // truncated to exactly 8 chars
+  });
+
+  it("does not append agent= in the log line when agent_id is absent from the body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).not.toContain("agent=");
+  });
 });
