@@ -160,6 +160,18 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
   });
 
+  it("POST /event/task-completed-agent returns 404 (synthetic route — unreachable via direct POST)", async () => {
+    // /event/task-completed-agent is a synthetic ROUTES key reachable only via
+    // deriveRoute() for agent-context task-completed events. A direct POST must
+    // 404, mirroring the /event/session-start-soft unreachability guarantee.
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("POST", "/event/task-completed-agent", listener.port());
+    expect(res.status).toBe(404);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual([]);
+  });
+
   it("dispatches multiple events in arrival order", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();

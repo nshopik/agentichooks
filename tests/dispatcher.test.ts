@@ -818,6 +818,80 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
   });
 });
 
+describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-context task-completed)", () => {
+  function fakeCounter() {
+    return {
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    };
+  }
+
+  it("handleRoute(TASK_COMPLETED_AGENT) decrements the counter exactly once", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    // Drive via deriveRoute to use the same path as production.
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!);
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+    expect(counter.increment).not.toHaveBeenCalled();
+    expect(counter.reset).not.toHaveBeenCalled();
+  });
+
+  it("handleRoute(TASK_COMPLETED_AGENT) does NOT clear an armed permission alert (regression guard)", () => {
+    // Bug repro: the normal /event/task-completed row has clears: ["permission"],
+    // which dismisses a legitimate permission alert when a teammate completes a task.
+    // The agent-context synthetic row must have clears: [] to avoid this.
+    const counter = fakeCounter();
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0; // fires immediately
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/permission-request"); // arms permission (delay=0 → ARMED immediately)
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    // Teammate task-completed arrives with agentId.
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-teammate");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!);
+
+    // Permission is still ARMED — not cleared.
+    expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+  });
+
+  it("contrast: normal /event/task-completed DOES clear an armed permission alert", () => {
+    // Confirms the two rows behave differently — the normal row's clears: ["permission"]
+    // is intentional (permission was resolved); the agent row must not have it.
+    const counter = fakeCounter();
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/permission-request");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/task-completed"); // normal row, no agentId
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+});
+
 describe("deriveRoute bug-repro regression — hard vs soft session-start counter behavior", () => {
   it("hard session-start calls counter.reset; soft session-start-soft does not", () => {
     const counter = {
