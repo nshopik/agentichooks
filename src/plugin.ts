@@ -137,6 +137,7 @@ async function startListener(): Promise<void> {
     port: HTTP_PORT,
     onEvent: (route, body) => {
       const derived = deriveRoute(route, body?.source, body?.agentId);
+      // deriveRoute returns null for agent-context events on non-task routes — drop, don't dispatch.
       if (derived === null) {
         dispatchLog.debug(`drop agent-context route=${route} agent=${body?.agentId?.slice(0, 8) ?? "?"}`);
         return;
