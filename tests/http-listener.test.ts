@@ -230,6 +230,7 @@ describe("HttpListener", () => {
     const warn = logs.find((l) => l.level === "warn");
     expect(warn?.msg).toMatch(/empty body/);
     expect(warn?.msg).toMatch(/route=\/event\/stop/);
+    expect(warn?.msg).toContain("(session_id required)");
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=?");
     expect(info?.msg).toContain("cwd=?");
@@ -242,6 +243,7 @@ describe("HttpListener", () => {
     await new Promise((r) => setTimeout(r, 20));
     const warn = logs.find((l) => l.level === "warn");
     expect(warn?.msg).toMatch(/unparseable body/);
+    expect(warn?.msg).toContain("(session_id required)");
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=?");
     expect(info?.msg).toContain("cwd=?");
@@ -256,6 +258,7 @@ describe("HttpListener", () => {
     await new Promise((r) => setTimeout(r, 20));
     const warn = logs.find((l) => l.level === "warn");
     expect(warn?.msg).toMatch(/oversize body/);
+    expect(warn?.msg).toContain("(session_id required)");
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=?");
     expect(info?.msg).toContain("cwd=?");
@@ -469,5 +472,52 @@ describe("HttpListener — onEvent body forwarding", () => {
     await new Promise((r) => setTimeout(r, 20));
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).not.toContain("agent=");
+  });
+});
+
+describe("HttpListener — session-id warn on action routes", () => {
+  it("POST with parsed body but no session_id on an action route emits WARN with (session_id required)", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    // Valid JSON, but no session_id field at all.
+    const body = JSON.stringify({ cwd: "/home/user/project" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
+    expect(warn).toBeDefined();
+    expect(warn?.msg).toMatch(/POST without session_id route=\/event\/stop/);
+    expect(warn?.msg).toContain("(session_id required)");
+  });
+
+  it("POST with parsed body and session_id='' on an action route emits WARN (empty string is falsy)", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "", cwd: "/home/user/project" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
+    expect(warn).toBeDefined();
+    expect(warn?.msg).toMatch(/POST without session_id route=\/event\/stop/);
+  });
+
+  it("POST with valid non-empty session_id on an action route does NOT emit session-id WARN", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "abc123", cwd: "/home/user/project" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const sessionWarn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
+    expect(sessionWarn).toBeUndefined();
+  });
+
+  it("POST with parsed body but no session_id on an INFO route does NOT emit session-id WARN", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    // Info routes are never gated — no session-id warn for them.
+    const body = JSON.stringify({ cwd: "/home/user/project" });
+    await requestWithBody("POST", "/event/notification", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const sessionWarn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
+    expect(sessionWarn).toBeUndefined();
   });
 });

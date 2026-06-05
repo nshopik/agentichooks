@@ -639,35 +639,35 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
 
 describe("deriveRoute — pure route derivation", () => {
   it("passes through any route that is not /event/session-start regardless of source", () => {
-    expect(deriveRoute("/event/stop", undefined)).toBe("/event/stop");
-    expect(deriveRoute("/event/stop", "compact")).toBe("/event/stop");
-    expect(deriveRoute("/event/permission-request", "resume")).toBe("/event/permission-request");
-    expect(deriveRoute("/event/user-prompt-submit", "startup")).toBe("/event/user-prompt-submit");
-    expect(deriveRoute("/event/task-created", undefined)).toBe("/event/task-created");
+    expect(deriveRoute("/event/stop", undefined, undefined, "s")).toBe("/event/stop");
+    expect(deriveRoute("/event/stop", "compact", undefined, "s")).toBe("/event/stop");
+    expect(deriveRoute("/event/permission-request", "resume", undefined, "s")).toBe("/event/permission-request");
+    expect(deriveRoute("/event/user-prompt-submit", "startup", undefined, "s")).toBe("/event/user-prompt-submit");
+    expect(deriveRoute("/event/task-created", undefined, undefined, "s")).toBe("/event/task-created");
   });
 
   it("passes through /event/session-start for source=startup", () => {
-    expect(deriveRoute("/event/session-start", "startup")).toBe("/event/session-start");
+    expect(deriveRoute("/event/session-start", "startup", undefined, "s")).toBe("/event/session-start");
   });
 
   it("passes through /event/session-start for source=clear", () => {
-    expect(deriveRoute("/event/session-start", "clear")).toBe("/event/session-start");
+    expect(deriveRoute("/event/session-start", "clear", undefined, "s")).toBe("/event/session-start");
   });
 
   it("passes through /event/session-start for source=undefined (missing body)", () => {
-    expect(deriveRoute("/event/session-start", undefined)).toBe("/event/session-start");
+    expect(deriveRoute("/event/session-start", undefined, undefined, "s")).toBe("/event/session-start");
   });
 
   it("passes through /event/session-start for an unknown future source value", () => {
-    expect(deriveRoute("/event/session-start", "rewind")).toBe("/event/session-start");
+    expect(deriveRoute("/event/session-start", "rewind", undefined, "s")).toBe("/event/session-start");
   });
 
   it("returns /event/session-start-soft for source=compact", () => {
-    expect(deriveRoute("/event/session-start", "compact")).toBe("/event/session-start-soft");
+    expect(deriveRoute("/event/session-start", "compact", undefined, "s")).toBe("/event/session-start-soft");
   });
 
   it("returns /event/session-start-soft for source=resume", () => {
-    expect(deriveRoute("/event/session-start", "resume")).toBe("/event/session-start-soft");
+    expect(deriveRoute("/event/session-start", "resume", undefined, "s")).toBe("/event/session-start-soft");
   });
 });
 
@@ -706,35 +706,100 @@ describe("deriveRoute — agent-context drop policy", () => {
 
   it("returns null for every drop-policy route when agentId is present", () => {
     for (const route of DROP_ROUTES) {
-      expect(deriveRoute(route, undefined, "agt-001")).toBeNull();
-      expect(deriveRoute(route, "compact", "agt-001")).toBeNull();
+      expect(deriveRoute(route, undefined, "agt-001", "s")).toBeNull();
+      expect(deriveRoute(route, "compact", "agt-001", "s")).toBeNull();
     }
   });
 
   it("returns the route itself for /event/task-created with agentId (passthrough)", () => {
-    expect(deriveRoute("/event/task-created", undefined, "agt-001")).toBe("/event/task-created");
+    expect(deriveRoute("/event/task-created", undefined, "agt-001", "s")).toBe("/event/task-created");
   });
 
   it("returns /event/task-completed-agent for /event/task-completed with agentId", () => {
-    expect(deriveRoute("/event/task-completed", undefined, "agt-001")).toBe("/event/task-completed-agent");
-    expect(deriveRoute("/event/task-completed", "compact", "agt-001")).toBe("/event/task-completed-agent");
+    expect(deriveRoute("/event/task-completed", undefined, "agt-001", "s")).toBe("/event/task-completed-agent");
+    expect(deriveRoute("/event/task-completed", "compact", "agt-001", "s")).toBe("/event/task-completed-agent");
   });
 
   it("agent check wins over source logic: agentId + source=compact on session-start → null", () => {
     // Precedence: agent check is evaluated FIRST; source logic only runs in the
     // agentId-absent branch. A compact-resume session-start from an agent context
     // still drops (null), not the soft route.
-    expect(deriveRoute("/event/session-start", "compact", "agt-001")).toBeNull();
-    expect(deriveRoute("/event/session-start", "resume", "agt-001")).toBeNull();
+    expect(deriveRoute("/event/session-start", "compact", "agt-001", "s")).toBeNull();
+    expect(deriveRoute("/event/session-start", "resume", "agt-001", "s")).toBeNull();
   });
 
-  it("never returns null for any ACTION_ROUTES member when agentId is absent (backwards-compat pin)", () => {
+  it("never returns null for any ACTION_ROUTES member when agentId is absent and sessionId is present (backwards-compat pin)", () => {
+    // The invariant: absent agentId never drops — *when a valid sessionId is present*.
+    // The session gate (added in 0.9.x) makes the old 2/3-arg form intentionally null for all 12 routes;
+    // the new invariant is conditional on sessionId being a non-empty string.
     for (const route of ACTION_ROUTES) {
-      const result = deriveRoute(route, undefined, undefined);
+      const result = deriveRoute(route, undefined, undefined, "sess-abc123");
       expect(result).not.toBeNull();
-      const result2 = deriveRoute(route, undefined);
-      expect(result2).not.toBeNull();
     }
+  });
+});
+
+describe("deriveRoute — session-id gate (evaluated before agent-context check)", () => {
+  // The 12 action routes below mirror http-listener.ts's ACTION_ROUTES.
+  const ACTION_ROUTES = [
+    "/event/stop",
+    "/event/stop-failure",
+    "/event/permission-request",
+    "/event/task-completed",
+    "/event/task-created",
+    "/event/session-start",
+    "/event/user-prompt-submit",
+    "/event/permission-denied",
+    "/event/post-tool-use",
+    "/event/post-tool-use-failure",
+    "/event/pre-tool-use",
+    "/event/session-end",
+  ];
+
+  it("returns null for every action route when sessionId is undefined", () => {
+    for (const route of ACTION_ROUTES) {
+      expect(deriveRoute(route, undefined, undefined, undefined)).toBeNull();
+    }
+  });
+
+  it("returns null for every action route when sessionId is empty string", () => {
+    for (const route of ACTION_ROUTES) {
+      expect(deriveRoute(route, undefined, undefined, "")).toBeNull();
+    }
+  });
+
+  it("returns non-null for every action route when sessionId is a non-empty string", () => {
+    for (const route of ACTION_ROUTES) {
+      // source=undefined, agentId=undefined — pure session gate, no other policy applies
+      const result = deriveRoute(route, undefined, undefined, "sess-abc123");
+      expect(result).not.toBeNull();
+    }
+  });
+
+  it("session gate precedes agent check: agentId present + no sessionId → null, not agent-passthrough", () => {
+    // If the agent check ran first, task-created would return the route (passthrough).
+    // If the session gate runs first, undefined sessionId → null regardless of agentId.
+    expect(deriveRoute("/event/task-created", undefined, "agt-001", undefined)).toBeNull();
+    expect(deriveRoute("/event/task-created", undefined, "agt-001", "")).toBeNull();
+    // With a sessionId, the agent check runs normally.
+    expect(deriveRoute("/event/task-created", undefined, "agt-001", "sess-xyz")).toBe("/event/task-created");
+  });
+
+  it("session gate precedes agent check: agentId present + no sessionId → null for drop-policy routes too", () => {
+    expect(deriveRoute("/event/stop", undefined, "agt-001", undefined)).toBeNull();
+    expect(deriveRoute("/event/permission-request", "compact", "agt-001", "")).toBeNull();
+  });
+
+  it("all existing source/agent permutations are preserved when sessionId is present", () => {
+    // Source logic: session-start + compact/resume → soft route
+    expect(deriveRoute("/event/session-start", "compact", undefined, "s")).toBe("/event/session-start-soft");
+    expect(deriveRoute("/event/session-start", "resume", undefined, "s")).toBe("/event/session-start-soft");
+    expect(deriveRoute("/event/session-start", "startup", undefined, "s")).toBe("/event/session-start");
+    expect(deriveRoute("/event/session-start", undefined, undefined, "s")).toBe("/event/session-start");
+    // Agent logic: task-created passthrough, task-completed → agent row, others → null
+    expect(deriveRoute("/event/task-created", undefined, "agt-001", "s")).toBe("/event/task-created");
+    expect(deriveRoute("/event/task-completed", undefined, "agt-001", "s")).toBe("/event/task-completed-agent");
+    expect(deriveRoute("/event/stop", undefined, "agt-001", "s")).toBeNull();
   });
 });
 
@@ -755,7 +820,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
       log,
     });
     for (const source of ["startup", "clear", "compact", "resume", undefined, "rewind"]) {
-      const derived = deriveRoute("/event/session-start", source);
+      const derived = deriveRoute("/event/session-start", source, undefined, "s");
       if (derived !== null) d.handleRoute(derived);
     }
     expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
@@ -809,7 +874,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
       log,
       taskCounter: counter,
     });
-    const derived = deriveRoute("/event/task-completed", undefined, "agt-001");
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "s");
     expect(derived).not.toBeNull();
     d.handleRoute(derived!);
     expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
@@ -836,7 +901,7 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
       taskCounter: counter,
     });
     // Drive via deriveRoute to use the same path as production.
-    const derived = deriveRoute("/event/task-completed", undefined, "agt-001");
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "s");
     expect(derived).not.toBeNull();
     d.handleRoute(derived!);
     expect(counter.decrement).toHaveBeenCalledTimes(1);
@@ -861,7 +926,7 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
 
     // Teammate task-completed arrives with agentId.
-    const derived = deriveRoute("/event/task-completed", undefined, "agt-teammate");
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-teammate", "s");
     expect(derived).not.toBeNull();
     d.handleRoute(derived!);
 
@@ -912,12 +977,12 @@ describe("deriveRoute bug-repro regression — hard vs soft session-start counte
     expect(counter.increment).toHaveBeenCalledTimes(3);
 
     // A compact/resume fires the soft route — must not reset.
-    const softRoute = deriveRoute("/event/session-start", "compact");
+    const softRoute = deriveRoute("/event/session-start", "compact", undefined, "s");
     if (softRoute !== null) d.handleRoute(softRoute);
     expect(counter.reset).not.toHaveBeenCalled();
 
     // A genuine new session fires the hard route — must reset.
-    const hardRoute = deriveRoute("/event/session-start", "startup");
+    const hardRoute = deriveRoute("/event/session-start", "startup", undefined, "s");
     if (hardRoute !== null) d.handleRoute(hardRoute);
     expect(counter.reset).toHaveBeenCalledTimes(1);
   });

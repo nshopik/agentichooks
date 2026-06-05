@@ -149,21 +149,27 @@ export class HttpListener {
       isSignal ? this.opts.log?.info(msg) : this.opts.log?.debug(msg);
 
     if (outcome.kind === "empty") {
-      this.opts.log?.warn(`POST with empty body route=${url} (manual test? legacy v1 hook?)`);
+      this.opts.log?.warn(`POST with empty body route=${url} (session_id required)`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
     if (outcome.kind === "unparseable") {
-      this.opts.log?.warn(`POST with unparseable body route=${url}`);
+      this.opts.log?.warn(`POST with unparseable body route=${url} (session_id required)`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
     if (outcome.kind === "oversize") {
-      this.opts.log?.warn(`POST with oversize body route=${url} (>64 KB; treated as no body)`);
+      this.opts.log?.warn(`POST with oversize body route=${url} (>64 KB) (session_id required)`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
+    // Body parsed successfully.
     const { sessionId, cwd, message, source, agentId } = outcome.body;
+    // Warn on action routes where session_id is absent or empty — the gate in
+    // deriveRoute will drop this event. Info routes are never gated; no warn.
+    if (isAction && !sessionId) {
+      this.opts.log?.warn(`POST without session_id route=${url} (session_id required)`);
+    }
     const sid = sessionId ? sessionId.slice(0, 8) : "?";
     const cwdShort = cwd ? basename(cwd) : "?";
     const sourceSuffix = source ? ` source=${source}` : "";
