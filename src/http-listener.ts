@@ -163,11 +163,12 @@ export class HttpListener {
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
-    const { sessionId, cwd, message, source } = outcome.body;
+    const { sessionId, cwd, message, source, agentId } = outcome.body;
     const sid = sessionId ? sessionId.slice(0, 8) : "?";
     const cwdShort = cwd ? basename(cwd) : "?";
     const sourceSuffix = source ? ` source=${source}` : "";
-    emit(`${kind} route=${url} session=${sid} cwd=${cwdShort}${sourceSuffix}`);
+    const agentSuffix = agentId ? ` agent=${agentId.slice(0, 8)}` : "";
+    emit(`${kind} route=${url} session=${sid} cwd=${cwdShort}${sourceSuffix}${agentSuffix}`);
     if (url === "/event/notification" && message) {
       this.opts.log?.info(`notification message=${JSON.stringify(message)}`);
     }

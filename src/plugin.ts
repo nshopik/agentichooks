@@ -116,6 +116,8 @@ const taskCounter = new TaskCounter({
   log: makeLogger("counter"),
 });
 
+const dispatchLog = makeLogger("dispatch");
+
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
@@ -124,7 +126,7 @@ const dispatcher = new Dispatcher({
     for (const a of actions) for (const [k, v] of a.buttonsForDispatcher()) merged.set(k, v);
     return merged;
   },
-  log: makeLogger("dispatch"),
+  log: dispatchLog,
   taskCounter,
 });
 
@@ -133,7 +135,15 @@ let listener: HttpListener | undefined;
 async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
-    onEvent: (route, body) => dispatcher.handleRoute(deriveRoute(route, body?.source)),
+    onEvent: (route, body) => {
+      const derived = deriveRoute(route, body?.source, body?.agentId);
+      // deriveRoute returns null for agent-context events on non-task routes — drop, don't dispatch.
+      if (derived === null) {
+        dispatchLog.debug(`drop agent-context route=${route} agent=${body?.agentId?.slice(0, 8) ?? "?"}`);
+        return;
+      }
+      dispatcher.handleRoute(derived);
+    },
     log: makeLogger("http"),
   });
   try {

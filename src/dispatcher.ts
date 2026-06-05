@@ -40,6 +40,7 @@ type RouteSpec = {
 };
 
 const SESSION_START_SOFT = "/event/session-start-soft";
+const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
 
 const ROUTES: Readonly<Record<string, RouteSpec>> = {
   "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
@@ -66,14 +67,25 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
   // Reachable only via deriveRoute() for SessionStart source=compact|resume:
   // mid-run compaction / resume must not clear alerts or reset the counter.
   [SESSION_START_SOFT]:           {                         clears: [] },
+  // Synthetic route — never in ACTION_ROUTES (a direct POST 404s). Reachable only
+  // via deriveRoute() for agent-context TaskCompleted: teammate completions drive
+  // the counter but must not clear the user's armed permission alert.
+  [TASK_COMPLETED_AGENT]:         {                         clears: [], counter: "decrement" },
 };
 
-// Maps an incoming route + the body's source field to the effective ROUTES key.
-// Only /event/session-start is affected: source="compact" or "resume" redirects
-// to the synthetic no-op row so mid-run compaction and --resume do not clear
-// alerts or reset the task counter. All other routes pass through unchanged.
-// Unknown / missing source values default to the existing full-reset behavior.
-export function deriveRoute(route: string, source: string | undefined): string {
+// Maps an incoming route + body fields to the effective ROUTES key, or null (drop).
+// Evaluation order (agent check is FIRST — takes precedence over source logic):
+//   1. agentId present + route is /event/task-created → passthrough (increment + clears
+//      task-completed: an armed "all done" alert is deliberately superseded by new agent work).
+//   2. agentId present + route is /event/task-completed → TASK_COMPLETED_AGENT (counter-only).
+//   3. agentId present, any other route → null (drop; caller must not call handleRoute).
+//   4. agentId absent → existing source logic; never returns null.
+export function deriveRoute(route: string, source: string | undefined, agentId?: string): string | null {
+  if (agentId !== undefined) {
+    if (route === "/event/task-created") return route;
+    if (route === "/event/task-completed") return TASK_COMPLETED_AGENT;
+    return null;
+  }
   if (route === "/event/session-start" && (source === "compact" || source === "resume")) {
     return SESSION_START_SOFT;
   }

@@ -160,6 +160,18 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
   });
 
+  it("POST /event/task-completed-agent returns 404 (synthetic route — unreachable via direct POST)", async () => {
+    // /event/task-completed-agent is a synthetic ROUTES key reachable only via
+    // deriveRoute() for agent-context task-completed events. A direct POST must
+    // 404, mirroring the /event/session-start-soft unreachability guarantee.
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    const res = await request("POST", "/event/task-completed-agent", listener.port());
+    expect(res.status).toBe(404);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual([]);
+  });
+
   it("dispatches multiple events in arrival order", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
@@ -428,5 +440,34 @@ describe("HttpListener — onEvent body forwarding", () => {
     await new Promise((r) => setTimeout(r, 20));
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).not.toContain("source=");
+  });
+
+  it("appends agent= suffix (8-char truncation) when agent_id is present in the parsed body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj", agent_id: "agt-001-xyz-full" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).toContain("agent=agt-001-");
+    expect(info?.msg).not.toContain("agent=agt-001-x"); // truncated to exactly 8 chars
+  });
+
+  it("does not append agent= in the log line when agent_id is absent from the body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj" });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).not.toContain("agent=");
   });
 });

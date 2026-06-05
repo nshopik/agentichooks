@@ -671,6 +671,73 @@ describe("deriveRoute — pure route derivation", () => {
   });
 });
 
+describe("deriveRoute — agent-context drop policy", () => {
+  // The 12 action routes below mirror http-listener.ts's ACTION_ROUTES (not exported).
+  // This list must stay in sync with that set; any divergence means a route either
+  // silently drops for agentId-present bodies (over-filtering) or silently passes
+  // through (under-filtering) — both are bugs.
+  const ACTION_ROUTES = [
+    "/event/stop",
+    "/event/stop-failure",
+    "/event/permission-request",
+    "/event/task-completed",
+    "/event/task-created",
+    "/event/session-start",
+    "/event/user-prompt-submit",
+    "/event/permission-denied",
+    "/event/post-tool-use",
+    "/event/post-tool-use-failure",
+    "/event/pre-tool-use",
+    "/event/session-end",
+  ];
+
+  const DROP_ROUTES = [
+    "/event/stop",
+    "/event/stop-failure",
+    "/event/permission-request",
+    "/event/user-prompt-submit",
+    "/event/session-start",
+    "/event/session-end",
+    "/event/pre-tool-use",
+    "/event/post-tool-use",
+    "/event/post-tool-use-failure",
+    "/event/permission-denied",
+  ];
+
+  it("returns null for every drop-policy route when agentId is present", () => {
+    for (const route of DROP_ROUTES) {
+      expect(deriveRoute(route, undefined, "agt-001")).toBeNull();
+      expect(deriveRoute(route, "compact", "agt-001")).toBeNull();
+    }
+  });
+
+  it("returns the route itself for /event/task-created with agentId (passthrough)", () => {
+    expect(deriveRoute("/event/task-created", undefined, "agt-001")).toBe("/event/task-created");
+  });
+
+  it("returns /event/task-completed-agent for /event/task-completed with agentId", () => {
+    expect(deriveRoute("/event/task-completed", undefined, "agt-001")).toBe("/event/task-completed-agent");
+    expect(deriveRoute("/event/task-completed", "compact", "agt-001")).toBe("/event/task-completed-agent");
+  });
+
+  it("agent check wins over source logic: agentId + source=compact on session-start → null", () => {
+    // Precedence: agent check is evaluated FIRST; source logic only runs in the
+    // agentId-absent branch. A compact-resume session-start from an agent context
+    // still drops (null), not the soft route.
+    expect(deriveRoute("/event/session-start", "compact", "agt-001")).toBeNull();
+    expect(deriveRoute("/event/session-start", "resume", "agt-001")).toBeNull();
+  });
+
+  it("never returns null for any ACTION_ROUTES member when agentId is absent (backwards-compat pin)", () => {
+    for (const route of ACTION_ROUTES) {
+      const result = deriveRoute(route, undefined, undefined);
+      expect(result).not.toBeNull();
+      const result2 = deriveRoute(route, undefined);
+      expect(result2).not.toBeNull();
+    }
+  });
+});
+
 describe("deriveRoute invariant — every emission is a known matrix key", () => {
   // Drift insurance: if the SESSION_START_SOFT constant and the ROUTES matrix
   // row ever diverge, the soft route falls into handleRoute's `unknown route=`
@@ -688,7 +755,8 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
       log,
     });
     for (const source of ["startup", "clear", "compact", "resume", undefined, "rewind"]) {
-      d.handleRoute(deriveRoute("/event/session-start", source));
+      const derived = deriveRoute("/event/session-start", source);
+      if (derived !== null) d.handleRoute(derived);
     }
     expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
   });
@@ -721,6 +789,107 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     d.handleRoute("/event/session-start");
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
   });
+
+  it("handleRoute(TASK_COMPLETED_AGENT derived route) never logs 'unknown route=' (synthetic row is in ROUTES)", () => {
+    // The TASK_COMPLETED_AGENT row is { clears: [], counter: "decrement" } — behaviorally
+    // identical to an unknown route (no arms, no clears). An injected log stub is the ONLY
+    // observable that distinguishes "row found" from "unknown route" for this shape.
+    // This mirrors the SESSION_START_SOFT invariant test pattern exactly.
+    const debug = vi.fn<(msg: string) => void>();
+    const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
+    const counter = {
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      log,
+      taskCounter: counter,
+    });
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!);
+    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
+    // Decrement was called — the row was found and applied (not silently dropped).
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-context task-completed)", () => {
+  function fakeCounter() {
+    return {
+      increment: vi.fn<() => void>(),
+      decrement: vi.fn<() => void>(),
+      reset: vi.fn<() => void>(),
+    };
+  }
+
+  it("handleRoute(TASK_COMPLETED_AGENT) decrements the counter exactly once", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    // Drive via deriveRoute to use the same path as production.
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!);
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+    expect(counter.increment).not.toHaveBeenCalled();
+    expect(counter.reset).not.toHaveBeenCalled();
+  });
+
+  it("handleRoute(TASK_COMPLETED_AGENT) does NOT clear an armed permission alert (regression guard)", () => {
+    // Bug repro: the normal /event/task-completed row has clears: ["permission"],
+    // which dismisses a legitimate permission alert when a teammate completes a task.
+    // The agent-context synthetic row must have clears: [] to avoid this.
+    const counter = fakeCounter();
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0; // fires immediately
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/permission-request"); // arms permission (delay=0 → ARMED immediately)
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    // Teammate task-completed arrives with agentId.
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-teammate");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!);
+
+    // Permission is still ARMED — not cleared.
+    expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    expect(counter.decrement).toHaveBeenCalledTimes(1);
+  });
+
+  it("contrast: normal /event/task-completed DOES clear an armed permission alert", () => {
+    // Confirms the two rows behave differently — the normal row's clears: ["permission"]
+    // is intentional (permission was resolved); the agent row must not have it.
+    const counter = fakeCounter();
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/permission-request");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/task-completed"); // normal row, no agentId
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
 });
 
 describe("deriveRoute bug-repro regression — hard vs soft session-start counter behavior", () => {
@@ -743,11 +912,13 @@ describe("deriveRoute bug-repro regression — hard vs soft session-start counte
     expect(counter.increment).toHaveBeenCalledTimes(3);
 
     // A compact/resume fires the soft route — must not reset.
-    d.handleRoute(deriveRoute("/event/session-start", "compact"));
+    const softRoute = deriveRoute("/event/session-start", "compact");
+    if (softRoute !== null) d.handleRoute(softRoute);
     expect(counter.reset).not.toHaveBeenCalled();
 
     // A genuine new session fires the hard route — must reset.
-    d.handleRoute(deriveRoute("/event/session-start", "startup"));
+    const hardRoute = deriveRoute("/event/session-start", "startup");
+    if (hardRoute !== null) d.handleRoute(hardRoute);
     expect(counter.reset).toHaveBeenCalledTimes(1);
   });
 });

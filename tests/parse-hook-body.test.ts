@@ -102,4 +102,38 @@ describe("makeBodyBuffer", () => {
       body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined },
     });
   });
+
+  it("extracts agentId when agent_id is a string", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", agent_id: "agt-001-xyz" })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: "abc", cwd: undefined, message: undefined, source: undefined, agentId: "agt-001-xyz" },
+    });
+  });
+
+  it("returns undefined for agentId when agent_id is a number", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ agent_id: 42 })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined, agentId: undefined },
+    });
+  });
+
+  it("returns undefined for agentId when agent_id is an object or null", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ agent_id: { id: "x" } })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined, agentId: undefined },
+    });
+
+    const buf2 = makeBodyBuffer();
+    buf2.push(Buffer.from(JSON.stringify({ agent_id: null })));
+    expect(buf2.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined, agentId: undefined },
+    });
+  });
 });
