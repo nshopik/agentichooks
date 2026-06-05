@@ -2,6 +2,7 @@ export type ParsedBody = {
   sessionId?: string;
   cwd?: string;
   message?: string;
+  source?: string;
 };
 
 export type BodyOutcome =
@@ -33,6 +34,7 @@ export function makeBodyBuffer(maxBytes = 64 * 1024) {
             sessionId: typeof json.session_id === "string" ? json.session_id : undefined,
             cwd: typeof json.cwd === "string" ? json.cwd : undefined,
             message: typeof json.message === "string" ? json.message : undefined,
+            source: typeof json.source === "string" ? json.source : undefined,
           },
         };
       } catch {

@@ -70,4 +70,36 @@ describe("makeBodyBuffer", () => {
       body: { sessionId: "sid", cwd: "/a/b", message: "m" },
     });
   });
+
+  it("extracts source when present as a string", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", source: "compact" })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: "abc", cwd: undefined, message: undefined, source: "compact" },
+    });
+  });
+
+  it("returns undefined for source that is a non-string (number, object, null)", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ source: 42 })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined },
+    });
+
+    const buf2 = makeBodyBuffer();
+    buf2.push(Buffer.from(JSON.stringify({ source: { nested: true } })));
+    expect(buf2.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined },
+    });
+
+    const buf3 = makeBodyBuffer();
+    buf3.push(Buffer.from(JSON.stringify({ source: null })));
+    expect(buf3.finish()).toEqual({
+      kind: "parsed",
+      body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined },
+    });
+  });
 });

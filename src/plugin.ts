@@ -7,7 +7,7 @@ import { OnTaskCompletedAction } from "./actions/on-task-completed-action.js";
 import type { EventFlashActionOpts } from "./actions/event-flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
-import { Dispatcher, type DispatchableButton } from "./dispatcher.js";
+import { Dispatcher, deriveRoute, type DispatchableButton } from "./dispatcher.js";
 import { TaskCounter } from "./task-counter.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
@@ -133,7 +133,7 @@ let listener: HttpListener | undefined;
 async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
-    onEvent: (route) => dispatcher.handleRoute(route),
+    onEvent: (route, body) => dispatcher.handleRoute(deriveRoute(route, body?.source)),
     log: makeLogger("http"),
   });
   try {
