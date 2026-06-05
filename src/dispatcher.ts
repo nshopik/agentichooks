@@ -134,6 +134,23 @@ export class Dispatcher {
     this.armType("task-completed");
   }
 
+  /**
+   * Public seam used by the action layer when a user keypress or per-button
+   * auto-timeout dismisses an alert. Clears ARMED state for the given event
+   * type and dismisses every currently-alerting button of that type.
+   *
+   * Alert-only scope: does NOT touch the TaskCounter or the in-flight count
+   * visual. Covers all three dispatcher states by delegating to clearType:
+   * IDLE (no-op on dispatcher state; still dismisses stray alerting visuals),
+   * PENDING (cancels the timer so the alert never fires), ARMED (clears state
+   * + visuals). Mirrors the fireTaskCompleted() pattern: a narrow public seam
+   * that cannot bypass the route matrix for arbitrary state.
+   */
+  dismissArmed(type: EventType): void {
+    this.opts.log?.debug(`dismissArmed type=${type}`);
+    this.clearType(type);
+  }
+
   private applyCounter(directive: CounterDirective): void {
     const c = this.opts.taskCounter;
     if (!c) return;

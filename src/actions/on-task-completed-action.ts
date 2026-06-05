@@ -77,20 +77,40 @@ export class OnTaskCompletedAction extends EventFlashAction {
   /**
    * Stream Deck rebuilds per-key contexts on every page/profile switch.
    * The base class restores alerting state from Dispatcher.armedMsAgo;
-   * here we additionally restore the in-flight visual from TaskCounter.
-   * Order matters: super first (which may set alerting from armedMsAgo),
-   * then we no-op if alerting (manifest alert image already on screen),
-   * else apply the in-flight image when count > 0.
+   * here we additionally restore — or clear — the in-flight visual from
+   * TaskCounter. Three-way logic, in order:
+   *
+   * 1. super first (may set alerting from armedMsAgo).
+   * 2. count === 0 → clear the state-0 image override. broadcastCount(0)
+   *    clears only contexts visible at the time of the >0 → 0 transition;
+   *    a button hidden during that window reappears with Stream Deck's
+   *    remembered override (a frozen count glyph). Clearing here falls back
+   *    to the manifest/user idle image — harmless when no override exists.
+   *    Runs even while alerting so a later dismiss lands on the idle image,
+   *    not a resurrected badge.
+   * 3. Alerting (count > 0) → no-op. The badge for count > 0 is queued
+   *    under state 0 by broadcastCount; we don't repaint here to avoid
+   *    racing the animation interval.
+   * 4. count > 0, not alerting → paint the current in-flight badge.
    */
   override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
     await super.onWillAppear(ev);
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
-    if (ctx.state.alerting) return;
     const count = this.opts.currentCount?.() ?? 0;
-    if (count > 0) {
-      const frame = ctx.settings.animateCounter !== false ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
-      void ctx.setImage(renderCountIcon(count, frame), 0);
+    if (count === 0) {
+      // Clear any stale in-flight badge. broadcastCount(0) clears the state-0
+      // override only for contexts visible at the time; a button hidden during
+      // the >0 → 0 transition reappears with Stream Deck's remembered override
+      // (a frozen count glyph). Clearing here falls back to the manifest/user
+      // idle image — harmless when no override exists. Runs even while
+      // alerting so a later dismiss lands on the idle image, not a
+      // resurrected badge.
+      void ctx.setImage("", 0);
+      return;
     }
+    if (ctx.state.alerting) return;
+    const frame = ctx.settings.animateCounter !== false ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
+    void ctx.setImage(renderCountIcon(count, frame), 0);
   }
 }

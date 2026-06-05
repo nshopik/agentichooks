@@ -66,6 +66,11 @@ const actionOpts: EventFlashActionOpts = {
   // binding and resolves at willAppear time. Same indirection pattern as
   // armedMsAgo above.
   currentCount: (): number => taskCounter.current(),
+  // Lazy: dispatcher is constructed below. Called when a button's keypress or
+  // auto-timeout dismisses an alert; the dispatcher clears ARMED state and
+  // dismisses every alerting button of that type (type-wide semantics). Same
+  // circular-reference dance as armedMsAgo / currentCount.
+  onDismissed: (eventType): void => dispatcher.dismissArmed(eventType),
 };
 
 const taskCompletedAction = new OnTaskCompletedAction(actionOpts);

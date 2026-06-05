@@ -8,6 +8,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Dismissing an alert (pressing the lit button, or the per-button auto-timeout
+  expiring) now clears the alert for the whole event type — previously only the
+  visible button was cleared, so a dismissed alert came back after a page or
+  profile switch (indefinitely for Stop/Permission, which have no default
+  timeout), a same-type button on another page could resurrect it, and the next
+  alert of that type fired instantly instead of honoring its alert delay.
+  Pressing one lit button now also clears same-type buttons on other pages (#25)
+- The in-flight task count badge no longer reappears frozen on a Task Completed
+  button that was on a hidden page when the count reached zero — the button now
+  clears the stale badge when it comes back into view (#25)
 - `SessionStart` from auto-compaction (`source: "compact"`) or `--resume`/`/resume`
   (`source: "resume"`) no longer clears alerts or resets the in-flight task
   counter — previously a mid-run compaction silently zeroed the count and the

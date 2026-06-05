@@ -39,6 +39,16 @@ export type EventFlashActionOpts = {
    * current global subagent count. Only consumed by OnTaskCompletedAction.
    */
   currentCount?: () => number;
+  /**
+   * Lazy callback wired to Dispatcher.dismissArmed. Called when this button
+   * type's alert is dismissed by a user keypress or per-button auto-timeout.
+   * The dispatcher then clears ARMED state and dismisses every alerting button
+   * of this type (type-wide semantics). When absent, falls back to the local
+   * dismissContext — pre-fix behavior, dispatcher ARMED is not cleared. Must
+   * never run unwired in production (plugin.ts always wires this). Mirrors the
+   * armedMsAgo lazy-arrow pattern.
+   */
+  onDismissed?: (eventType: EventType) => void;
 };
 
 type Ctx = {
@@ -128,7 +138,14 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
   override async onKeyDown(ev: KeyDownEvent<JsonObject>): Promise<void> {
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
-    if (ctx.state.alerting) this.dismissContext(ctx);
+    if (ctx.state.alerting) {
+      // Do NOT call dismissContext(ctx) here before onDismissed. The originating
+      // button's ctx.state.alerting must remain true so that the dispatcher's
+      // clearType includes it in the round-trip dismissal. Calling dismissContext
+      // first would flip alerting=false and produce a redundant double-clear path.
+      if (this.opts.onDismissed) this.opts.onDismissed(this.eventType);
+      else this.dismissContext(ctx); // unwired fallback (tests, safety — pre-fix behavior)
+    }
   }
 
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<JsonObject>): Promise<void> {
@@ -194,7 +211,16 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     }
     const timeoutMs = timeoutOverrideMs ?? ctx.settings.autoTimeoutMs;
     if (timeoutMs > 0) {
-      ctx.state.timeoutTimer = setTimeout(() => this.dismissContext(ctx), timeoutMs);
+      ctx.state.timeoutTimer = setTimeout(() => {
+        // Do NOT call dismissContext(ctx) here before onDismissed. The originating
+        // button's ctx.state.alerting must remain true so that the dispatcher's
+        // clearType includes it in the round-trip dismissal. Calling dismissContext
+        // first would flip alerting=false and produce a redundant double-clear path.
+        // Note: the round-trip will re-run clearTimers(ctx) against the already-fired
+        // timeoutTimer — clearTimeout on a fired handle is a harmless no-op.
+        if (this.opts.onDismissed) this.opts.onDismissed(this.eventType);
+        else this.dismissContext(ctx); // unwired fallback (tests, safety — pre-fix behavior)
+      }, timeoutMs);
     }
   }
 

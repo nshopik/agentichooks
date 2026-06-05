@@ -922,3 +922,116 @@ describe("deriveRoute bug-repro regression — hard vs soft session-start counte
     expect(counter.reset).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
+  // (1) dismissArmed on an ARMED type → armedMsAgo null + alerting buttons dismissed.
+  it("dismissArmed on ARMED type clears armedMsAgo and dismisses alerting buttons of that type", () => {
+    globals.alertDelay.permission = 0; // fires immediately → ARMED
+    const btn = makeButton("permission");
+    buttons.set("perm", btn);
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request"); // delay=0 → ARMED, btn.alert called
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    expect(btn.alert).toHaveBeenCalledTimes(1);
+
+    d.dismissArmed("permission");
+
+    expect(d.armedMsAgo("permission")).toBeNull();
+    expect(btn.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // (2) dismissArmed on IDLE type with no alerting buttons → no state change, no dismiss calls, no throw.
+  it("dismissArmed on IDLE type with no alerting buttons is a safe no-op", () => {
+    const btn = makeButton("stop"); // not alerting
+    buttons.set("stop", btn);
+    const d = dispatcher();
+    // stop is IDLE — never armed
+    expect(() => d.dismissArmed("stop")).not.toThrow();
+    expect(d.armedMsAgo("stop")).toBeNull();
+    expect(btn.dismiss).not.toHaveBeenCalled();
+  });
+
+  // (3) dismissArmed during PENDING cancels the timer — advance fake timers past the delay, assert no fire.
+  it("dismissArmed during PENDING cancels the pending timer — no audio, no alert after delay", () => {
+    const btn = makeButton("permission");
+    buttons.set("perm", btn);
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request"); // default 1s delay → PENDING
+    vi.advanceTimersByTime(500);
+    expect(btn.alert).not.toHaveBeenCalled();
+
+    d.dismissArmed("permission");
+
+    // Advance well past the original delay — timer must not fire.
+    vi.advanceTimersByTime(5000);
+    expect(btn.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  // (4) Re-arm after dismissArmed goes through the PENDING delay window, not instant fire.
+  it("re-arm after dismissArmed goes through the normal PENDING delay, not instant fire", () => {
+    globals.alertDelay.permission = 0; // fires immediately → ARMED
+    const btn = makeButton("permission");
+    buttons.set("perm", btn);
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request"); // ARMED immediately
+    d.dismissArmed("permission"); // → IDLE
+
+    // Restore normal delay for the re-arm.
+    globals.alertDelay.permission = 1000;
+    d.handleRoute("/event/permission-request"); // must re-enter PENDING, not fire instantly
+
+    // At 999ms: not yet fired.
+    vi.advanceTimersByTime(999);
+    expect(btn.alert).toHaveBeenCalledTimes(1); // only the initial fire before dismissArmed
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+
+    // At 1000ms: fires once more.
+    vi.advanceTimersByTime(1);
+    expect(btn.alert).toHaveBeenCalledTimes(2);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+  });
+
+  // (5) Cross-type non-interference: dismissArmed("stop") leaves PENDING and ARMED state of "permission" untouched.
+  it("dismissArmed(stop) leaves PENDING permission untouched", () => {
+    const stopBtn = makeButton("stop");
+    const permBtn = makeButton("permission");
+    buttons.set("stop", stopBtn);
+    buttons.set("perm", permBtn);
+    globals.alertDelay.stop = 0; // stop fires immediately → ARMED
+    const d = dispatcher();
+    d.handleRoute("/event/stop"); // ARMED immediately
+    d.handleRoute("/event/permission-request"); // 1s delay → PENDING
+
+    d.dismissArmed("stop"); // must not touch permission
+
+    // Advance past permission's delay — it must still fire.
+    vi.advanceTimersByTime(1000);
+    expect(permBtn.alert).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    // Stop was cleared.
+    expect(d.armedMsAgo("stop")).toBeNull();
+    expect(stopBtn.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("dismissArmed(stop) leaves an ARMED permission untouched", () => {
+    globals.alertDelay.stop = 0;
+    globals.alertDelay.permission = 0;
+    const stopBtn = makeButton("stop");
+    const permBtn = makeButton("permission");
+    buttons.set("stop", stopBtn);
+    buttons.set("perm", permBtn);
+    const d = dispatcher();
+    d.handleRoute("/event/stop"); // ARMED
+    d.handleRoute("/event/permission-request"); // ARMED
+
+    d.dismissArmed("stop");
+
+    expect(d.armedMsAgo("stop")).toBeNull();
+    expect(stopBtn.dismiss).toHaveBeenCalledTimes(1);
+    // permission stays armed
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+    expect(permBtn.dismiss).not.toHaveBeenCalled();
+  });
+});
