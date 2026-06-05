@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
     entries with native `type:"http"` hooks since the v2 marker — any remaining v1
     hooks must be re-run through the installer to migrate.
   - Native Claude Code `type:"http"` hooks always include `session_id` in the event
-    JSON — real hooks are unaffected.
+    JSON — real hooks are unaffected. (#27)
 
 ### Fixed
 
