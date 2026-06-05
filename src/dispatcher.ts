@@ -75,7 +75,8 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
 
 // Maps an incoming route + body fields to the effective ROUTES key, or null (drop).
 // Evaluation order (agent check is FIRST — takes precedence over source logic):
-//   1. agentId present + route is /event/task-created → passthrough (counter increment).
+//   1. agentId present + route is /event/task-created → passthrough (increment + clears
+//      task-completed: an armed "all done" alert is deliberately superseded by new agent work).
 //   2. agentId present + route is /event/task-completed → TASK_COMPLETED_AGENT (counter-only).
 //   3. agentId present, any other route → null (drop; caller must not call handleRoute).
 //   4. agentId absent → existing source logic; never returns null.
