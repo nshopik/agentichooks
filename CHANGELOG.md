@@ -15,6 +15,16 @@ All notable changes to this project will be documented in this file.
   those two cases to a synthetic no-op matrix row (`/event/session-start-soft`);
   `startup`, `clear`, and bodyless manual POSTs keep the full clear-all + reset
   behavior. `[http]` result lines now include `source=<value>` when present (#23)
+- Hook events from agent contexts (in-process subagents, teammates, `--agent`
+  runs — any body carrying `agent_id`) no longer arm stop or permission alerts,
+  clear armed alerts, or reset the in-flight task counter — previously a
+  subagent's tool calls silently dismissed legitimate alerts and teammate
+  lifecycles armed ghost ones. Agent-context `task-created` still increments
+  the shared counter; agent-context `task-completed` decrements via a synthetic
+  counter-only matrix row (`/event/task-completed-agent`) that deliberately
+  skips the normal row's permission-clear, so team workflows still reach zero
+  and fire the task-completed alert. `[http]` result lines now include
+  `agent=<8-char id>` when present (#24)
 
 ## [0.9.2] - 2026-05-11
 
