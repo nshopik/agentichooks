@@ -339,3 +339,94 @@ describe("HttpListener", () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe("HttpListener — onEvent body forwarding", () => {
+  let receivedBodies: (import("../src/parse-hook-body.js").ParsedBody | undefined)[];
+
+  beforeEach(() => {
+    receivedBodies = [];
+  });
+
+  it("passes the parsed body as second argument to onEvent when body is valid JSON", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: (_route, body) => receivedBodies.push(body),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "abc123def456", cwd: "/home/user/project", source: "compact" });
+    await requestWithBody("POST", "/event/session-start", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(receivedBodies).toHaveLength(1);
+    expect(receivedBodies[0]).toEqual({
+      sessionId: "abc123def456",
+      cwd: "/home/user/project",
+      message: undefined,
+      source: "compact",
+    });
+  });
+
+  it("passes undefined as second argument to onEvent when body is empty", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: (_route, body) => receivedBodies.push(body),
+    });
+    await listener.start();
+    await request("POST", "/event/stop", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(receivedBodies).toHaveLength(1);
+    expect(receivedBodies[0]).toBeUndefined();
+  });
+
+  it("passes undefined as second argument when body is unparseable", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: (_route, body) => receivedBodies.push(body),
+    });
+    await listener.start();
+    await requestWithBody("POST", "/event/stop", listener.port(), "not-json");
+    await new Promise((r) => setTimeout(r, 20));
+    expect(receivedBodies).toHaveLength(1);
+    expect(receivedBodies[0]).toBeUndefined();
+  });
+
+  it("existing route-only onEvent callbacks still compile and work (existing tests unaffected)", async () => {
+    // This test demonstrates that the new signature is backward compatible —
+    // a callback that ignores the second arg still satisfies the widened type.
+    listener = new HttpListener({
+      port: 0,
+      onEvent: (route) => received.push(route),
+    });
+    await listener.start();
+    await request("POST", "/event/stop", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual(["/event/stop"]);
+  });
+
+  it("logs source= in the INFO result line when source is present in the parsed body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj", source: "compact" });
+    await requestWithBody("POST", "/event/session-start", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).toContain("source=compact");
+  });
+
+  it("does not append source= in the log line when source is absent from the body", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      log: makeLog(),
+    });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "a1b2c3d4e5f6", cwd: "/home/user/proj" });
+    await requestWithBody("POST", "/event/session-start", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).not.toContain("source=");
+  });
+});

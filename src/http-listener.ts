@@ -1,6 +1,6 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
-import { makeBodyBuffer, type BodyOutcome } from "./parse-hook-body.js";
+import { makeBodyBuffer, type BodyOutcome, type ParsedBody } from "./parse-hook-body.js";
 import type { Logger } from "./types.js";
 
 const ACTION_ROUTES = new Set<string>([
@@ -59,9 +59,10 @@ function basename(cwd: string): string {
 
 export type HttpListenerOpts = {
   port: number;
-  // Called for every action route; the URL path is forwarded to the dispatcher's
-  // matrix lookup. Info routes log + 204 only and never invoke this callback.
-  onEvent: (route: string) => void;
+  // Called for every action route; the URL path and parsed body are forwarded
+  // to the dispatcher's matrix lookup. Info routes log + 204 only and never
+  // invoke this callback.
+  onEvent: (route: string, body?: ParsedBody) => void;
   log?: Logger;
 };
 
@@ -136,7 +137,7 @@ export class HttpListener {
       setImmediate(() => {
         const outcome = buffer.finish();
         this.logRequest(url, isAction, outcome);
-        if (isAction) this.opts.onEvent(url);
+        if (isAction) this.opts.onEvent(url, outcome.kind === "parsed" ? outcome.body : undefined);
       });
     });
   }
@@ -162,10 +163,11 @@ export class HttpListener {
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
-    const { sessionId, cwd, message } = outcome.body;
+    const { sessionId, cwd, message, source } = outcome.body;
     const sid = sessionId ? sessionId.slice(0, 8) : "?";
     const cwdShort = cwd ? basename(cwd) : "?";
-    emit(`${kind} route=${url} session=${sid} cwd=${cwdShort}`);
+    const sourceSuffix = source ? ` source=${source}` : "";
+    emit(`${kind} route=${url} session=${sid} cwd=${cwdShort}${sourceSuffix}`);
     if (url === "/event/notification" && message) {
       this.opts.log?.info(`notification message=${JSON.stringify(message)}`);
     }
