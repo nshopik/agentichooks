@@ -133,7 +133,7 @@ let listener: HttpListener | undefined;
 async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
-    onEvent: (route, body) => dispatcher.handleRoute(deriveRoute(route, body?.source)),
+    onEvent: (route, body) => { const r = deriveRoute(route, body?.source); if (r !== null) dispatcher.handleRoute(r); },
     log: makeLogger("http"),
   });
   try {
