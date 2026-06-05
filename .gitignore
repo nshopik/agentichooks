@@ -8,7 +8,7 @@ dist/
 .DS_Store
 .claude/
 TODO.md
-CLAUDE.md
+CLAUDE.local.md
 docs/superpowers/
 docs/claude-code-hooks/
 docs/elgato-plugin-guidelines.md
