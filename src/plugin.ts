@@ -141,10 +141,14 @@ async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
     onEvent: (route, body) => {
-      const derived = deriveRoute(route, body?.source, body?.agentId);
-      // deriveRoute returns null for agent-context events on non-task routes — drop, don't dispatch.
+      const derived = deriveRoute(route, body?.source, body?.agentId, body?.sessionId);
       if (derived === null) {
-        dispatchLog.debug(`drop agent-context route=${route} agent=${body?.agentId?.slice(0, 8) ?? "?"}`);
+        // Distinguish the two drop reasons so log lines remain diagnosable.
+        if (!body?.sessionId) {
+          dispatchLog.debug(`drop no-session route=${route}`);
+        } else {
+          dispatchLog.debug(`drop agent-context route=${route} agent=${body?.agentId?.slice(0, 8) ?? "?"}`);
+        }
         return;
       }
       dispatcher.handleRoute(derived);

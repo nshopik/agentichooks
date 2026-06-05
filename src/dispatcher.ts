@@ -74,18 +74,34 @@ const ROUTES: Readonly<Record<string, RouteSpec>> = {
 };
 
 // Maps an incoming route + body fields to the effective ROUTES key, or null (drop).
-// Evaluation order (agent check is FIRST — takes precedence over source logic):
-//   1. agentId present + route is /event/task-created → passthrough (increment + clears
-//      task-completed: an armed "all done" alert is deliberately superseded by new agent work).
-//   2. agentId present + route is /event/task-completed → TASK_COMPLETED_AGENT (counter-only).
-//   3. agentId present, any other route → null (drop; caller must not call handleRoute).
-//   4. agentId absent → existing source logic; never returns null.
-export function deriveRoute(route: string, source: string | undefined, agentId?: string): string | null {
+//
+// Admission policy — evaluated in this order:
+//   1. Session gate (FIRST): sessionId falsy → null. Applies to every action route
+//      without exception, including task-created / task-completed — real Claude Code
+//      hooks always carry session_id, so the counter never sees gated traffic.
+//   2. Agent context: agentId present + route is /event/task-created → passthrough
+//      (increment + clears task-completed: an armed "all done" alert is deliberately
+//      superseded by new agent work). agentId present + route is /event/task-completed
+//      → TASK_COMPLETED_AGENT (counter-only). agentId present, any other route → null
+//      (drop; caller must not call handleRoute).
+//   3. Source derivation: agentId absent → source logic. session-start with
+//      source=compact|resume → SESSION_START_SOFT (no-op). Everything else → route.
+//      Never returns null in this branch.
+//
+// NOTE: sessionId is a REQUIRED parameter (no `?`, no default) so the TypeScript
+// compiler forces every call site — production and test — to state explicitly what
+// session context they pass. Callers that want to express "no session" pass `undefined`.
+// The check is a falsy guard (`!sessionId`), so `""` is treated as absent.
+export function deriveRoute(route: string, source: string | undefined, agentId: string | undefined, sessionId: string | undefined): string | null {
+  // 1. Session gate — evaluated FIRST.
+  if (!sessionId) return null;
+  // 2. Agent-context check.
   if (agentId !== undefined) {
     if (route === "/event/task-created") return route;
     if (route === "/event/task-completed") return TASK_COMPLETED_AGENT;
     return null;
   }
+  // 3. Source derivation.
   if (route === "/event/session-start" && (source === "compact" || source === "resume")) {
     return SESSION_START_SOFT;
   }
