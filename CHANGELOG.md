@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+### Breaking
+
+- Action-route POSTs without a `session_id` body field are now dropped with a warn
+  log and produce no alert, sound, or state change. Affected callers:
+  - **Bare `curl.exe -X POST …/event/stop`** (no body) — now a no-op. Add
+    `-H "Content-Type: application/json" -d '{"session_id":"manual-test"}'` for
+    manual testing.
+  - **v1 curl-based hooks** (shell wrappers that posted empty bodies). The
+    `install-hooks.ps1` / `install-hooks.sh` installers have auto-replaced v1 marker
+    entries with native `type:"http"` hooks since the v2 marker — any remaining v1
+    hooks must be re-run through the installer to migrate.
+  - Native Claude Code `type:"http"` hooks always include `session_id` in the event
+    JSON — real hooks are unaffected.
+
 ### Fixed
 
 - Dismissing an alert (pressing the lit button, or the per-button auto-timeout
