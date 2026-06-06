@@ -88,7 +88,9 @@ export class OnStopAction extends EventFlashAction {
    */
   broadcastAlertTitle(): void {
     const ctx = this.opts.armedContext?.(this.eventType) ?? null;
-    const title = ctx !== null ? formatAlertTitle(ctx.count, ctx.latestCwd) : undefined;
+    // Coalesce "" → undefined: an armed alert with no resolvable cwd keeps the
+    // user/manifest title instead of blanking it (never call setTitle("")).
+    const title = (ctx !== null ? formatAlertTitle(ctx.count, ctx.latestCwd) : "") || undefined;
     for (const [, c] of this.contexts) {
       void c.setTitle(title);
     }
@@ -113,7 +115,8 @@ export class OnStopAction extends EventFlashAction {
     if (ctx.state.alerting) {
       const armedCtx = this.opts.armedContext?.(this.eventType) ?? null;
       if (armedCtx !== null) {
-        void ctx.setTitle(formatAlertTitle(armedCtx.count, armedCtx.latestCwd));
+        // "" → undefined: same coalesce as broadcastAlertTitle.
+        void ctx.setTitle(formatAlertTitle(armedCtx.count, armedCtx.latestCwd) || undefined);
       }
     }
     const isThinking = this.opts.currentThinking?.() ?? false;
