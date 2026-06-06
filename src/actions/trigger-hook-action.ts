@@ -29,7 +29,7 @@ export class TriggerHookAction extends SingletonAction<TriggerSettings> {
 
   override async onKeyDown(ev: KeyDownEvent<TriggerSettings>): Promise<void> {
     const route = this.routes.get(ev.action.id) ?? normalizeTriggerRoute(undefined);
-    streamDeck.logger.info(`[trigger] key-press route=${route}`);
+    streamDeck.logger.debug(`[trigger] key-press route=${route}`);
     const result = await sendTrigger(route, fetch);
     if (result.ok) {
       await ev.action.showOk();
