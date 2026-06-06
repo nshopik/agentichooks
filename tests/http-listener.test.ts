@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "node:http";
 import net from "node:net";
-import { HttpListener } from "../src/http-listener.js";
+import { HttpListener, ACTION_ROUTES as ACTION_ROUTES_SET, INFO_ROUTES as INFO_ROUTES_SET } from "../src/http-listener.js";
+
+// Derived arrays for it.each (which requires an iterable of primitives, not a Set).
+const ACTION_ROUTES = [...ACTION_ROUTES_SET];
+const INFO_ROUTES = [...INFO_ROUTES_SET];
 
 let listener: HttpListener | undefined;
 let received: string[];
@@ -79,41 +83,6 @@ async function requestWithHeaders(
     req.end();
   });
 }
-
-const ACTION_ROUTES = [
-  "/event/stop",
-  "/event/stop-failure",
-  "/event/permission-request",
-  "/event/task-completed",
-  "/event/task-created",
-  "/event/session-start",
-  "/event/user-prompt-submit",
-  "/event/permission-denied",
-  "/event/post-tool-use",
-  "/event/post-tool-use-failure",
-  "/event/pre-tool-use",
-  "/event/session-end",
-];
-
-const INFO_ROUTES = [
-  "/event/notification",
-  "/event/post-tool-batch",
-  "/event/subagent-start",
-  "/event/subagent-stop",
-  "/event/setup",
-  "/event/instructions-loaded",
-  "/event/user-prompt-expansion",
-  "/event/teammate-idle",
-  "/event/config-change",
-  "/event/cwd-changed",
-  "/event/file-changed",
-  "/event/worktree-create",
-  "/event/worktree-remove",
-  "/event/pre-compact",
-  "/event/post-compact",
-  "/event/elicitation",
-  "/event/elicitation-result",
-];
 
 const REMOVED_ROUTES = [
   "/event/permission",
@@ -577,6 +546,21 @@ describe("HttpListener — warn suffix on info routes", () => {
     expect(warn).toBeDefined();
     expect(warn!.msg).toContain("(session_id required)");
     expect(warn!.msg).not.toContain("(no usable body)");
+  });
+});
+
+describe("HttpListener — route-set consistency", () => {
+  it("ACTION_ROUTES used by it.each equals the exported source set", () => {
+    // If a route is added/renamed in source but not reflected in ACTION_ROUTES, this fails.
+    const sourceArray = [...ACTION_ROUTES_SET].sort();
+    const testArray = [...ACTION_ROUTES].sort();
+    expect(testArray).toEqual(sourceArray);
+  });
+
+  it("INFO_ROUTES used by it.each equals the exported source set", () => {
+    const sourceArray = [...INFO_ROUTES_SET].sort();
+    const testArray = [...INFO_ROUTES].sort();
+    expect(testArray).toEqual(sourceArray);
   });
 });
 

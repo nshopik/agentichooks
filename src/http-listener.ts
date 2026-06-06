@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import { makeBodyBuffer, type BodyOutcome, type ParsedBody } from "./parse-hook-body.js";
 import type { Logger } from "./types.js";
 
-const ACTION_ROUTES = new Set<string>([
+export const ACTION_ROUTES = new Set<string>([
   "/event/stop",
   "/event/stop-failure",
   "/event/permission-request",
@@ -18,7 +18,7 @@ const ACTION_ROUTES = new Set<string>([
   "/event/session-end",
 ]);
 
-const INFO_ROUTES = new Set<string>([
+export const INFO_ROUTES = new Set<string>([
   "/event/notification",
   "/event/post-tool-batch",
   "/event/subagent-start",
