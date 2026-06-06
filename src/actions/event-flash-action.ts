@@ -92,8 +92,9 @@ type Ctx = {
   // class never calls it.
   setImage: (image: string, state?: 0 | 1) => Promise<void>;
   // Resets to user/manifest title when called with no arg; sets an override when
-  // called with a string. Use no-arg form to restore user-set titles after alert
-  // clears. (Note: setTitle("") would blank a user-set title — never use that form.)
+  // called with a string. Use no-arg form to restore titles after alert clears.
+  // (setTitle("") would override the manifest title with blank on keys without a
+  // user title — and is ignored entirely when a user title exists. Never use it.)
   setTitle: (title?: string) => Promise<void>;
 };
 

@@ -3,6 +3,7 @@ import type { JsonObject } from "@elgato/utils";
 import type { EventType } from "../types.js";
 import { renderThinkingIcon, THINKING_FRAMES } from "../render-thinking-icon.js";
 import { formatElapsed } from "../format-elapsed.js";
+import { formatAlertTitle } from "../alert-title.js";
 import { EventFlashAction } from "./event-flash-action.js";
 
 @action({ UUID: "com.nshopik.agentichooks.stop" })
@@ -77,6 +78,23 @@ export class OnStopAction extends EventFlashAction {
   }
 
   /**
+   * Called by plugin.ts via onArmedChanged when the armed-session context for
+   * the stop type changes (new session armed, session cleared, or dismissArmed).
+   * Applies the cwd title to all visible On Stop key contexts:
+   *   - armed → setTitle(formatAlertTitle(count, latestCwd))
+   *   - not armed (null context) → setTitle() no-arg (restore user/manifest title)
+   *
+   * Follows the broadcastCounts / broadcastThinking precedent.
+   */
+  broadcastAlertTitle(): void {
+    const ctx = this.opts.armedContext?.(this.eventType) ?? null;
+    const title = ctx !== null ? formatAlertTitle(ctx.count, ctx.latestCwd) : undefined;
+    for (const [, c] of this.contexts) {
+      void c.setTitle(title);
+    }
+  }
+
+  /**
    * Restores state after a Stream Deck page/profile switch.
    * Order per spec: super first (restores alerting from armedMsAgo), then:
    *   - thinking-inactive → setImage("", 0) to clear any stale override.
@@ -89,6 +107,15 @@ export class OnStopAction extends EventFlashAction {
     await super.onWillAppear(ev);
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
+    // Apply title: only when the base actually re-alerted this button.
+    // Expired-budget path sets state IDLE and calls setTitle() — we must not
+    // overwrite that with a title. ctx.state.alerting is set by alertContext().
+    if (ctx.state.alerting) {
+      const armedCtx = this.opts.armedContext?.(this.eventType) ?? null;
+      if (armedCtx !== null) {
+        void ctx.setTitle(formatAlertTitle(armedCtx.count, armedCtx.latestCwd));
+      }
+    }
     const isThinking = this.opts.currentThinking?.() ?? false;
     if (!isThinking) {
       void ctx.setImage("", 0);
