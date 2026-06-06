@@ -10,6 +10,7 @@ import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher, deriveRoute, type DispatchableButton } from "./dispatcher.js";
 import { SessionSetCounter } from "./session-set-counter.js";
+import { TurnClock } from "./turn-clock.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
 import { pickLogLevel } from "./log-level.js";
@@ -67,6 +68,9 @@ const actionOpts: EventFlashActionOpts = {
   // binding and resolve at willAppear time. Same indirection pattern as armedMsAgo above.
   currentCount: (): number => taskCounters.tasks.sum(),
   currentThinking: (): boolean => taskCounters.thinking.sum() > 0,
+  // Lazy: turnClock is constructed below, so this arrow captures the outer
+  // binding and resolves at repaint / willAppear time.
+  currentElapsedMs: (): number | null => turnClock.currentElapsedMs(),
   currentAgentCount: (): number => taskCounters.subagents.sum(),
   // Lazy: dispatcher is constructed below. Called when a button's keypress or
   // auto-timeout dismisses an alert; the dispatcher clears ARMED state and
@@ -148,6 +152,11 @@ const taskCounters = {
   }),
 };
 
+// TurnClock wraps taskCounters.thinking to record per-session start timestamps.
+// Constructed after taskCounters (needs the inner counter) and before dispatcher
+// (dispatcher's counters.thinking slot receives the decorator, not the raw counter).
+const turnClock = new TurnClock({ inner: taskCounters.thinking });
+
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
@@ -157,7 +166,13 @@ const dispatcher = new Dispatcher({
     return merged;
   },
   log: dispatchLog,
-  counters: taskCounters,
+  counters: {
+    tasks: taskCounters.tasks,
+    subagents: taskCounters.subagents,
+    // Dispatcher talks to the TurnClock decorator; TurnClock talks to the
+    // thinking SessionSetCounter, whose onChanged → broadcastThinking wiring is unchanged.
+    thinking: turnClock,
+  },
 });
 
 let listener: HttpListener | undefined;

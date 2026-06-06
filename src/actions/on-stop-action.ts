@@ -2,6 +2,7 @@ import { action, type WillAppearEvent } from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
 import type { EventType } from "../types.js";
 import { renderThinkingIcon, THINKING_FRAMES } from "../render-thinking-icon.js";
+import { formatElapsed } from "../format-elapsed.js";
 import { EventFlashAction } from "./event-flash-action.js";
 
 @action({ UUID: "com.nshopik.agentichooks.stop" })
@@ -13,6 +14,9 @@ export class OnStopAction extends EventFlashAction {
   private static readonly FRAMES = THINKING_FRAMES;
 
   private frameIdx = 0;
+  // Timer repaint loop: fires every 200 ms while thinking is active.
+  // Advances the sparkle frame AND repaints the elapsed timer on every context.
+  // Runs even when every context has animateThinking unchecked (timer still ticks).
   private animInterval: NodeJS.Timeout | null = null;
 
   private startAnimation(): void {
@@ -32,31 +36,33 @@ export class OnStopAction extends EventFlashAction {
   }
 
   /**
-   * Re-render every enabled On Stop key context with the current thinking frame.
-   * animateThinking defaults ON: undefined is treated as true (`!== false`, the
-   * animateCounter precedent); only contexts where the user unchecked the PI
-   * checkbox are left showing their manifest/user idle image.
+   * Re-render every On Stop key context with the current thinking frame and
+   * elapsed timer. All contexts receive a repaint while the repaint loop runs.
+   * animateThinking gates only the corner sparkle:
+   *   - animateThinking !== false → corner sparkle + centered timer
+   *   - animateThinking === false → centered timer only (no sparkle)
    *
-   * Alert/thinking precedence: thinking paints via setImage(..., 0) (idle state).
-   * The armed flash owns state 1. An armed alert always wins visually; the thinking
-   * image is queued under state 0 and is revealed on dismiss — correct under
-   * multi-session overlap where stop-failure arms the alert for session A while
-   * session B is still thinking.
+   * No alerting guard: timer paints state 0 unconditionally while thinking,
+   * exactly like the prior sparkle behavior. The armed alert wins via state-1
+   * precedence — skipping paints would diverge from current behavior.
    */
   private renderThinkingFrame(): void {
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
+    const elapsedMs = this.opts.currentElapsedMs?.() ?? null;
+    const label = elapsedMs !== null ? formatElapsed(elapsedMs) : null;
     for (const [, ctx] of this.contexts) {
-      if (ctx.settings.animateThinking !== false) {
-        void ctx.setImage(renderThinkingIcon(frameGlyph, null), 0);
-      }
+      const sparkle = ctx.settings.animateThinking !== false ? frameGlyph : null;
+      void ctx.setImage(renderThinkingIcon(sparkle, label), 0);
     }
   }
 
   /**
    * Called by plugin.ts when the thinking counter (sum > 0) changes.
-   * active=true starts the animation; active=false stops it and clears state-0
-   * image overrides on enabled contexts.
+   * active=true starts the timer repaint loop; active=false stops it and
+   * clears state-0 image overrides on ALL contexts (animateThinking guard
+   * removed from the clear path — without this, a stale timer image is
+   * stranded on unchecked buttons when the turn ends).
    */
   broadcastThinking(active: boolean): void {
     if (active) {
@@ -65,9 +71,7 @@ export class OnStopAction extends EventFlashAction {
     } else {
       this.stopAnimation();
       for (const [, ctx] of this.contexts) {
-        if (ctx.settings.animateThinking !== false) {
-          void ctx.setImage("", 0);
-        }
+        void ctx.setImage("", 0);
       }
     }
   }
@@ -75,22 +79,27 @@ export class OnStopAction extends EventFlashAction {
   /**
    * Restores state after a Stream Deck page/profile switch.
    * Order per spec: super first (restores alerting from armedMsAgo), then:
-   *   - thinking-inactive OR animateThinking unchecked → setImage("", 0) to clear any
-   *     stale override (harmless no-op when no override exists).
-   *   - thinking-active + animateThinking enabled (default) → repaint current frame.
+   *   - thinking-inactive → setImage("", 0) to clear any stale override.
+   *   - thinking-active + animateThinking enabled (default) →
+   *     corner sparkle + centered timer.
+   *   - thinking-active + animateThinking === false →
+   *     timer only (no sparkle).
    */
   override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
     await super.onWillAppear(ev);
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
     const isThinking = this.opts.currentThinking?.() ?? false;
-    if (!isThinking || ctx.settings.animateThinking === false) {
+    if (!isThinking) {
       void ctx.setImage("", 0);
       return;
     }
-    // Thinking active + enabled: repaint current frame.
+    // Thinking active: repaint current frame + elapsed timer.
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
-    void ctx.setImage(renderThinkingIcon(frameGlyph, null), 0);
+    const elapsedMs = this.opts.currentElapsedMs?.() ?? null;
+    const label = elapsedMs !== null ? formatElapsed(elapsedMs) : null;
+    const sparkle = ctx.settings.animateThinking !== false ? frameGlyph : null;
+    void ctx.setImage(renderThinkingIcon(sparkle, label), 0);
   }
 }
