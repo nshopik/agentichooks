@@ -39,6 +39,13 @@ export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
   autoTimeoutMs: 0,
 };
 
+// Runtime guard for flashMode arriving from the Property Inspector — the PI
+// payload is untyped JSON, so a garbage value ("blink", 42) must collapse to
+// the default rather than flow through typed as the valid union.
+export function normalizeFlashMode(raw: unknown): FlashSettings["flashMode"] {
+  return raw === "static" || raw === "pulse" ? raw : DEFAULT_FLASH_SETTINGS.flashMode;
+}
+
 // Per-event-type default for autoTimeoutMs. task-completed self-clears after 30s
 // because no Claude Code hook reliably fires after the task completion that we
 // can use as a dismiss signal short of the next prompt.
