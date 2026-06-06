@@ -15,7 +15,7 @@
 set -euo pipefail
 
 URL="${AGENTIC_HOOKS_URL:-http://127.0.0.1:9123}"
-SETTINGS="${HOME}/.claude/settings.json"
+SETTINGS="${SETTINGS_PATH:-${HOME}/.claude/settings.json}"
 MARKER="_agentic-hooks-installer"
 CURRENT_VERSION="v2"
 
