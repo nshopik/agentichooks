@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi } from "vitest";
 import {
   buildTriggerRequest,
@@ -156,4 +157,39 @@ describe("TRIGGER_ROUTES", () => {
   it("equals the sorted ACTION_ROUTES set (derivation pin)", () => {
     expect([...TRIGGER_ROUTES]).toEqual([...ACTION_ROUTES].sort());
   });
+});
+
+// ─────────────────────────────────────────────────────────
+// PI drift pin — every ACTION_ROUTES member must appear in ui/trigger.html
+// ─────────────────────────────────────────────────────────
+// This test reads the PI HTML from disk and asserts that every route in
+// ACTION_ROUTES has a corresponding <option> element. If a route is added
+// to ACTION_ROUTES without updating the PI, this test fails loudly rather
+// than silently producing a broken dropdown.
+
+describe("ui/trigger.html — PI route drift pin", () => {
+  let html = "";
+
+  try {
+    html = readFileSync(
+      new URL("../com.nshopik.agentichooks.sdPlugin/ui/trigger.html", import.meta.url),
+      "utf8",
+    );
+  } catch {
+    html = "";
+  }
+
+  it("ui/trigger.html exists and is non-empty", () => {
+    expect(html.length).toBeGreaterThan(0);
+  });
+
+  it.each([...ACTION_ROUTES])(
+    "ACTION_ROUTE %s has a matching <option value> in ui/trigger.html",
+    (route) => {
+      // Match  value="/event/stop"  or  value='/event/stop'
+      const escaped = route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const pattern = new RegExp(`value=["']${escaped}["']`);
+      expect(html).toMatch(pattern);
+    },
+  );
 });
