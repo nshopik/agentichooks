@@ -16,13 +16,13 @@ export const ACTION_ROUTES = new Set<string>([
   "/event/post-tool-use-failure",
   "/event/pre-tool-use",
   "/event/session-end",
+  "/event/subagent-start",
+  "/event/subagent-stop",
 ]);
 
 export const INFO_ROUTES = new Set<string>([
   "/event/notification",
   "/event/post-tool-batch",
-  "/event/subagent-start",
-  "/event/subagent-stop",
   "/event/setup",
   "/event/instructions-loaded",
   "/event/user-prompt-expansion",
