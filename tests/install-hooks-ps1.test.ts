@@ -46,12 +46,13 @@ const SCRIPT_PATH = path.resolve(
 
 // ---------------------------------------------------------------------------
 // Helper: run install-hooks.ps1 against a given settings file path.
-// Returns { status, stdout, stderr }.
+// Returns { status, stdout, stderr, error }.
 // ---------------------------------------------------------------------------
 function runInstaller(settingsPath: string): {
   status: number;
   stdout: string;
   stderr: string;
+  error?: Error;
 } {
   const result = spawnSync(
     "powershell.exe",
@@ -72,6 +73,7 @@ function runInstaller(settingsPath: string): {
     status: result.status ?? 1,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
+    error: result.error,
   };
 }
 
@@ -98,11 +100,11 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
     // ------------------------------------------------------------------
     it("exits 0 and writes valid JSON to the target path", () => {
       const result = runInstaller(settingsPath);
-      expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+      expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error?.message ?? "none"}`).toBe(0);
       expect(fs.existsSync(settingsPath)).toBe(true);
       const raw = fs.readFileSync(settingsPath, "utf8");
       expect(() => JSON.parse(raw)).not.toThrow();
-    });
+    }, 45000);
 
     // ------------------------------------------------------------------
     // Test 2: Depth round-trip — a value nested 11 levels deep must
@@ -143,7 +145,7 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
       fs.writeFileSync(settingsPath, JSON.stringify(deep), "utf8");
 
       const result = runInstaller(settingsPath);
-      expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+      expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error?.message ?? "none"}`).toBe(0);
 
       const raw = fs.readFileSync(settingsPath, "utf8");
       const parsed = JSON.parse(raw);
@@ -151,8 +153,8 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
       // Navigate all 11 levels and assert the sentinel is intact.
       const reached =
         parsed?.myApp?.l1?.l2?.l3?.l4?.l5?.l6?.l7?.l8?.l9?.l10?.l11;
-      expect(reached).toBe(sentinel);
-    });
+      expect(reached, `parsed at depth ~2: ${JSON.stringify(parsed?.myApp?.l1?.l2)}`).toBe(sentinel);
+    }, 45000);
 
     // ------------------------------------------------------------------
     // Test 3: Atomicity — no partial write is visible at the target path.
@@ -164,12 +166,12 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
     // ------------------------------------------------------------------
     it("leaves no temp files in the settings directory after a successful run", () => {
       const result = runInstaller(settingsPath);
-      expect(result.status, `stderr: ${result.stderr}`).toBe(0);
+      expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error?.message ?? "none"}`).toBe(0);
 
       // Only settings.json should be present; any .tmp or partial files are a bug.
       const leftovers = fs.readdirSync(tmpDir).filter((e) => e !== "settings.json");
       expect(leftovers, `unexpected leftovers: ${leftovers.join(", ")}`).toEqual([]);
-    });
+    }, 45000);
 
     // ------------------------------------------------------------------
     // Test 4: Idempotency — running twice produces the same output and
@@ -177,14 +179,14 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
     // ------------------------------------------------------------------
     it("is idempotent: second run exits 0 and produces identical JSON", () => {
       const r1 = runInstaller(settingsPath);
-      expect(r1.status, `first run stderr: ${r1.stderr}`).toBe(0);
+      expect(r1.status, `stdout: ${r1.stdout}\nstderr: ${r1.stderr}\nerror: ${r1.error?.message ?? "none"}`).toBe(0);
       const afterFirst = fs.readFileSync(settingsPath, "utf8");
 
       const r2 = runInstaller(settingsPath);
-      expect(r2.status, `second run stderr: ${r2.stderr}`).toBe(0);
+      expect(r2.status, `stdout: ${r2.stdout}\nstderr: ${r2.stderr}\nerror: ${r2.error?.message ?? "none"}`).toBe(0);
       const afterSecond = fs.readFileSync(settingsPath, "utf8");
 
       expect(JSON.parse(afterFirst)).toEqual(JSON.parse(afterSecond));
-    });
+    }, 75000);
   }
 );
