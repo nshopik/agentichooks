@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Stop/Permission keys show the arming session's repository basename as the key title while armed, with a `+N` second line when more sessions are armed (latest-wins). User-set key titles always win — the plugin title is ignored on keys with a custom title. (#N)
 - **Elapsed turn time on the On Stop button** — a live timer starts on
   `UserPromptSubmit` and ends on `Stop`/`StopFailure`, rendered as the centerpiece
   of the thinking visual: big gray time centered on the key, coral sparkle pulse
@@ -34,6 +35,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Session-scoped alert clearing: a clearing hook from one Claude Code session (e.g. `post-tool-use`, `session-end`, `user-prompt-submit`) no longer dismisses armed alerts raised by another session. Pending/armed alert state is tracked per session; keypress and per-button auto-timeout still dismiss all sessions for that key's type. (#N)
 - `install-hooks.ps1` no longer crashes on a bare-filename `-SettingsPath`
   (e.g. `settings.json`): the path is normalized to an absolute path against
   the shell's current directory before use. The test suite also gains an
