@@ -82,7 +82,7 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
   // take over — without this, the count "1" only appears after the 30s auto-timeout.
   "/event/task-created":          {                     clears: ["task-completed"],                counters: [{ metric: "tasks", op: "add" }] },
   // arms: "task-completed" REMOVED — arming is now indirect, driven by
-  // TaskCounter.onZeroReached → dispatcher.fireTaskCompleted().
+  // SessionSetCounter (tasks instance) onSessionDrained → dispatcher.fireTaskCompleted().
   "/event/task-completed":        {                     clears: ["permission"],                   counters: [{ metric: "tasks", op: "remove" }] },
   // Synthetic agent-only routes — always routed here via deriveRoute (agentId present).
   // Counter-only: no alert state change.
@@ -201,8 +201,8 @@ export class Dispatcher {
     this.opts.log?.trace(`state stop=${this.stateOf("stop")} permission=${this.stateOf("permission")} task-completed=${this.stateOf("task-completed")}`);
   }
 
-  // Public seam used by TaskCounter.onZeroReached. Wraps the existing
-  // private armType so external callers can fire only the task-completed
+  // Public seam used by SessionSetCounter (tasks instance) onSessionDrained. Wraps the
+  // existing private armType so external callers can fire only the task-completed
   // alert and cannot bypass the matrix for arbitrary types.
   fireTaskCompleted(): void {
     this.armType("task-completed");
@@ -213,7 +213,7 @@ export class Dispatcher {
    * auto-timeout dismisses an alert. Clears ARMED state for the given event
    * type and dismisses every currently-alerting button of that type.
    *
-   * Alert-only scope: does NOT touch the TaskCounter or the in-flight count
+   * Alert-only scope: does NOT touch the SessionSetCounter instances or the in-flight count
    * visual. Covers all three dispatcher states by delegating to clearType:
    * IDLE (no-op on dispatcher state; still dismisses stray alerting visuals),
    * PENDING (cancels the timer so the alert never fires), ARMED (clears state

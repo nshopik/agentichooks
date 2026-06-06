@@ -41,7 +41,7 @@ export type EventFlashActionOpts = {
    */
   currentThinking?: () => boolean;
   /**
-   * Lazy lookup against TaskCounter so OnTaskCompletedAction.onWillAppear can
+   * Lazy lookup against the SessionSetCounter (tasks instance) so OnTaskCompletedAction.onWillAppear can
    * restore the in-flight visual after a page/profile switch. Returns the
    * current global subagent count. Only consumed by OnTaskCompletedAction.
    */
