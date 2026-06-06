@@ -121,7 +121,7 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
 // it as an opt. onZeroReached uses a lazy arrow because dispatcher is
 // declared on the next line — same circular-reference dance as armedMsAgo.
 const taskCounter = new TaskCounter({
-  onCountChanged: (n) => taskCompletedAction.broadcastCount(n),
+  onCountChanged: (n) => taskCompletedAction.broadcastCounts(n, 0), // agentSum placeholder — Task 10 wires the real subagent sum.
   onZeroReached: () => dispatcher.fireTaskCompleted(),
   log: makeLogger("counter"),
 });
