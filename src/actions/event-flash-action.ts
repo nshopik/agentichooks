@@ -72,6 +72,13 @@ export type EventFlashActionOpts = {
    * armedMsAgo lazy-arrow pattern.
    */
   onDismissed?: (eventType: EventType) => void;
+  /**
+   * Lazy lookup (dispatcher constructed later): armed-session context for this
+   * action's event type, or null when nothing is armed. Drives the cwd title on
+   * stop and permission keys. Only consumed by OnStopAction and OnPermissionAction.
+   * Mirrors the armedMsAgo lazy-arrow pattern.
+   */
+  armedContext?: (eventType: EventType) => { count: number; latestCwd: string | null } | null;
 };
 
 type Ctx = {
@@ -84,6 +91,10 @@ type Ctx = {
   // Used by OnTaskCompletedAction for the in-flight count visual; the base
   // class never calls it.
   setImage: (image: string, state?: 0 | 1) => Promise<void>;
+  // Resets to user/manifest title when called with no arg; sets an override when
+  // called with a string. Use no-arg form to restore user-set titles after alert
+  // clears. (Note: setTitle("") would blank a user-set title — never use that form.)
+  setTitle: (title?: string) => Promise<void>;
 };
 
 type RawSettings = JsonObject & {
@@ -130,6 +141,7 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       // state !== undefined (NOT `state ?`) — the truthy check would map state===0 to undefined,
       // losing our explicit idle-state targeting. Pass { state } only when caller specified one.
       setImage: isKey ? (img, state) => (action as KeyAction<JsonObject>).setImage(img, state !== undefined ? { state } : undefined) : async () => {},
+      setTitle: isKey ? (title) => (action as KeyAction<JsonObject>).setTitle(title) : async () => {},
     };
     this.contexts.set(action.id, ctx);
     // Stream Deck rebuilds per-key contexts on every page or profile switch.
@@ -138,12 +150,14 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     const msAgo = this.opts.armedMsAgo?.(this.eventType) ?? null;
     if (msAgo === null) {
       await ctx.setState(STATE_IDLE);
+      await ctx.setTitle(); // restore user/manifest title
       return;
     }
     if (settings.autoTimeoutMs > 0) {
       const remaining = settings.autoTimeoutMs - msAgo;
       if (remaining <= 0) {
         await ctx.setState(STATE_IDLE);
+        await ctx.setTitle(); // restore user/manifest title
         return;
       }
       this.alertContext(ctx, remaining);
