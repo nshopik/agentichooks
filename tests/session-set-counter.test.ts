@@ -246,4 +246,12 @@ describe("SessionSetCounter", () => {
     // No warn spam — debug only
     expect(log.warn).not.toHaveBeenCalled();
   });
+
+  // ---- metric= label ----
+
+  it("log lines carry metric=<name> when the name opt is set", () => {
+    const c = new SessionSetCounter({ onChanged, log, name: "tasks" });
+    c.add("sess-A", "task-1");
+    expect(log.debug).toHaveBeenCalledWith(expect.stringContaining("metric=tasks"));
+  });
 });

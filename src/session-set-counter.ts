@@ -7,6 +7,8 @@ export type SessionSetCounterOpts = {
   // armed state is set before the visual layer queries it.
   onSessionDrained?: () => void;
   log?: Logger;
+  // Metric label for log lines (e.g. "tasks", "subagents", "thinking").
+  name?: string;
 };
 
 // Per-session id-set counter.
@@ -32,6 +34,10 @@ export class SessionSetCounter {
     this.opts = opts;
   }
 
+  private get m(): string {
+    return this.opts.name ? `metric=${this.opts.name} ` : "";
+  }
+
   sum(): number {
     let total = 0;
     for (const s of this.sessions.values()) total += s.size;
@@ -47,28 +53,28 @@ export class SessionSetCounter {
     if (set.has(id)) return; // dedup — no callback
     set.add(id);
     const s = this.sum();
-    this.opts.log?.debug(`add metric session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} set-size=${set.size} sum=${s}`);
+    this.opts.log?.debug(`${this.m}add session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} set-size=${set.size} sum=${s}`);
     this.opts.onChanged(s);
   }
 
   remove(sessionId: string, id: string): void {
     const set = this.sessions.get(sessionId);
     if (!set || !set.has(id)) {
-      this.opts.log?.debug(`remove ignore: session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} (not in set)`);
+      this.opts.log?.debug(`${this.m}remove ignore: session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} (not in set)`);
       return;
     }
     set.delete(id);
     if (set.size === 0) {
       this.sessions.delete(sessionId);
       const s = this.sum();
-      this.opts.log?.debug(`remove drain session=${sessionId.slice(0, 8)} sum=${s}`);
+      this.opts.log?.debug(`${this.m}remove drain session=${sessionId.slice(0, 8)} sum=${s}`);
       // Drain: onSessionDrained BEFORE onChanged — so dispatcher.fireTaskCompleted()
       // sets ARMED state before the visual layer's onChanged queries sum/armed.
       this.opts.onSessionDrained?.();
       this.opts.onChanged(s);
     } else {
       const s = this.sum();
-      this.opts.log?.debug(`remove session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} set-size=${set.size} sum=${s}`);
+      this.opts.log?.debug(`${this.m}remove session=${sessionId.slice(0, 8)} id=${id.slice(0, 8)} set-size=${set.size} sum=${s}`);
       this.opts.onChanged(s);
     }
   }
@@ -80,7 +86,7 @@ export class SessionSetCounter {
     if (!set || set.size === 0) return;
     this.sessions.delete(sessionId);
     const s = this.sum();
-    this.opts.log?.debug(`reset session=${sessionId.slice(0, 8)} sum=${s}`);
+    this.opts.log?.debug(`${this.m}reset session=${sessionId.slice(0, 8)} sum=${s}`);
     this.opts.onChanged(s);
   }
 }
