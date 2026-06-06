@@ -35,9 +35,10 @@ All notable changes to this project will be documented in this file.
   notification pill in the top-right corner shows the running subagent count (fed by
   `SubagentStart`/`SubagentStop`). Both metrics use per-session id-sets, eliminating
   drift from duplicate or orphan events. (#38)
-- **On Stop thinking indicator** — per-button opt-in animated coral glyph (8-frame pulse)
-  while any session is thinking (`UserPromptSubmit` → `Stop`). Enable via "Animate while
-  Claude is thinking" checkbox in the On Stop Property Inspector. (#38)
+- **On Stop thinking indicator** — animated coral glyph (8-frame pulse) while any
+  session is thinking (`UserPromptSubmit` → `Stop`). On by default; disable per button
+  via the "Animate while Claude is thinking" checkbox in the On Stop Property
+  Inspector. (#38, #39)
 - **Trigger Hook action** — a fourth Stream Deck button that POSTs to a
   configurable `http://127.0.0.1:9123/event/<route>` on key press, using the
   same HTTP transport as real Claude Code hooks. Useful for manual alert

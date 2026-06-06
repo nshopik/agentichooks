@@ -5,7 +5,8 @@ export type FlashSettings = {
   pulseIntervalMs: number;
   autoTimeoutMs: number;
   // Only read by OnStopAction; other event contexts carry the field but ignore it.
-  // Undefined is treated as false (thinking animation off by default).
+  // Undefined is treated as true (thinking animation ON by default; gate with
+  // `!== false` — the animateCounter precedent). Only an explicit uncheck disables.
   animateThinking?: boolean;
 };
 

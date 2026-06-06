@@ -32,9 +32,10 @@ export class OnStopAction extends EventFlashAction {
   }
 
   /**
-   * Re-render every opted-in On Stop key context with the current thinking frame.
-   * Only contexts with animateThinking=true receive setImage calls; others are left
-   * showing their manifest/user idle image.
+   * Re-render every enabled On Stop key context with the current thinking frame.
+   * animateThinking defaults ON: undefined is treated as true (`!== false`, the
+   * animateCounter precedent); only contexts where the user unchecked the PI
+   * checkbox are left showing their manifest/user idle image.
    *
    * Alert/thinking precedence: thinking paints via setImage(..., 0) (idle state).
    * The armed flash owns state 1. An armed alert always wins visually; the thinking
@@ -46,7 +47,7 @@ export class OnStopAction extends EventFlashAction {
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
     for (const [, ctx] of this.contexts) {
-      if (ctx.settings.animateThinking) {
+      if (ctx.settings.animateThinking !== false) {
         void ctx.setImage(renderThinkingIcon(frameGlyph), 0);
       }
     }
@@ -55,7 +56,7 @@ export class OnStopAction extends EventFlashAction {
   /**
    * Called by plugin.ts when the thinking counter (sum > 0) changes.
    * active=true starts the animation; active=false stops it and clears state-0
-   * image overrides on opted-in contexts.
+   * image overrides on enabled contexts.
    */
   broadcastThinking(active: boolean): void {
     if (active) {
@@ -64,7 +65,7 @@ export class OnStopAction extends EventFlashAction {
     } else {
       this.stopAnimation();
       for (const [, ctx] of this.contexts) {
-        if (ctx.settings.animateThinking) {
+        if (ctx.settings.animateThinking !== false) {
           void ctx.setImage("", 0);
         }
       }
@@ -74,20 +75,20 @@ export class OnStopAction extends EventFlashAction {
   /**
    * Restores state after a Stream Deck page/profile switch.
    * Order per spec: super first (restores alerting from armedMsAgo), then:
-   *   - thinking-inactive OR animateThinking off → setImage("", 0) to clear any
+   *   - thinking-inactive OR animateThinking unchecked → setImage("", 0) to clear any
    *     stale override (harmless no-op when no override exists).
-   *   - thinking-active + animateThinking on → repaint current thinking frame.
+   *   - thinking-active + animateThinking enabled (default) → repaint current frame.
    */
   override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
     await super.onWillAppear(ev);
     const ctx = this.contexts.get(ev.action.id);
     if (!ctx) return;
     const isThinking = this.opts.currentThinking?.() ?? false;
-    if (!isThinking || !ctx.settings.animateThinking) {
+    if (!isThinking || ctx.settings.animateThinking === false) {
       void ctx.setImage("", 0);
       return;
     }
-    // Thinking active + opted-in: repaint current frame.
+    // Thinking active + enabled: repaint current frame.
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
     void ctx.setImage(renderThinkingIcon(frameGlyph), 0);

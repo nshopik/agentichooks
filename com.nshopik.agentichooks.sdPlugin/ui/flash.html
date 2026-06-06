@@ -42,8 +42,8 @@
     </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
     <sdpi-item label="Thinking indicator">
-      <!-- no default attr: sdpi-checkbox treats default="false" as a truthy string (renders checked) -->
-      <sdpi-checkbox setting="animateThinking">Animate while Claude is thinking</sdpi-checkbox>
+      <!-- default="true" renders checked (truthy string); never use default="false" — also truthy. -->
+      <sdpi-checkbox setting="animateThinking" default="true">Animate while Claude is thinking</sdpi-checkbox>
     </sdpi-item>
   </div>
 
