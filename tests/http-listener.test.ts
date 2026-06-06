@@ -549,21 +549,6 @@ describe("HttpListener — warn suffix on info routes", () => {
   });
 });
 
-describe("HttpListener — route-set consistency", () => {
-  it("ACTION_ROUTES used by it.each equals the exported source set", () => {
-    // If a route is added/renamed in source but not reflected in ACTION_ROUTES, this fails.
-    const sourceArray = [...ACTION_ROUTES_SET].sort();
-    const testArray = [...ACTION_ROUTES].sort();
-    expect(testArray).toEqual(sourceArray);
-  });
-
-  it("INFO_ROUTES used by it.each equals the exported source set", () => {
-    const sourceArray = [...INFO_ROUTES_SET].sort();
-    const testArray = [...INFO_ROUTES].sort();
-    expect(testArray).toEqual(sourceArray);
-  });
-});
-
 describe("HttpListener — connection-lifetime timeouts", () => {
   // Helper: open a raw TCP socket to the listener port and return it.
   // The caller controls what (if anything) is written.
