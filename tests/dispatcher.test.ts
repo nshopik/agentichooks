@@ -36,14 +36,14 @@ function makeButton(eventType: EventType, alerting = false): FakeButton {
 // Single typed counter fake shared by every describe block (previously three
 // local copies, one of them untyped).
 function fakeCounter(): DispatcherTaskCounter & {
-  increment: ReturnType<typeof vi.fn<() => void>>;
-  decrement: ReturnType<typeof vi.fn<() => void>>;
-  reset: ReturnType<typeof vi.fn<() => void>>;
+  increment: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
+  decrement: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
+  reset: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
 } {
   return {
-    increment: vi.fn<() => void>(),
-    decrement: vi.fn<() => void>(),
-    reset: vi.fn<() => void>(),
+    increment: vi.fn<(sessionId: string) => void>(),
+    decrement: vi.fn<(sessionId: string) => void>(),
+    reset: vi.fn<(sessionId: string) => void>(),
   };
 }
 
@@ -74,7 +74,7 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
   it("does not alert or play audio before the delay elapses", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(999);
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
@@ -83,7 +83,7 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
   it("fires audio + alert exactly when the delay elapses", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
@@ -93,7 +93,7 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
     globals.alertDelay.stop = 5000;
     buttons.set("a", makeButton("stop"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
+    d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(4999);
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
@@ -105,9 +105,9 @@ describe("Dispatcher.handleRoute — pending cancelled by clearing route (the bu
   it("permission-request followed by post-tool-use within delay → no audio, no alert", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/post-tool-use");
+    d.handleRoute("/event/post-tool-use", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
@@ -116,9 +116,9 @@ describe("Dispatcher.handleRoute — pending cancelled by clearing route (the bu
   it("permission-denied also cancels a pending permission alert", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/permission-denied");
+    d.handleRoute("/event/permission-denied", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -126,9 +126,9 @@ describe("Dispatcher.handleRoute — pending cancelled by clearing route (the bu
   it("post-tool-use-failure also cancels a pending permission alert", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/post-tool-use-failure");
+    d.handleRoute("/event/post-tool-use-failure", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -138,9 +138,9 @@ describe("Dispatcher.handleRoute — same-type arm during PENDING is no-op (no t
   it("two permission-requests 500ms apart fire exactly one alert at t=1000", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500); // total 1000 from first arm
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
@@ -155,10 +155,10 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("task", makeButton("task-completed"));
     buttons.set("stop", makeButton("stop"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/stop");
+    d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(5000);
     // Only stop fires; the cancelled permission and task-completed never alert.
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
@@ -171,9 +171,9 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("perm", makeButton("permission"));
     buttons.set("stop", makeButton("stop"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/stop-failure");
+    d.handleRoute("/event/stop-failure", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
@@ -189,9 +189,9 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/task-completed");
+    d.handleRoute("/event/task-completed", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
     // Direct alert is gone — task-completed never reaches the button via the
@@ -205,11 +205,11 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("task", makeButton("task-completed"));
     buttons.set("perm", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
+    d.handleRoute("/event/stop", "sess-test");
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(5000);
     // All three pending timers eventually fire — permission-request only arms its own type.
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
@@ -224,11 +224,11 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/stop", "sess-test");
+    d.handleRoute("/event/permission-request", "sess-test");
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/session-start");
+    d.handleRoute("/event/session-start", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
@@ -241,11 +241,11 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/stop", "sess-test");
+    d.handleRoute("/event/permission-request", "sess-test");
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/user-prompt-submit");
+    d.handleRoute("/event/user-prompt-submit", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
@@ -257,7 +257,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     buttons.set("stop", makeButton("stop", true));
     buttons.set("perm", makeButton("permission", true));
     const d = dispatcher();
-    d.handleRoute("/event/session-start");
+    d.handleRoute("/event/session-start", "sess-test");
     expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
   });
@@ -267,11 +267,11 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/stop", "sess-test");
+    d.handleRoute("/event/permission-request", "sess-test");
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/session-end");
+    d.handleRoute("/event/session-end", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
@@ -284,7 +284,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     buttons.set("perm", makeButton("permission", true));
     buttons.set("task", makeButton("task-completed", true));
     const d = dispatcher();
-    d.handleRoute("/event/session-end");
+    d.handleRoute("/event/session-end", "sess-test");
     expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
     expect(buttons.get("task")!.dismiss).toHaveBeenCalledTimes(1);
@@ -295,12 +295,12 @@ describe("Dispatcher.handleRoute — re-fire when already ARMED", () => {
   it("same-type arm on an armed slot re-fires (audio plays twice)", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
     // Now ARMED. Another permission-request fires immediately, no fresh wait.
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     expect(audioPlayer.play).toHaveBeenCalledTimes(2);
     expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1); // re-arm dismisses prior
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(2);
@@ -312,15 +312,15 @@ describe("Dispatcher.handleRoute — ARMED → clear → re-arm lifecycle", () =
     const btn = makeButton("permission");
     buttons.set("perm", btn);
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000); // fire #1 → ARMED
     expect(btn.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
 
-    d.handleRoute("/event/post-tool-use"); // clears permission → IDLE
+    d.handleRoute("/event/post-tool-use", "sess-test"); // clears permission → IDLE
     expect(btn.dismiss).toHaveBeenCalledTimes(1);
 
-    d.handleRoute("/event/permission-request"); // re-arm → PENDING, not instant
+    d.handleRoute("/event/permission-request", "sess-test"); // re-arm → PENDING, not instant
     vi.advanceTimersByTime(999);
     expect(btn.alert).toHaveBeenCalledTimes(1); // not yet
     vi.advanceTimersByTime(1);
@@ -338,9 +338,9 @@ describe("Dispatcher.handleRoute — ARMED + zero-delay precedence", () => {
     const btn = makeButton("permission");
     buttons.set("perm", btn);
     const d = dispatcher();
-    d.handleRoute("/event/permission-request"); // fire #1 → ARMED, no timer
+    d.handleRoute("/event/permission-request", "sess-test"); // fire #1 → ARMED, no timer
     expect(btn.alert).toHaveBeenCalledTimes(1);
-    d.handleRoute("/event/permission-request"); // ARMED check wins; immediate re-fire
+    d.handleRoute("/event/permission-request", "sess-test"); // ARMED check wins; immediate re-fire
     expect(btn.dismiss).toHaveBeenCalledTimes(1); // re-fire dismisses the prior alert first
     expect(btn.alert).toHaveBeenCalledTimes(2);
     expect(audioPlayer.play).toHaveBeenCalledTimes(2);
@@ -356,7 +356,7 @@ describe("Dispatcher.handleRoute — delayMs = 0 opt-out", () => {
     globals.alertDelay.permission = 0;
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
   });
@@ -366,9 +366,9 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
   it("pre-tool-use cancels a pending stop alert (loop restarted without user input)", () => {
     buttons.set("a", makeButton("stop"));
     const d = dispatcher();
-    d.handleRoute("/event/stop");
+    d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/pre-tool-use");
+    d.handleRoute("/event/pre-tool-use", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
@@ -377,16 +377,16 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
   it("pre-tool-use dismisses an already-armed stop alert", () => {
     buttons.set("a", makeButton("stop", true));
     const d = dispatcher();
-    d.handleRoute("/event/pre-tool-use");
+    d.handleRoute("/event/pre-tool-use", "sess-test");
     expect(buttons.get("a")!.dismiss).toHaveBeenCalledTimes(1);
   });
 
   it("pre-tool-use does not affect a pending permission", () => {
     buttons.set("perm", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/pre-tool-use");
+    d.handleRoute("/event/pre-tool-use", "sess-test");
     vi.advanceTimersByTime(2000);
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
   });
@@ -397,7 +397,7 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500);
-    d.handleRoute("/event/pre-tool-use");
+    d.handleRoute("/event/pre-tool-use", "sess-test");
     vi.advanceTimersByTime(2000);
     expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
   });
@@ -407,8 +407,8 @@ describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
   it("unknown route is a silent no-op", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
-    d.handleRoute("/event/this-does-not-exist");
+    d.handleRoute("/event/permission-request", "sess-test");
+    d.handleRoute("/event/this-does-not-exist", "sess-test");
     vi.advanceTimersByTime(1000);
     // The pending permission still fires; the unknown route had no effect.
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
@@ -417,7 +417,7 @@ describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
   it("clearing route with no matching pending or armed state is a no-op", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/post-tool-use");
+    d.handleRoute("/event/post-tool-use", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("a")!.dismiss).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
@@ -435,7 +435,7 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
   it("returns null while pending (delay timer not yet elapsed)", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(500);
     expect(d.armedMsAgo("permission")).toBeNull();
   });
@@ -444,7 +444,7 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
     vi.setSystemTime(new Date("2026-05-09T00:00:00Z"));
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000); // fire at t=1000
     // Simulate Stream Deck page switch: button context is torn down.
     buttons.clear();
@@ -455,12 +455,12 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
   it("clearType wipes armed state even if the alerting button was off-page", () => {
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000);
     // Page switched away — buttons disappeared.
     buttons.clear();
     // Then a clearing route arrives (post-tool-use).
-    d.handleRoute("/event/post-tool-use");
+    d.handleRoute("/event/post-tool-use", "sess-test");
     expect(d.armedMsAgo("permission")).toBeNull();
   });
 
@@ -470,11 +470,11 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
     globals.alertDelay.stop = 0;
     globals.alertDelay.permission = 0;
     const d = dispatcher();
-    d.handleRoute("/event/stop");
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/stop", "sess-test");
+    d.handleRoute("/event/permission-request", "sess-test");
     expect(d.armedMsAgo("stop")).not.toBeNull();
     expect(d.armedMsAgo("permission")).not.toBeNull();
-    d.handleRoute("/event/session-start");
+    d.handleRoute("/event/session-start", "sess-test");
     expect(d.armedMsAgo("stop")).toBeNull();
     expect(d.armedMsAgo("permission")).toBeNull();
     expect(d.armedMsAgo("task-completed")).toBeNull();
@@ -484,11 +484,11 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
     vi.setSystemTime(new Date("2026-05-09T00:00:00Z"));
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000); // first fire at t=1000
     vi.advanceTimersByTime(3000); // t=4000, msAgo=3000
     expect(d.armedMsAgo("permission")).toBe(3000);
-    d.handleRoute("/event/permission-request"); // re-fire (already armed) → resets timestamp
+    d.handleRoute("/event/permission-request", "sess-test"); // re-fire (already armed) → resets timestamp
     expect(d.armedMsAgo("permission")).toBe(0);
   });
 });
@@ -498,7 +498,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio.permission.soundPath = "C:\\custom\\alert.wav";
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\alert.wav");
   });
@@ -507,7 +507,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     globals.audio.permission.soundPath = "";
     buttons.set("a", makeButton("permission"));
     const d = dispatcher();
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual still fires though.
@@ -555,8 +555,9 @@ describe("Dispatcher.handleRoute — counter directives", () => {
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created", "sess-test");
     expect(counter.increment).toHaveBeenCalledTimes(1);
+    expect(counter.increment).toHaveBeenCalledWith("sess-test");
     expect(counter.decrement).not.toHaveBeenCalled();
     expect(counter.reset).not.toHaveBeenCalled();
   });
@@ -565,7 +566,7 @@ describe("Dispatcher.handleRoute — counter directives", () => {
     // Existing tests construct dispatcher without taskCounter; this asserts
     // the new task-created route is a safe no-op when the counter isn't wired.
     const d = dispatcher();
-    expect(() => d.handleRoute("/event/task-created")).not.toThrow();
+    expect(() => d.handleRoute("/event/task-created", "sess-test")).not.toThrow();
   });
 
   it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
@@ -589,9 +590,10 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/session-start");
+    d.handleRoute("/event/session-start", "sess-test");
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalled();
     expect(counter.reset).toHaveBeenCalledTimes(1);
+    expect(counter.reset).toHaveBeenCalledWith("sess-test");
   });
 
   it("/event/user-prompt-submit does NOT call counter.reset (regression guard)", () => {
@@ -602,7 +604,7 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/user-prompt-submit");
+    d.handleRoute("/event/user-prompt-submit", "sess-test");
     expect(counter.reset).not.toHaveBeenCalled();
     expect(counter.increment).not.toHaveBeenCalled();
     expect(counter.decrement).not.toHaveBeenCalled();
@@ -617,9 +619,10 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/session-end");
+    d.handleRoute("/event/session-end", "sess-test");
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalled();
     expect(counter.reset).toHaveBeenCalledTimes(1);
+    expect(counter.reset).toHaveBeenCalledWith("sess-test");
   });
 
   it("/event/task-completed does not directly arm the task-completed alert", () => {
@@ -631,10 +634,11 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/task-completed");
+    d.handleRoute("/event/task-completed", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(counter.decrement).toHaveBeenCalledTimes(1);
+    expect(counter.decrement).toHaveBeenCalledWith("sess-test");
   });
 
   it("/event/task-created dismisses an active task-completed alert and increments counter", () => {
@@ -652,7 +656,7 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created", "sess-test");
     expect(armedTask.dismiss).toHaveBeenCalledTimes(1);
     expect(counter.increment).toHaveBeenCalledTimes(1);
   });
@@ -672,7 +676,7 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
     // Simulate the pending alert by calling fireTaskCompleted (enters PENDING).
     d.fireTaskCompleted();
     vi.advanceTimersByTime(500); // half the 1s delay
-    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created", "sess-test");
     vi.advanceTimersByTime(5000);
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     expect(counter.increment).toHaveBeenCalledTimes(1);
@@ -863,7 +867,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     });
     for (const source of ["startup", "clear", "compact", "resume", undefined, "rewind"]) {
       const derived = deriveRoute("/event/session-start", source, undefined, "s");
-      if (derived !== null) d.handleRoute(derived);
+      if (derived !== null) d.handleRoute(derived, "sess-test");
     }
     expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
   });
@@ -878,10 +882,10 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/permission-request"); // delay=0 → fires → ARMED (makeButton's
+    d.handleRoute("/event/permission-request", "sess-test"); // delay=0 → fires → ARMED (makeButton's
     // alert mock sets state.alerting = true, mirroring the real action)
     // Fire the soft route.
-    d.handleRoute("/event/session-start-soft");
+    d.handleRoute("/event/session-start-soft", "sess-test");
     // Zero counter calls.
     expect(counter.increment).not.toHaveBeenCalled();
     expect(counter.decrement).not.toHaveBeenCalled();
@@ -889,7 +893,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     // ARMED permission is NOT dismissed (clears: []).
     expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
     // Contrast: the hard route DOES dismiss it.
-    d.handleRoute("/event/session-start");
+    d.handleRoute("/event/session-start", "sess-test");
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
   });
 
@@ -910,7 +914,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     });
     const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "s");
     expect(derived).not.toBeNull();
-    d.handleRoute(derived!);
+    d.handleRoute(derived!, "s");
     expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
     // Decrement was called — the row was found and applied (not silently dropped).
     expect(counter.decrement).toHaveBeenCalledTimes(1);
@@ -929,8 +933,9 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
     // Drive via deriveRoute to use the same path as production.
     const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "s");
     expect(derived).not.toBeNull();
-    d.handleRoute(derived!);
+    d.handleRoute(derived!, "s");
     expect(counter.decrement).toHaveBeenCalledTimes(1);
+    expect(counter.decrement).toHaveBeenCalledWith("s"); // "s" is the sessionId from deriveRoute call above
     expect(counter.increment).not.toHaveBeenCalled();
     expect(counter.reset).not.toHaveBeenCalled();
   });
@@ -948,13 +953,13 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/permission-request"); // arms permission (delay=0 → ARMED immediately)
+    d.handleRoute("/event/permission-request", "sess-test"); // arms permission (delay=0 → ARMED immediately)
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
 
     // Teammate task-completed arrives with agentId.
     const derived = deriveRoute("/event/task-completed", undefined, "agt-teammate", "s");
     expect(derived).not.toBeNull();
-    d.handleRoute(derived!);
+    d.handleRoute(derived!, "s");
 
     // Permission is still ARMED — not cleared.
     expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
@@ -974,10 +979,10 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       taskCounter: counter,
     });
-    d.handleRoute("/event/permission-request");
+    d.handleRoute("/event/permission-request", "sess-test");
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
 
-    d.handleRoute("/event/task-completed"); // normal row, no agentId
+    d.handleRoute("/event/task-completed", "s"); // normal row, no agentId
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
     expect(d.armedMsAgo("permission")).toBeNull();
   });
@@ -993,19 +998,19 @@ describe("deriveRoute bug-repro regression — hard vs soft session-start counte
       taskCounter: counter,
     });
     // Simulate three increments (in-flight subagents).
-    d.handleRoute("/event/task-created");
-    d.handleRoute("/event/task-created");
-    d.handleRoute("/event/task-created");
+    d.handleRoute("/event/task-created", "sess-test");
+    d.handleRoute("/event/task-created", "sess-test");
+    d.handleRoute("/event/task-created", "sess-test");
     expect(counter.increment).toHaveBeenCalledTimes(3);
 
     // A compact/resume fires the soft route — must not reset.
     const softRoute = deriveRoute("/event/session-start", "compact", undefined, "s");
-    if (softRoute !== null) d.handleRoute(softRoute);
+    if (softRoute !== null) d.handleRoute(softRoute, "sess-test");
     expect(counter.reset).not.toHaveBeenCalled();
 
     // A genuine new session fires the hard route — must reset.
     const hardRoute = deriveRoute("/event/session-start", "startup", undefined, "s");
-    if (hardRoute !== null) d.handleRoute(hardRoute);
+    if (hardRoute !== null) d.handleRoute(hardRoute, "sess-test");
     expect(counter.reset).toHaveBeenCalledTimes(1);
   });
 });
@@ -1017,7 +1022,7 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     const btn = makeButton("permission");
     buttons.set("perm", btn);
     const d = dispatcher();
-    d.handleRoute("/event/permission-request"); // delay=0 → ARMED, btn.alert called
+    d.handleRoute("/event/permission-request", "sess-test"); // delay=0 → ARMED, btn.alert called
     expect(d.armedMsAgo("permission")).not.toBeNull();
     expect(btn.alert).toHaveBeenCalledTimes(1);
 
@@ -1043,7 +1048,7 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     const btn = makeButton("permission");
     buttons.set("perm", btn);
     const d = dispatcher();
-    d.handleRoute("/event/permission-request"); // default 1s delay → PENDING
+    d.handleRoute("/event/permission-request", "sess-test"); // default 1s delay → PENDING
     vi.advanceTimersByTime(500);
     expect(btn.alert).not.toHaveBeenCalled();
 
@@ -1062,12 +1067,12 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     const btn = makeButton("permission");
     buttons.set("perm", btn);
     const d = dispatcher();
-    d.handleRoute("/event/permission-request"); // ARMED immediately
+    d.handleRoute("/event/permission-request", "sess-test"); // ARMED immediately
     d.dismissArmed("permission"); // → IDLE
 
     // Restore normal delay for the re-arm.
     globals.alertDelay.permission = 1000;
-    d.handleRoute("/event/permission-request"); // must re-enter PENDING, not fire instantly
+    d.handleRoute("/event/permission-request", "sess-test"); // must re-enter PENDING, not fire instantly
 
     // At 999ms: not yet fired.
     vi.advanceTimersByTime(999);
@@ -1088,8 +1093,8 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     buttons.set("perm", permBtn);
     globals.alertDelay.stop = 0; // stop fires immediately → ARMED
     const d = dispatcher();
-    d.handleRoute("/event/stop"); // ARMED immediately
-    d.handleRoute("/event/permission-request"); // 1s delay → PENDING
+    d.handleRoute("/event/stop", "sess-test"); // ARMED immediately
+    d.handleRoute("/event/permission-request", "sess-test"); // 1s delay → PENDING
 
     d.dismissArmed("stop"); // must not touch permission
 
@@ -1110,8 +1115,8 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     buttons.set("stop", stopBtn);
     buttons.set("perm", permBtn);
     const d = dispatcher();
-    d.handleRoute("/event/stop"); // ARMED
-    d.handleRoute("/event/permission-request"); // ARMED
+    d.handleRoute("/event/stop", "sess-test"); // ARMED
+    d.handleRoute("/event/permission-request", "sess-test"); // ARMED
 
     d.dismissArmed("stop");
 
@@ -1120,5 +1125,69 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     // permission stays armed
     expect(d.armedMsAgo("permission")).not.toBeNull();
     expect(permBtn.dismiss).not.toHaveBeenCalled();
+  });
+});
+
+describe("Dispatcher.handleRoute — sessionId is forwarded to counter methods", () => {
+  it("handleRoute passes the sessionId to counter.increment for /event/task-created", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-created", "session-abc");
+    expect(counter.increment).toHaveBeenCalledWith("session-abc");
+  });
+
+  it("handleRoute passes the sessionId to counter.decrement for /event/task-completed", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/task-completed", "session-xyz");
+    expect(counter.decrement).toHaveBeenCalledWith("session-xyz");
+  });
+
+  it("handleRoute passes the sessionId to counter.decrement for the TASK_COMPLETED_AGENT synthetic row", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "session-pqr");
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!, "session-pqr");
+    expect(counter.decrement).toHaveBeenCalledWith("session-pqr");
+  });
+
+  it("handleRoute passes the sessionId to counter.reset for /event/session-start", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/session-start", "session-lmn");
+    expect(counter.reset).toHaveBeenCalledWith("session-lmn");
+  });
+
+  it("handleRoute passes the sessionId to counter.reset for /event/session-end", () => {
+    const counter = fakeCounter();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      taskCounter: counter,
+    });
+    d.handleRoute("/event/session-end", "session-lmn");
+    expect(counter.reset).toHaveBeenCalledWith("session-lmn");
   });
 });
