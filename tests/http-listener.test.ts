@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "node:http";
-import { HttpListener } from "../src/http-listener.js";
+import net from "node:net";
+import { HttpListener, ACTION_ROUTES as ACTION_ROUTES_SET, INFO_ROUTES as INFO_ROUTES_SET } from "../src/http-listener.js";
+
+// Derived arrays for it.each (which requires an iterable of primitives, not a Set).
+const ACTION_ROUTES = [...ACTION_ROUTES_SET];
+const INFO_ROUTES = [...INFO_ROUTES_SET];
 
 let listener: HttpListener | undefined;
 let received: string[];
@@ -78,41 +83,6 @@ async function requestWithHeaders(
     req.end();
   });
 }
-
-const ACTION_ROUTES = [
-  "/event/stop",
-  "/event/stop-failure",
-  "/event/permission-request",
-  "/event/task-completed",
-  "/event/task-created",
-  "/event/session-start",
-  "/event/user-prompt-submit",
-  "/event/permission-denied",
-  "/event/post-tool-use",
-  "/event/post-tool-use-failure",
-  "/event/pre-tool-use",
-  "/event/session-end",
-];
-
-const INFO_ROUTES = [
-  "/event/notification",
-  "/event/post-tool-batch",
-  "/event/subagent-start",
-  "/event/subagent-stop",
-  "/event/setup",
-  "/event/instructions-loaded",
-  "/event/user-prompt-expansion",
-  "/event/teammate-idle",
-  "/event/config-change",
-  "/event/cwd-changed",
-  "/event/file-changed",
-  "/event/worktree-create",
-  "/event/worktree-remove",
-  "/event/pre-compact",
-  "/event/post-compact",
-  "/event/elicitation",
-  "/event/elicitation-result",
-];
 
 const REMOVED_ROUTES = [
   "/event/permission",
@@ -220,6 +190,16 @@ describe("HttpListener", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const addr = (listener as any).server.address();
     expect(addr.address).toBe("127.0.0.1");
+  });
+
+  it("resolvedPort field is set after start() and matches port()", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const field = (listener as any).resolvedPort as number;
+    expect(typeof field).toBe("number");
+    expect(field).toBeGreaterThan(0);
+    expect(field).toBe(listener.port());
   });
 
   it("POST with empty body on a signal route emits WARN and INFO result with session=? cwd=?", async () => {
@@ -519,5 +499,128 @@ describe("HttpListener — session-id warn on action routes", () => {
     await new Promise((r) => setTimeout(r, 20));
     const sessionWarn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
     expect(sessionWarn).toBeUndefined();
+  });
+});
+
+describe("HttpListener — warn suffix on info routes", () => {
+  it("POST with empty body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await request("POST", "/event/notification", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with unparseable body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await requestWithBody("POST", "/event/notification", listener.port(), "not-json");
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("unparseable body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with oversize body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const big = "{" + '"a":"' + "x".repeat(65 * 1024) + '"}';
+    await requestWithBody("POST", "/event/notification", listener.port(), big);
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("oversize body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with empty body on an action route still emits WARN with '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await request("POST", "/event/stop", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).toContain("(session_id required)");
+    expect(warn!.msg).not.toContain("(no usable body)");
+  });
+});
+
+describe("HttpListener — connection-lifetime timeouts", () => {
+  // Helper: open a raw TCP socket to the listener port and return it.
+  // The caller controls what (if anything) is written.
+  const openedSockets: net.Socket[] = [];
+  function openRawSocket(port: number): Promise<net.Socket> {
+    return new Promise((resolve, reject) => {
+      const sock = net.createConnection({ host: "127.0.0.1", port });
+      openedSockets.push(sock);
+      sock.once("connect", () => resolve(sock));
+      sock.once("error", reject);
+    });
+  }
+
+  afterEach(() => {
+    for (const sock of openedSockets.splice(0)) {
+      if (!sock.destroyed) sock.destroy();
+    }
+  });
+
+  it("destroys a completely idle socket after idleTimeoutMs", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 80,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    const sock = await openRawSocket(port);
+    // Send nothing — pure idle connection.
+    const t0 = Date.now();
+    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
+    const elapsed = Date.now() - t0;
+    // Should have been destroyed within ~3× the timeout (generous for CI jitter).
+    expect(elapsed).toBeGreaterThanOrEqual(60);
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it("destroys a socket that sends one byte and then goes idle within idleTimeoutMs", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 80,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    // Connect, wait ~50 ms (well inside the 80 ms window), then write one byte.
+    // The idle timer resets on the received data; the socket should close only
+    // after a fresh ~80 ms of silence, so total elapsed since connect must be
+    // >= ~130 ms (50 ms wait + most of the fresh window) and < 500 ms.
+    const t0 = Date.now();
+    const sock = await openRawSocket(port);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    sock.write("P");
+    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeGreaterThanOrEqual(100);
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it("does NOT destroy a normal fast POST before idleTimeoutMs fires", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 200,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    const body = JSON.stringify({ session_id: "fast-test" });
+    const res = await requestWithBody("POST", "/event/stop", port, body);
+    expect(res.status).toBe(204);
   });
 });
