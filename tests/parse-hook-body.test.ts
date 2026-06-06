@@ -136,4 +136,36 @@ describe("makeBodyBuffer", () => {
       body: { sessionId: undefined, cwd: undefined, message: undefined, source: undefined, agentId: undefined },
     });
   });
+
+  it("extracts taskId when task_id is a string", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", task_id: "task-xyz-001" })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: {
+        sessionId: "abc",
+        cwd: undefined,
+        message: undefined,
+        source: undefined,
+        agentId: undefined,
+        taskId: "task-xyz-001",
+      },
+    });
+  });
+
+  it("returns undefined for taskId when task_id is a number or missing", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ task_id: 42 })));
+    expect(buf.finish()).toEqual({
+      kind: "parsed",
+      body: {
+        sessionId: undefined,
+        cwd: undefined,
+        message: undefined,
+        source: undefined,
+        agentId: undefined,
+        taskId: undefined,
+      },
+    });
+  });
 });

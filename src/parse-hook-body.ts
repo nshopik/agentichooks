@@ -4,6 +4,7 @@ export type ParsedBody = {
   message?: string;
   source?: string;
   agentId?: string;
+  taskId?: string;
 };
 
 export type BodyOutcome =
@@ -37,6 +38,7 @@ export function makeBodyBuffer(maxBytes = 64 * 1024) {
             message: typeof json.message === "string" ? json.message : undefined,
             source: typeof json.source === "string" ? json.source : undefined,
             agentId: typeof json.agent_id === "string" ? json.agent_id : undefined,
+            taskId: typeof json.task_id === "string" ? json.task_id : undefined,
           },
         };
       } catch {
