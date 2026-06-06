@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
   same HTTP transport as real Claude Code hooks. Useful for manual alert
   replays and Stream Deck multi-actions. Select the target route in the
   Property Inspector; the key shows a tick on success or an alert cross on
-  failure (e.g. listener not running). (#N)
+  failure (e.g. listener not running). (#35)
 
 ### Security
 
