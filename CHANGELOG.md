@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+### Security
+
+- The HTTP listener now destroys connections that stay idle for 5 seconds
+  (no data flowing in either direction). Previously a peer reached over an SSH
+  remote forward could hold sockets open indefinitely (slowloris); the 64 KB
+  body cap bounded memory but not connection lifetime. Normal Claude Code
+  hooks (2-second client timeout) are unaffected. (#28)
+
 ### Breaking
 
 - Action-route POSTs without a `session_id` body field are now dropped with a warn
@@ -22,6 +30,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Warn logs for empty/unparseable/oversize POST bodies on info-only routes
+  (e.g. `/event/notification`) no longer carry the misleading
+  `(session_id required)` suffix — info routes are never session-gated; they
+  now log `(no usable body)` instead. Action routes keep the original
+  suffix. (#28)
 - Dismissing an alert (pressing the lit button, or the per-button auto-timeout
   expiring) now clears the alert for the whole event type — previously only the
   visible button was cleared, so a dismissed alert came back after a page or
