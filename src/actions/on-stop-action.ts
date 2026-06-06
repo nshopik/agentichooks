@@ -48,7 +48,7 @@ export class OnStopAction extends EventFlashAction {
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
     for (const [, ctx] of this.contexts) {
       if (ctx.settings.animateThinking !== false) {
-        void ctx.setImage(renderThinkingIcon(frameGlyph), 0);
+        void ctx.setImage(renderThinkingIcon(frameGlyph, null), 0);
       }
     }
   }
@@ -91,6 +91,6 @@ export class OnStopAction extends EventFlashAction {
     // Thinking active + enabled: repaint current frame.
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
-    void ctx.setImage(renderThinkingIcon(frameGlyph), 0);
+    void ctx.setImage(renderThinkingIcon(frameGlyph, null), 0);
   }
 }
