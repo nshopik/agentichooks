@@ -50,7 +50,7 @@ function Write-Settings($obj) {
     } catch {
         # Clean up temp file on failure so no partial file lingers.
         if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
-        throw
+        throw "Failed to write $settingsPath (is the file locked by another process, e.g. an AV scanner?): $($_.Exception.Message)"
     }
 }
 
