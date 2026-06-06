@@ -36,6 +36,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- A garbage `flashMode` value arriving from the Property Inspector (anything
+  but `"static"`/`"pulse"`) now collapses to the default instead of flowing
+  through typed as valid and silently breaking pulse handling. (#31)
 - Rapid arm→clear→arm cycling (e.g. alternating `permission-request`/
   `permission-denied`) no longer spawns overlapping sound processes — the
   audio player now skips `play()` while a previous sound is still playing

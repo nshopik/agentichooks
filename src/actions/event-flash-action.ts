@@ -11,6 +11,7 @@ import type { JsonObject, JsonValue } from "@elgato/utils";
 import {
   DEFAULT_AUTO_TIMEOUT_BY_EVENT,
   DEFAULT_FLASH_SETTINGS,
+  normalizeFlashMode,
   type EventType,
   type FlashSettings,
   type ButtonState,
@@ -190,7 +191,7 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       timeoutMs = DEFAULT_AUTO_TIMEOUT_BY_EVENT[this.eventType];
     }
     return {
-      flashMode: r.flashMode ?? DEFAULT_FLASH_SETTINGS.flashMode,
+      flashMode: normalizeFlashMode(r.flashMode),
       pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
       autoTimeoutMs: timeoutMs,
       animateCounter: r.animateCounter,
