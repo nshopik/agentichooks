@@ -2,9 +2,14 @@
 # Idempotently installs Claude Code hooks that signal the Agentic Hooks Stream Deck plugin.
 # Installs 29 Claude Code hooks: 11 action events (flash/audio/clear) + 18 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
+#           powershell -ExecutionPolicy Bypass -File install-hooks.ps1 -SettingsPath C:\custom\path\settings.json
+[CmdletBinding()]
+param(
+    [string]$SettingsPath = (Join-Path $env:USERPROFILE ".claude\settings.json")
+)
 
 $ErrorActionPreference = "Stop"
-$settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
+$settingsPath = $SettingsPath
 $marker = "_agentic-hooks-installer"
 $CURRENT_VERSION = "v2"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
@@ -21,8 +26,32 @@ function Read-Settings {
 function Write-Settings($obj) {
     $dir = Split-Path $settingsPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    $json = $obj | ConvertTo-Json -Depth 10
-    Set-Content -Path $settingsPath -Value $json -Encoding UTF8
+    # Resolve to absolute path so [System.IO.File]::WriteAllText (which uses .NET's
+    # working directory, not PowerShell's) always receives an absolute path — even
+    # if the caller passed a relative -SettingsPath.  The directory was just ensured
+    # to exist above, so Resolve-Path will always succeed here.
+    $dir = (Resolve-Path -LiteralPath $dir).Path
+    $json = $obj | ConvertTo-Json -Depth 100
+    # Write atomically: write to a temp file in the SAME directory as the target
+    # (same-directory guarantees the rename is on the same volume, which makes
+    # Move-Item atomic on Windows; cross-volume would fall back to copy+delete).
+    # Use [System.IO.File]::WriteAllText so encoding is identical under both
+    # Windows PowerShell 5.1 and pwsh 7 (UTF-8 without BOM).
+    # The "settings.json.*.tmp" naming makes orphans from a crashed run
+    # recognizable (vs. an opaque random name).
+    $tmp = Join-Path $dir ("settings.json." + [System.IO.Path]::GetRandomFileName() + ".tmp")
+    try {
+        [System.IO.File]::WriteAllText(
+            $tmp,
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        Move-Item -Path $tmp -Destination $settingsPath -Force
+    } catch {
+        # Clean up temp file on failure so no partial file lingers.
+        if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        throw "Failed to write $settingsPath (is the file locked by another process, e.g. an AV scanner?): $($_.Exception.Message)"
+    }
 }
 
 function Get-OrAdd-Property($obj, $name, $default) {

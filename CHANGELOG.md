@@ -43,6 +43,16 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- `install-hooks.ps1` now writes `settings.json` atomically via a temp file in
+  the same directory followed by `Move-Item -Force`, eliminating the corruption
+  window between `Set-Content`'s truncate and write phases. `ConvertTo-Json
+  -Depth` is raised from 10 to 100, preventing silent data loss for settings
+  nested deeper than 10 levels. The file is now written as UTF-8 **without
+  BOM** (`Set-Content -Encoding UTF8` wrote a BOM under Windows PowerShell
+  5.1). `install-hooks.sh` was verified to already write atomically via
+  temp-file-then-rename. Both installers gained a settings-path override
+  (`-SettingsPath` / `SETTINGS_PATH`) and vitest suites that exercise the real
+  scripts against temp directories. (#34)
 - A garbage `flashMode` value arriving from the Property Inspector (anything
   but `"static"`/`"pulse"`) now collapses to the default instead of flowing
   through typed as valid and silently breaking pulse handling. (#31)
