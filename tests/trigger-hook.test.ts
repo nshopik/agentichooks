@@ -5,6 +5,7 @@ import {
   normalizeTriggerRoute,
   TRIGGER_ROUTES,
 } from "../src/trigger-hook.js";
+import { ACTION_ROUTES } from "../src/http-listener.js";
 
 // ─────────────────────────────────────────────────────────
 // buildTriggerRequest
@@ -51,7 +52,7 @@ describe("buildTriggerRequest", () => {
 
 describe("sendTrigger", () => {
   it("calls fetch with the URL and init from buildTriggerRequest", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response);
+    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     await sendTrigger("/event/stop", fakeFetch);
     expect(fakeFetch).toHaveBeenCalledOnce();
     const [url, init] = fakeFetch.mock.calls[0] as [string, RequestInit];
@@ -60,13 +61,13 @@ describe("sendTrigger", () => {
   });
 
   it("returns {ok: true, status: 204} when fetch resolves with a 2xx response", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response);
+    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     const result = await sendTrigger("/event/stop", fakeFetch);
     expect(result).toEqual({ ok: true, status: 204 });
   });
 
   it("returns {ok: false, status: 404} when fetch resolves with a 4xx response", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue({ ok: false, status: 404 } as Response);
+    const fakeFetch = vi.fn().mockResolvedValue({ ok: false, status: 404 });
     const result = await sendTrigger("/event/stop", fakeFetch);
     expect(result).toEqual({ ok: false, status: 404 });
   });
@@ -78,7 +79,7 @@ describe("sendTrigger", () => {
   });
 
   it("passes the route through to the URL even if it is not in TRIGGER_ROUTES", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 } as Response);
+    const fakeFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     await sendTrigger("/event/unknown-route", fakeFetch);
     const [url] = fakeFetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("http://127.0.0.1:9123/event/unknown-route");
@@ -150,5 +151,9 @@ describe("TRIGGER_ROUTES", () => {
 
   it("contains /event/session-start", () => {
     expect(TRIGGER_ROUTES).toContain("/event/session-start");
+  });
+
+  it("equals the sorted ACTION_ROUTES set (derivation pin)", () => {
+    expect([...TRIGGER_ROUTES]).toEqual([...ACTION_ROUTES].sort());
   });
 });
