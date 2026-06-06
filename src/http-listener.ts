@@ -169,17 +169,20 @@ export class HttpListener {
       isSignal ? this.opts.log?.info(msg) : this.opts.log?.debug(msg);
 
     if (outcome.kind === "empty") {
-      this.opts.log?.warn(`POST with empty body route=${url} (session_id required)`);
+      const suffix = isAction ? "(session_id required)" : "(no usable body)";
+      this.opts.log?.warn(`POST with empty body route=${url} ${suffix}`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
     if (outcome.kind === "unparseable") {
-      this.opts.log?.warn(`POST with unparseable body route=${url} (session_id required)`);
+      const suffix = isAction ? "(session_id required)" : "(no usable body)";
+      this.opts.log?.warn(`POST with unparseable body route=${url} ${suffix}`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
     if (outcome.kind === "oversize") {
-      this.opts.log?.warn(`POST with oversize body route=${url} (>64 KB) (session_id required)`);
+      const suffix = isAction ? "(session_id required)" : "(no usable body)";
+      this.opts.log?.warn(`POST with oversize body route=${url} (>64 KB) ${suffix}`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }

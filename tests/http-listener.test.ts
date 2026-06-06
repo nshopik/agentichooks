@@ -533,6 +533,53 @@ describe("HttpListener — session-id warn on action routes", () => {
   });
 });
 
+describe("HttpListener — warn suffix on info routes", () => {
+  it("POST with empty body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await request("POST", "/event/notification", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with unparseable body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await requestWithBody("POST", "/event/notification", listener.port(), "not-json");
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("unparseable body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with oversize body on an info route emits WARN without '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const big = "{" + '"a":"' + "x".repeat(65 * 1024) + '"}';
+    await requestWithBody("POST", "/event/notification", listener.port(), big);
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("oversize body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("(session_id required)");
+    expect(warn!.msg).toContain("(no usable body)");
+  });
+
+  it("POST with empty body on an action route still emits WARN with '(session_id required)' suffix", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await request("POST", "/event/stop", listener.port());
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).toContain("(session_id required)");
+    expect(warn!.msg).not.toContain("(no usable body)");
+  });
+});
+
 describe("HttpListener — connection-lifetime timeouts", () => {
   // Helper: open a raw TCP socket to the listener port and return it.
   // The caller controls what (if anything) is written.
