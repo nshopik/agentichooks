@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Removed
+
+- **Trigger Hook action** — the debug-only fourth button that POSTed hook routes
+  on key press. The manual curl playbook covers the same need without shipping a
+  debug surface; removal also pre-empts special-casing its synthetic
+  `session_id: "streamdeck-trigger"` in the upcoming session-scoped alert
+  clearing. Keys still assigned to it will show a missing-action placeholder
+  after update. (#43)
+
 ### Added
 
 - **Elapsed turn time on the On Stop button** — a live timer starts on
