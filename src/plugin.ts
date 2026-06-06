@@ -76,13 +76,17 @@ const actionOpts: EventFlashActionOpts = {
   // dismisses every alerting button of that type (type-wide semantics). Same
   // circular-reference dance as armedMsAgo / currentCount.
   onDismissed: (eventType): void => dispatcher.dismissArmed(eventType),
+  // Lazy lookup against the Dispatcher so OnStopAction and OnPermissionAction
+  // can compute the cwd title while armed. Dispatcher constructed below.
+  armedContext: (eventType) => dispatcher.armedContext(eventType),
 };
 
 const stopAction = new OnStopAction(actionOpts);
+const permissionAction = new OnPermissionAction(actionOpts);
 const taskCompletedAction = new OnTaskCompletedAction(actionOpts);
 const actions = [
   stopAction,
-  new OnPermissionAction(actionOpts),
+  permissionAction,
   taskCompletedAction,
 ];
 for (const a of actions) streamDeck.actions.registerAction(a);
@@ -132,7 +136,7 @@ const taskCounters = {
     // onSessionDrained fires BEFORE onChanged(sum) per spec contract —
     // dispatcher.fireTaskCompleted() is called first so ARMED state is set
     // before the visual layer's broadcastCounts queries it.
-    onSessionDrained: () => dispatcher.fireTaskCompleted(),
+    onSessionDrained: (sid) => dispatcher.fireTaskCompleted(sid),
     onChanged: (n) => taskCompletedAction.broadcastCounts(n, taskCounters.subagents.sum()),
     log: makeLogger("counter"),
   }),
@@ -164,6 +168,13 @@ const dispatcher = new Dispatcher({
     return merged;
   },
   log: dispatchLog,
+  onArmedChanged: (type) => {
+    // Broadcast the updated title to all buttons of the affected type.
+    // Only stop and permission actions have broadcastAlertTitle — task-completed
+    // uses a count badge (no title) and has no consumer for this callback.
+    if (type === "stop") stopAction.broadcastAlertTitle();
+    else if (type === "permission") permissionAction.broadcastAlertTitle();
+  },
   counters: {
     tasks: taskCounters.tasks,
     subagents: taskCounters.subagents,
@@ -189,7 +200,7 @@ async function startListener(): Promise<void> {
         }
         return;
       }
-      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId });
+      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId, cwd: body?.cwd });
     },
     log: makeLogger("http"),
   });

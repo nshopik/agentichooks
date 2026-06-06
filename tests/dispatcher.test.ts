@@ -169,7 +169,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("stop", makeButton("stop"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -221,7 +221,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -240,7 +240,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/session-start", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -257,7 +257,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/user-prompt-submit", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -283,7 +283,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/session-end", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -409,7 +409,7 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/pre-tool-use", "sess-test");
     vi.advanceTimersByTime(2000);
@@ -532,7 +532,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual flash still fires.
@@ -544,7 +544,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
@@ -554,7 +554,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -586,7 +586,7 @@ describe("Dispatcher.handleRoute — counter directives", () => {
   it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(999);
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
@@ -696,7 +696,7 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       counters,
     });
     // Simulate the pending alert by calling fireTaskCompleted (enters PENDING).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500); // half the 1s delay
     d.handleRoute("/event/task-created", "sess-test", { taskId: "task-1" });
     vi.advanceTimersByTime(5000);
@@ -993,7 +993,7 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
     d.handleRoute("/event/permission-request", "sess-test");
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
 
-    d.handleRoute("/event/task-completed", "s", { taskId: "task-abc" }); // normal row, no agentId
+    d.handleRoute("/event/task-completed", "sess-test", { taskId: "task-abc" }); // normal row, same session
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
     expect(d.armedMsAgo("permission")).toBeNull();
   });
@@ -1407,5 +1407,287 @@ describe("Dispatcher.handleRoute — per-metric id selection", () => {
     const d = dispatcher(); // no counters
     expect(() => d.handleRoute("/event/task-created", "sess-test", { taskId: "t1" })).not.toThrow();
     expect(() => d.handleRoute("/event/user-prompt-submit", "sess-test")).not.toThrow();
+  });
+});
+
+describe("Dispatcher — session-scoped alert clearing (new)", () => {
+  // Test 1: B's clearing route does not dismiss A's armed alert
+  it("session B post-tool-use does NOT dismiss session A's armed permission alert", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/post-tool-use", "sess-B");
+    expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+  });
+
+  // Test 2: Own-session clear works correctly
+  it("session A's own post-tool-use clears its armed permission", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/post-tool-use", "sess-A");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  // Test 3: dismissArmed wipes all sessions and cancels per-session pending timers (iteration pin)
+  it("dismissArmed clears all sessions for a type and cancels every per-session pending timer", () => {
+    buttons.set("perm", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A"); // PENDING (1s default delay)
+    d.handleRoute("/event/permission-request", "sess-B"); // PENDING independently
+    // Neither has fired yet
+    expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
+
+    d.dismissArmed("permission");
+
+    // Advance well past the delay — neither timer should fire
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("perm")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  // Test 4: Per-session pending cancellation — own session only
+  it("session A's clearing route cancels only A's pending timer; B's still fires", () => {
+    buttons.set("perm", makeButton("permission"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A"); // PENDING
+    d.handleRoute("/event/permission-request", "sess-B"); // PENDING
+    vi.advanceTimersByTime(500);
+
+    d.handleRoute("/event/post-tool-use", "sess-A"); // cancels A only
+
+    vi.advanceTimersByTime(1000); // B fires at t≈1000
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1); // only B fired
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    // armedMsAgo is non-null because B is armed
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+  });
+
+  // Test 5: Independent pending timers — B arms while A is PENDING (edge #6)
+  it("B arming the same type while A is PENDING → two independent fires", () => {
+    buttons.set("perm", makeButton("permission"));
+    const d = dispatcher();
+    globals.alertDelay.permission = 1000;
+    d.handleRoute("/event/permission-request", "sess-A"); // PENDING, fires at t=1000
+    vi.advanceTimersByTime(500);
+    d.handleRoute("/event/permission-request", "sess-B"); // PENDING, fires at t=1500
+    vi.advanceTimersByTime(500); // total t=1000 → A fires
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1); // A fired
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000); // total t=2000 (B fired at t=1500)
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(2); // B fired
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+  });
+
+  // Test 6: B arms while A is ARMED → armedContext count=2, latest cwd=B, audio replays (edge #8)
+  it("B arming while A already ARMED → armedContext count=2, audio plays again", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A"); // ARMED immediately
+    const ctx1 = d.armedContext("permission");
+    expect(ctx1).not.toBeNull();
+    expect(ctx1!.count).toBe(1);
+
+    d.handleRoute("/event/permission-request", "sess-B"); // re-fires; B is latest
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+    const ctx2 = d.armedContext("permission");
+    expect(ctx2).not.toBeNull();
+    expect(ctx2!.count).toBe(2);
+  });
+
+  // Test 7: armedMsAgo latest-wins — latest session's armedAt is used
+  it("armedMsAgo returns time since the latest session's armedAt", () => {
+    vi.setSystemTime(new Date("2026-06-06T00:00:00Z"));
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A"); // armed at t=0
+    vi.advanceTimersByTime(3000); // t=3000
+    d.handleRoute("/event/permission-request", "sess-B"); // armed at t=3000 → latest
+    // armedMsAgo should be ~0 (latest wins), not ~3000 (A's time)
+    expect(d.armedMsAgo("permission")).toBe(0);
+  });
+
+  // Test 8: armedMsAgo null after last session entry is removed (prune-on-empty pin)
+  it("armedMsAgo is null after the last armed session entry is cleared", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A");
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+
+    d.handleRoute("/event/post-tool-use", "sess-A"); // clear A's entry
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  // Test 9: Same-session re-fire replay still works per-session (existing pin, now per-session)
+  it("same-session re-arm on an already-ARMED type re-fires audio (per-session re-fire)", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A");
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    d.handleRoute("/event/permission-request", "sess-A"); // re-fire same session
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1); // dismiss before re-alert
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(2);
+  });
+
+  // Test 10: fireTaskCompleted(sessionId) arms only that session; clearing routes are
+  // session-scoped — B's session-end must NOT clear A's entry (spec edge #4).
+  it("fireTaskCompleted(sessionId) arms only the given session; B's session-end does NOT clear A", () => {
+    buttons.set("task", makeButton("task-completed"));
+    globals.alertDelay["task-completed"] = 0; // fire immediately — this test is about scoping, not timing
+    const d = dispatcher();
+    d.fireTaskCompleted("sess-A");
+    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("task-completed")).not.toBeNull();
+
+    d.handleRoute("/event/session-end", "sess-B"); // B's clear is scoped to B
+    expect(d.armedMsAgo("task-completed")).not.toBeNull(); // A still armed
+    expect(buttons.get("task")!.dismiss).not.toHaveBeenCalled();
+
+    d.handleRoute("/event/session-end", "sess-A"); // A's own clear removes A
+    expect(d.armedMsAgo("task-completed")).toBeNull();
+    expect(buttons.get("task")!.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  // Test 10b: B's pre-tool-use does not clear A's armed stop alert
+  it("session B's pre-tool-use does not clear A's armed stop alert", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-A");
+    expect(d.armedMsAgo("stop")).not.toBeNull();
+
+    d.handleRoute("/event/pre-tool-use", "sess-B"); // B's pre-tool-use clears B's stop only
+    expect(d.armedMsAgo("stop")).not.toBeNull(); // A's still armed
+    expect(buttons.get("stop")!.dismiss).not.toHaveBeenCalled();
+  });
+
+  // Test 11: onArmedChanged fires exactly once per ARMED-map mutation, never on PENDING
+  it("onArmedChanged fires once when an entry is added to armed (not on pending entry)", () => {
+    const onArmedChanged = vi.fn<(type: EventType) => void>();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      onArmedChanged,
+    });
+    // PENDING: should NOT fire onArmedChanged
+    d.handleRoute("/event/permission-request", "sess-A"); // enters PENDING (1s delay)
+    expect(onArmedChanged).not.toHaveBeenCalled();
+    // ARMED: fires once
+    vi.advanceTimersByTime(1000);
+    expect(onArmedChanged).toHaveBeenCalledTimes(1);
+    expect(onArmedChanged).toHaveBeenCalledWith("permission");
+  });
+
+  it("onArmedChanged fires once when clearType removes an armed entry", () => {
+    const onArmedChanged = vi.fn<(type: EventType) => void>();
+    globals.alertDelay.permission = 0;
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      onArmedChanged,
+    });
+    d.handleRoute("/event/permission-request", "sess-A"); // fires immediately → ARMED, onArmedChanged called once
+    onArmedChanged.mockClear();
+    d.handleRoute("/event/post-tool-use", "sess-A"); // removes entry → onArmedChanged called once more
+    expect(onArmedChanged).toHaveBeenCalledTimes(1);
+    expect(onArmedChanged).toHaveBeenCalledWith("permission");
+  });
+
+  it("onArmedChanged fires once on dismissArmed when the armed map was non-empty", () => {
+    const onArmedChanged = vi.fn<(type: EventType) => void>();
+    globals.alertDelay.permission = 0;
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      onArmedChanged,
+    });
+    d.handleRoute("/event/permission-request", "sess-A");
+    onArmedChanged.mockClear();
+    d.dismissArmed("permission");
+    expect(onArmedChanged).toHaveBeenCalledTimes(1);
+    expect(onArmedChanged).toHaveBeenCalledWith("permission");
+  });
+
+  it("onArmedChanged does NOT fire on dismissArmed when no sessions were armed (IDLE dismissal)", () => {
+    const onArmedChanged = vi.fn<(type: EventType) => void>();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      onArmedChanged,
+    });
+    d.dismissArmed("permission"); // IDLE → no-op
+    expect(onArmedChanged).not.toHaveBeenCalled();
+  });
+
+  // Test 12: armedContext null when no sessions armed; count+latestCwd correct when armed
+  it("armedContext returns null when no sessions are armed", () => {
+    const d = dispatcher();
+    expect(d.armedContext("permission")).toBeNull();
+    expect(d.armedContext("stop")).toBeNull();
+    expect(d.armedContext("task-completed")).toBeNull();
+  });
+
+  it("armedContext returns correct count and latestCwd for one armed session", () => {
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    // handleRoute widened ctx param — pass cwd via ctx
+    d.handleRoute("/event/permission-request", "sess-A", { cwd: "/home/user/my-project" });
+    const ctx = d.armedContext("permission");
+    expect(ctx).not.toBeNull();
+    expect(ctx!.count).toBe(1);
+    expect(ctx!.latestCwd).toBe("/home/user/my-project");
+  });
+
+  it("armedContext latestCwd is from the most recently armed session (latest-wins)", () => {
+    vi.setSystemTime(new Date("2026-06-06T00:00:00Z"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A", { cwd: "/repos/alpha" });
+    vi.advanceTimersByTime(100);
+    d.handleRoute("/event/permission-request", "sess-B", { cwd: "/repos/beta" }); // armed later
+    const ctx = d.armedContext("permission");
+    expect(ctx!.count).toBe(2);
+    expect(ctx!.latestCwd).toBe("/repos/beta");
+  });
+
+  // Edge #5 pin: both sessions ARMED, one clears → key stays lit, no dismiss,
+  // armedContext flips to the remaining session, audio does not replay.
+  it("clearing one of two ARMED sessions keeps the key lit and does not dismiss", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A", { cwd: "/repos/alpha" });
+    d.handleRoute("/event/permission-request", "sess-B", { cwd: "/repos/beta" });
+    // B's arm pulse-restarts: one dismiss+re-alert so far
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+
+    d.handleRoute("/event/post-tool-use", "sess-A"); // A clears; B remains ARMED
+
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1); // unchanged — key stays lit
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2); // no replay on clear
+    const ctx = d.armedContext("permission");
+    expect(ctx).not.toBeNull();
+    expect(ctx!.count).toBe(1);
+    expect(ctx!.latestCwd).toBe("/repos/beta");
+    expect(d.armedMsAgo("permission")).not.toBeNull();
   });
 });
