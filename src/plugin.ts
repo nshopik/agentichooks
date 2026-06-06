@@ -4,6 +4,7 @@ import type { JsonObject } from "@elgato/utils";
 import { OnStopAction } from "./actions/on-stop-action.js";
 import { OnPermissionAction } from "./actions/on-permission-action.js";
 import { OnTaskCompletedAction } from "./actions/on-task-completed-action.js";
+import { TriggerHookAction } from "./actions/trigger-hook-action.js";
 import type { EventFlashActionOpts } from "./actions/event-flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
@@ -80,6 +81,7 @@ const actions = [
   taskCompletedAction,
 ];
 for (const a of actions) streamDeck.actions.registerAction(a);
+streamDeck.actions.registerAction(new TriggerHookAction());
 
 // PI persists alertDelay as { stop: { seconds: 1 }, ... } for human readability,
 // matching the autoTimeoutSeconds precedent. Convert to ms once at load time.

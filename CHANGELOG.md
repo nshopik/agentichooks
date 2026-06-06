@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Trigger Hook action** — a fourth Stream Deck button that POSTs to a
+  configurable `http://127.0.0.1:9123/event/<route>` on key press, using the
+  same HTTP transport as real Claude Code hooks. Useful for manual alert
+  replays and Stream Deck multi-actions. Select the target route in the
+  Property Inspector; the key shows a tick on success or an alert cross on
+  failure (e.g. listener not running). (#35)
+
 ### Security
 
 - Warn-line logging in the HTTP listener is no longer attacker-amplifiable:

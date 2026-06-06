@@ -96,6 +96,25 @@ function Draw-PermGlyph {
     $brush.Dispose()
 }
 
+function Draw-PlayGlyph {
+    param($g, $size, $pen, $white)
+    $s = [single]$size
+    # Filled right-pointing triangle (play symbol), centered with slight right bias.
+    $x0 = [single]($s * 0.30)  # left edge of triangle
+    $x1 = [single]($s * 0.74)  # right tip
+    $yc = [single]($s * 0.50)  # vertical center
+    $yt = [single]($s * 0.26)  # top vertex
+    $yb = [single]($s * 0.74)  # bottom vertex
+    $pts = [System.Drawing.PointF[]]@(
+        (New-Object System.Drawing.PointF($x0, $yt)),
+        (New-Object System.Drawing.PointF($x1, $yc)),
+        (New-Object System.Drawing.PointF($x0, $yb))
+    )
+    $brush = New-Object System.Drawing.SolidBrush($white)
+    $g.FillPolygon($brush, $pts)
+    $brush.Dispose()
+}
+
 function Make-KeyIcon {
     param([string]$outPath, [int]$size, [string]$bgHex, [string]$glyphName)
     $bmp = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
@@ -121,6 +140,7 @@ function Make-KeyIcon {
         "idle"  { Draw-IdleGlyph  $g $size $pen $white }
         "perm"  { Draw-PermGlyph  $g $size $pen $white }
         "moon"  { Draw-MoonGlyph  $g $size $pen $white }
+        "play"  { Draw-PlayGlyph  $g $size $pen $white }
     }
 
     $pen.Dispose()
@@ -134,14 +154,17 @@ function Make-KeyIcon {
 $events = @(
     @{ name = "stop";           glyph = "check"; idle = "#000000"; alert = "#16a34a" },
     @{ name = "permission";     glyph = "perm";  idle = "#000000"; alert = "#dc2626" },
-    @{ name = "task-completed"; glyph = "idle";  idle = "#000000"; alert = "#3b82f6" }
+    @{ name = "task-completed"; glyph = "idle";  idle = "#000000"; alert = "#3b82f6" },
+    @{ name = "trigger";        glyph = "play";  idle = "#000000"; alert = $null     }
 )
 
 foreach ($e in $events) {
     foreach ($size in @(72, 144)) {
         $suffix = if ($size -eq 144) { "@2x" } else { "" }
         Make-KeyIcon -outPath (Join-Path $keys "$($e.name)-idle$suffix.png")  -size $size -bgHex $e.idle  -glyphName $e.glyph
-        Make-KeyIcon -outPath (Join-Path $keys "$($e.name)-alert$suffix.png") -size $size -bgHex $e.alert -glyphName $e.glyph
+        if ($null -ne $e.alert) {
+            Make-KeyIcon -outPath (Join-Path $keys "$($e.name)-alert$suffix.png") -size $size -bgHex $e.alert -glyphName $e.glyph
+        }
     }
 }
 
