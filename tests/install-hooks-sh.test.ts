@@ -106,16 +106,18 @@ describe.skipIf(!SUITE_AVAILABLE)(
     }, 45000);
 
     // ------------------------------------------------------------------
-    // Test 2: Atomicity — the script uses temp-file-then-rename so no
-    // partial write is committed to the target path.  We verify the
-    // side-effect: no leftover temp files in tmpDir after a successful run.
-    // (mktemp creates its temp in /tmp, not in tmpDir, so tmpDir should
-    // contain only settings.json after the run.)
+    // Test 2: Atomicity — the script creates temp files in the SAME
+    // directory as the settings file (same-volume rename → atomic on
+    // POSIX), then removes them on exit via trap.  Orphaned temp files
+    // are observable here because they land in the test's tmpDir.
+    // After a successful run, the directory must contain only
+    // settings.json and no .settings.json.* or *.new survivors.
     // ------------------------------------------------------------------
     it("leaves no temp files in the settings directory after a successful run", () => {
       const result = runInstaller(settingsPath);
       expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error?.message ?? "none"}`).toBe(0);
 
+      // fs.readdirSync includes dotfiles, so .settings.json.XXXXXX orphans are visible.
       const leftovers = fs.readdirSync(tmpDir).filter((e) => e !== "settings.json");
       expect(leftovers, `unexpected leftovers: ${leftovers.join(", ")}`).toEqual([]);
     }, 45000);
