@@ -1667,4 +1667,27 @@ describe("Dispatcher — session-scoped alert clearing (new)", () => {
     expect(ctx!.count).toBe(2);
     expect(ctx!.latestCwd).toBe("/repos/beta");
   });
+
+  // Edge #5 pin: both sessions ARMED, one clears → key stays lit, no dismiss,
+  // armedContext flips to the remaining session, audio does not replay.
+  it("clearing one of two ARMED sessions keeps the key lit and does not dismiss", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-A", { cwd: "/repos/alpha" });
+    d.handleRoute("/event/permission-request", "sess-B", { cwd: "/repos/beta" });
+    // B's arm pulse-restarts: one dismiss+re-alert so far
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+
+    d.handleRoute("/event/post-tool-use", "sess-A"); // A clears; B remains ARMED
+
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1); // unchanged — key stays lit
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2); // no replay on clear
+    const ctx = d.armedContext("permission");
+    expect(ctx).not.toBeNull();
+    expect(ctx!.count).toBe(1);
+    expect(ctx!.latestCwd).toBe("/repos/beta");
+    expect(d.armedMsAgo("permission")).not.toBeNull();
+  });
 });
