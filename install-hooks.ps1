@@ -2,9 +2,14 @@
 # Idempotently installs Claude Code hooks that signal the Agentic Hooks Stream Deck plugin.
 # Installs 29 Claude Code hooks: 11 action events (flash/audio/clear) + 18 info events (log-only).
 # Run with: powershell -ExecutionPolicy Bypass -File install-hooks.ps1
+#           powershell -ExecutionPolicy Bypass -File install-hooks.ps1 -SettingsPath C:\custom\path\settings.json
+[CmdletBinding()]
+param(
+    [string]$SettingsPath = (Join-Path $env:USERPROFILE ".claude\settings.json")
+)
 
 $ErrorActionPreference = "Stop"
-$settingsPath = Join-Path $env:USERPROFILE ".claude\settings.json"
+$settingsPath = $SettingsPath
 $marker = "_agentic-hooks-installer"
 $CURRENT_VERSION = "v2"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"
