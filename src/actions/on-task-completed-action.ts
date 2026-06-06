@@ -40,10 +40,8 @@ export class OnTaskCompletedAction extends EventFlashAction {
    * renderCountIcon paints the static yellow sparkle.
    */
   private renderFrame(count: number): void {
-    const frameGlyph = OnTaskCompletedAction.FRAMES[this.frameIdx];
     for (const [, ctx] of this.contexts) {
-      const frame = ctx.settings.animateCounter !== false ? frameGlyph : undefined;
-      void ctx.setImage(renderCountIcon(count, frame), 0);
+      void ctx.setImage(renderCountIcon(count, 0), 0);
     }
   }
 
@@ -110,7 +108,6 @@ export class OnTaskCompletedAction extends EventFlashAction {
       return;
     }
     if (ctx.state.alerting) return;
-    const frame = ctx.settings.animateCounter !== false ? OnTaskCompletedAction.FRAMES[this.frameIdx] : undefined;
-    void ctx.setImage(renderCountIcon(count, frame), 0);
+    void ctx.setImage(renderCountIcon(count, 0), 0);
   }
 }
