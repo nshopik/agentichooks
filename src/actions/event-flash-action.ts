@@ -35,11 +35,25 @@ export type EventFlashActionOpts = {
    */
   armedMsAgo?: (eventType: EventType) => number | null;
   /**
+   * Lazy lookup so OnStopAction.onWillAppear can restore the thinking visual
+   * after a page/profile switch. Returns true when the thinking sum > 0.
+   * Only consumed by OnStopAction. Mirrors the currentCount precedent.
+   */
+  currentThinking?: () => boolean;
+  /**
    * Lazy lookup against TaskCounter so OnTaskCompletedAction.onWillAppear can
    * restore the in-flight visual after a page/profile switch. Returns the
    * current global subagent count. Only consumed by OnTaskCompletedAction.
    */
   currentCount?: () => number;
+  /**
+   * Lazy lookup so OnTaskCompletedAction.onWillAppear can restore the coral pill
+   * after a page/profile switch while subagents are still running. Returns the
+   * current subagent sum. Restoring it as 0 would be the same stale-visual bug
+   * class that currentCount fixed for the task number — both numbers must be
+   * painted correctly on restore. Only consumed by OnTaskCompletedAction.
+   */
+  currentAgentCount?: () => number;
   /**
    * Lazy callback wired to Dispatcher.dismissArmed. Called when this button
    * type's alert is dismissed by a user keypress or per-button auto-timeout.
@@ -69,7 +83,7 @@ type RawSettings = JsonObject & {
   pulseIntervalMs?: number;
   autoTimeoutMs?: number;
   autoTimeoutSeconds?: number | string;
-  animateCounter?: boolean;
+  animateThinking?: boolean;
 };
 
 export abstract class EventFlashAction extends SingletonAction<JsonObject> {
@@ -194,7 +208,7 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       flashMode: normalizeFlashMode(r.flashMode),
       pulseIntervalMs: typeof r.pulseIntervalMs === "number" ? r.pulseIntervalMs : DEFAULT_FLASH_SETTINGS.pulseIntervalMs,
       autoTimeoutMs: timeoutMs,
-      animateCounter: r.animateCounter,
+      animateThinking: r.animateThinking,
     };
   }
 
