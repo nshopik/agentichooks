@@ -526,13 +526,21 @@ describe("HttpListener — session-id warn on action routes", () => {
 describe("HttpListener — connection-lifetime timeouts", () => {
   // Helper: open a raw TCP socket to the listener port and return it.
   // The caller controls what (if anything) is written.
+  const openedSockets: net.Socket[] = [];
   function openRawSocket(port: number): Promise<net.Socket> {
     return new Promise((resolve, reject) => {
       const sock = net.createConnection({ host: "127.0.0.1", port });
+      openedSockets.push(sock);
       sock.once("connect", () => resolve(sock));
       sock.once("error", reject);
     });
   }
+
+  afterEach(() => {
+    for (const sock of openedSockets.splice(0)) {
+      if (!sock.destroyed) sock.destroy();
+    }
+  });
 
   it("destroys a completely idle socket after idleTimeoutMs", async () => {
     listener = new HttpListener({
@@ -562,13 +570,17 @@ describe("HttpListener — connection-lifetime timeouts", () => {
     await listener.start();
     const port = listener.port();
 
-    const sock = await openRawSocket(port);
-    // Send a single byte — not idle at that instant, but then goes idle.
-    // server.timeout resets on each received byte; after 80ms of silence it fires.
-    sock.write("P");
+    // Connect, wait ~50 ms (well inside the 80 ms window), then write one byte.
+    // The idle timer resets on the received data; the socket should close only
+    // after a fresh ~80 ms of silence, so total elapsed since connect must be
+    // >= ~130 ms (50 ms wait + most of the fresh window) and < 500 ms.
     const t0 = Date.now();
+    const sock = await openRawSocket(port);
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+    sock.write("P");
     await new Promise<void>((resolve) => sock.once("close", () => resolve()));
     const elapsed = Date.now() - t0;
+    expect(elapsed).toBeGreaterThanOrEqual(100);
     expect(elapsed).toBeLessThan(500);
   });
 
