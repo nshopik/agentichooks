@@ -223,6 +223,16 @@ describe("HttpListener", () => {
     expect(addr.address).toBe("127.0.0.1");
   });
 
+  it("resolvedPort field is set after start() and matches port()", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    await listener.start();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const field = (listener as any).resolvedPort as number;
+    expect(typeof field).toBe("number");
+    expect(field).toBeGreaterThan(0);
+    expect(field).toBe(listener.port());
+  });
+
   it("POST with empty body on a signal route emits WARN and INFO result with session=? cwd=?", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
     await listener.start();

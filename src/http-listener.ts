@@ -79,6 +79,7 @@ export type HttpListenerOpts = {
 export class HttpListener {
   private opts: HttpListenerOpts;
   private server?: http.Server;
+  private resolvedPort = -1;
 
   constructor(opts: HttpListenerOpts) {
     this.opts = opts;
@@ -91,7 +92,13 @@ export class HttpListener {
       // socket after no data flows for the configured duration.
       this.server.timeout = this.opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
       this.server.once("error", reject);
-      this.server.listen(this.opts.port, "127.0.0.1", () => resolve());
+      this.server.listen(this.opts.port, "127.0.0.1", () => {
+        const addr = this.server!.address();
+        if (addr && typeof addr !== "string") {
+          this.resolvedPort = addr.port;
+        }
+        resolve();
+      });
     });
   }
 
@@ -123,7 +130,7 @@ export class HttpListener {
       return;
     }
 
-    const expectedPort = this.port();
+    const expectedPort = this.resolvedPort;
     const allowedHosts = [`127.0.0.1:${expectedPort}`, `localhost:${expectedPort}`];
     if (!allowedHosts.includes(req.headers.host ?? "")) {
       this.opts.log?.warn(`rejected from=${peer} url=${url} reason=host host=${req.headers.host ?? "(none)"}`);
