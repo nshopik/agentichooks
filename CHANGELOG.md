@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- **Elapsed turn time on the On Stop button** — a live timer starts on
+  `UserPromptSubmit` and ends on `Stop`/`StopFailure`, rendered as the centerpiece
+  of the thinking visual: big gray time centered on the key, coral sparkle pulse
+  tucked into the top-left corner. Format tiers: `35s` (< 60 s) → `4:37` (< 1 h) →
+  `1:04:52` (< 10 h, smaller font) → `10:04` (≥ 10 h, seconds dropped). With
+  multiple sessions thinking, the latest prompt's timer is shown, falling back to
+  the previous still-running session when it stops. New pure modules
+  `format-elapsed.ts` and `turn-clock.ts` (a decorator over the thinking counter
+  slot — dispatcher, route matrix, and `SessionSetCounter` untouched). (#40)
+
+### Changed
+
+- The per-button "Animate thinking" checkbox now gates **only the corner sparkle**
+  (PI label reworded to "Animate thinking sparkle"); the elapsed timer renders on
+  every On Stop key whenever a turn is running. The armed alert still wins
+  visually — the timer paints the idle state underneath. (#40)
+
 ### Fixed
 
 - `install-hooks.ps1` no longer crashes on a bare-filename `-SettingsPath`
