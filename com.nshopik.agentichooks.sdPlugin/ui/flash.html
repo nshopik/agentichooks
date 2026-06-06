@@ -41,6 +41,9 @@
       <sdpi-textfield setting="alertDelay.stop.seconds" placeholder="1" default="1" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
     </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('stop')">▶ Test sound</sdpi-button></sdpi-item>
+    <sdpi-item label="Thinking indicator">
+      <sdpi-checkbox setting="animateThinking" default="false">Animate while Claude is thinking</sdpi-checkbox>
+    </sdpi-item>
   </div>
 
   <div id="audio-permission-section" style="display:none">
@@ -69,10 +72,6 @@
       <sdpi-textfield setting="alertDelay.task-completed.seconds" placeholder="1" default="1" pattern="[0-9]+(\.[0-9]+)?" global></sdpi-textfield>
     </sdpi-item>
     <sdpi-item><sdpi-button onclick="testAudio('task-completed')">▶ Test sound</sdpi-button></sdpi-item>
-    <!-- Counter animation: not audio, but only relevant for task-completed PIs. -->
-    <sdpi-item label="Counter animation">
-      <sdpi-checkbox setting="animateCounter" default="true">Animate in-flight counter (Claude Code spinner)</sdpi-checkbox>
-    </sdpi-item>
   </div>
 
   <script>
