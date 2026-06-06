@@ -152,6 +152,14 @@ export class HttpListener {
     return (addr as AddressInfo).port;
   }
 
+  // Bound address, or null before start(). Public mirror of port() so tests
+  // can assert the loopback-only bind without poking the private server field.
+  host(): string | null {
+    const addr = this.server?.address();
+    if (!addr || typeof addr === "string") return null;
+    return (addr as AddressInfo).address;
+  }
+
   isListening(): boolean {
     return this.server?.listening ?? false;
   }

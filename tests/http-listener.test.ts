@@ -184,22 +184,58 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
   });
 
-  it("binds to 127.0.0.1 only", async () => {
+  it("binds to 127.0.0.1 only (public host() accessor)", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const addr = (listener as any).server.address();
-    expect(addr.address).toBe("127.0.0.1");
+    expect(listener.host()).toBe("127.0.0.1");
   });
 
-  it("resolvedPort field is set after start() and matches port()", async () => {
+  it("host() returns null before start()", () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
+    expect(listener.host()).toBeNull();
+  });
+
+  it("Host allowlist is pinned to the resolved listen port (wrong-port Host → 403)", async () => {
+    // Behavioral replacement for the former `(listener as any).resolvedPort`
+    // private-field poke: the only observable contract of the captured port is
+    // that the Host allowlist accepts exactly `<loopback>:<resolved port>`.
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
     await listener.start();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const field = (listener as any).resolvedPort as number;
-    expect(typeof field).toBe("number");
-    expect(field).toBeGreaterThan(0);
-    expect(field).toBe(listener.port());
+    const port = listener.port();
+    expect(port).toBeGreaterThan(0);
+    const wrong = await requestWithHeaders("POST", "/event/stop", port, {
+      Host: `127.0.0.1:${port + 1}`,
+    });
+    expect(wrong.status).toBe(403);
+    const right = await requestWithHeaders("POST", "/event/stop", port, {
+      Host: `127.0.0.1:${port}`,
+    });
+    expect(right.status).toBe(204);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual(["/event/stop"]);
+  });
+
+  it("request without any Host header returns 403 (missing-Host contract)", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const port = listener.port();
+    // node:http always injects a Host header, so speak raw HTTP/1.0 (where
+    // Host is optional) over a bare TCP socket.
+    const raw: string = await new Promise((resolve, reject) => {
+      const sock = net.createConnection({ host: "127.0.0.1", port }, () => {
+        sock.write("POST /event/stop HTTP/1.0\r\nContent-Length: 0\r\n\r\n");
+      });
+      let buf = "";
+      sock.on("data", (c) => (buf += c));
+      sock.on("end", () => resolve(buf));
+      sock.on("error", reject);
+    });
+    expect(raw).toMatch(/^HTTP\/1\.[01] 403/);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(received).toEqual([]);
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("reason=host"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).toContain("host=(none)");
   });
 
   it("POST with empty body on a signal route emits WARN and INFO result with session=? cwd=?", async () => {

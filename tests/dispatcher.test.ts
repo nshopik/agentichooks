@@ -293,6 +293,50 @@ describe("Dispatcher.handleRoute — re-fire when already ARMED", () => {
   });
 });
 
+describe("Dispatcher.handleRoute — ARMED → clear → re-arm lifecycle", () => {
+  it("re-arm after a route-based clear goes through the PENDING delay and fires exactly once", () => {
+    const btn = makeButton("permission");
+    buttons.set("perm", btn);
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request");
+    vi.advanceTimersByTime(1000); // fire #1 → ARMED
+    expect(btn.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/post-tool-use"); // clears permission → IDLE
+    expect(btn.dismiss).toHaveBeenCalledTimes(1);
+
+    d.handleRoute("/event/permission-request"); // re-arm → PENDING, not instant
+    vi.advanceTimersByTime(999);
+    expect(btn.alert).toHaveBeenCalledTimes(1); // not yet
+    vi.advanceTimersByTime(1);
+    expect(btn.alert).toHaveBeenCalledTimes(2); // exactly one new alert
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+    vi.advanceTimersByTime(5000); // no stray timer left behind
+    expect(btn.alert).toHaveBeenCalledTimes(2);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Dispatcher.handleRoute — ARMED + zero-delay precedence", () => {
+  it("with delay=0, a same-type arm on an ARMED slot re-fires immediately without entering PENDING", () => {
+    globals.alertDelay.permission = 0;
+    const btn = makeButton("permission");
+    buttons.set("perm", btn);
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request"); // fire #1 → ARMED, no timer
+    expect(btn.alert).toHaveBeenCalledTimes(1);
+    d.handleRoute("/event/permission-request"); // ARMED check wins; immediate re-fire
+    expect(btn.dismiss).toHaveBeenCalledTimes(1); // re-fire dismisses the prior alert first
+    expect(btn.alert).toHaveBeenCalledTimes(2);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+    // No PENDING state was ever created — advancing timers changes nothing.
+    vi.advanceTimersByTime(10_000);
+    expect(btn.alert).toHaveBeenCalledTimes(2);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("Dispatcher.handleRoute — delayMs = 0 opt-out", () => {
   it("fires immediately with no pending state when alertDelay is 0", () => {
     globals.alertDelay.permission = 0;
