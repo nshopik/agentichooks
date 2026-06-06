@@ -6,7 +6,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 > **Beta — pre-1.0.** This is the first public release of Agentic Hooks. Expect rough edges; please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases (not Elgato Marketplace) until 1.0.
 
-> **Requires Claude Code 2.1.128+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight subagent counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Upgrade Claude Code if button responses look incomplete after running the installer.
+> **Requires Claude Code 2.1.128+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight task counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Upgrade Claude Code if button responses look incomplete after running the installer.
 
 > **macOS support is experimental.** The Windows install path is the tested one; macOS code paths exist (afplay, system sounds, hook installer) but have not yet been validated end-to-end on a real Mac. Bug reports from Mac users are very welcome.
 
@@ -14,7 +14,8 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude.
 - Static or pulsing flash mode, configurable per button.
-- Live subagent counter: when Claude dispatches subagents (Task tool), the Task Completed button shows the in-flight count and flashes once when the run completes — no per-task noise.
+- Live task count: the Task Completed button shows the number of in-progress tasks as a big number — a rough progress bar for the run — and flashes once when all tasks complete, with no per-task noise. A small coral pill in the corner separately shows how many subagents are running in parallel.
+- On Stop thinking indicator: an animated coral glyph on the On Stop button from when you submit a prompt until Claude stops (per-button opt-in via the Property Inspector).
 - Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
 
@@ -76,25 +77,26 @@ Expected: `HTTP/1.1 200 OK`. Then run `bash install-hooks.sh` on the remote host
 
 ## HTTP routes
 
-The listener accepts 29 routes (12 action + 17 info). URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
+The listener accepts 29 routes (14 action + 15 info). URL paths mirror Claude hook names: `/event/post-tool-use` ↔ `PostToolUse`, `/event/user-prompt-submit` ↔ `UserPromptSubmit`, etc.
 
 | Route | Effect |
 |---|---|
-| `/event/stop` | arms `stop`; clears `permission`, `task-completed` |
-| `/event/stop-failure` | arms `stop`; clears `permission`, `task-completed` |
+| `/event/stop` | arms `stop`; clears `permission`, `task-completed`; clears thinking |
+| `/event/stop-failure` | arms `stop`; clears `permission`, `task-completed`; clears thinking |
 | `/event/permission-request` | arms `permission` |
-| `/event/task-completed` | decrements in-flight subagent counter; clears `permission`; arms `task-completed` (flash + audio) when counter reaches 0 |
-| `/event/session-start` | clears `stop`, `permission`, `task-completed`; resets the in-flight subagent counter |
-| `/event/user-prompt-submit` | clears `stop`, `permission`, `task-completed` |
+| `/event/task-completed` | decrements in-flight task count (id-set; `task_id` required); clears `permission`; arms `task-completed` when task count reaches 0 |
+| `/event/task-created` | adds to in-flight task count (id-set; `task_id` required); clears `task-completed` |
+| `/event/subagent-start` | increments running subagent count (id-set; `agent_id` required); no alert state change |
+| `/event/subagent-stop` | decrements running subagent count (id-set; `agent_id` required); no alert state change |
+| `/event/session-start` | clears `stop`, `permission`, `task-completed`; resets task, subagent, and thinking counters |
+| `/event/session-end` | clears `stop`, `permission`, `task-completed`; resets task, subagent, and thinking counters |
+| `/event/user-prompt-submit` | clears `stop`, `permission`, `task-completed`; marks session as thinking |
 | `/event/permission-denied` | clears `permission` |
 | `/event/post-tool-use` | clears `permission` |
 | `/event/post-tool-use-failure` | clears `permission` |
 | `/event/pre-tool-use` | clears `stop` |
 | `/event/notification` | log-only |
 | `/event/post-tool-batch` | log-only |
-| `/event/subagent-start` | log-only |
-| `/event/subagent-stop` | log-only |
-| `/event/task-created` | increments in-flight subagent counter (drives the Task Completed button's number display) |
 
 `GET /health` returns `200 OK`.
 
@@ -126,7 +128,7 @@ When the Stream Deck plugin is running, hooks complete in well under a milliseco
 
 ## Debug logging
 
-Set `AGENTIC_HOOKS_DEBUG=1` and restart the plugin to raise log level from `warn` to `info`. Logs land in `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.agentichooks.sdPlugin\logs\com.nshopik.agentichooks.0.log` (newest is `.0`).
+The plugin defaults to `info` log level. Set `AGENTIC_HOOKS_DEBUG=1` and restart the plugin to raise it to `debug`. Logs land in `%APPDATA%\Elgato\StreamDeck\Plugins\com.nshopik.agentichooks.sdPlugin\logs\com.nshopik.agentichooks.0.log` (newest is `.0`).
 
 ## Development
 

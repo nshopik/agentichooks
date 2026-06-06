@@ -691,6 +691,26 @@ describe("HttpListener — warn rate limiting", () => {
   });
 });
 
+describe("HttpListener — route-set membership", () => {
+  it("ACTION_ROUTES has exactly 14 members (12 original + subagent-start + subagent-stop)", () => {
+    expect(ACTION_ROUTES_SET.size).toBe(14);
+  });
+
+  it("INFO_ROUTES has exactly 15 members (17 original − subagent-start − subagent-stop)", () => {
+    expect(INFO_ROUTES_SET.size).toBe(15);
+  });
+
+  it("ACTION_ROUTES contains /event/subagent-start and /event/subagent-stop", () => {
+    expect(ACTION_ROUTES_SET.has("/event/subagent-start")).toBe(true);
+    expect(ACTION_ROUTES_SET.has("/event/subagent-stop")).toBe(true);
+  });
+
+  it("INFO_ROUTES does not contain /event/subagent-start or /event/subagent-stop", () => {
+    expect(INFO_ROUTES_SET.has("/event/subagent-start")).toBe(false);
+    expect(INFO_ROUTES_SET.has("/event/subagent-stop")).toBe(false);
+  });
+});
+
 describe("HttpListener — connection-lifetime timeouts", () => {
   // Helper: open a raw TCP socket to the listener port and return it.
   // The caller controls what (if anything) is written.

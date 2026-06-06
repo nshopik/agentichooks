@@ -4,9 +4,9 @@ export type FlashSettings = {
   flashMode: "static" | "pulse";
   pulseIntervalMs: number;
   autoTimeoutMs: number;
-  // Only read by OnTaskCompletedAction; stop and permission contexts carry the
-  // field but ignore it. Undefined is treated as true (animation on by default).
-  animateCounter?: boolean;
+  // Only read by OnStopAction; other event contexts carry the field but ignore it.
+  // Undefined is treated as false (thinking animation off by default).
+  animateThinking?: boolean;
 };
 
 export type AudioConfig = { soundPath?: string };
