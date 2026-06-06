@@ -35,6 +35,15 @@ function hasJq(): boolean {
 const SUITE_AVAILABLE =
   process.platform !== "win32" && hasBash() && hasJq();
 
+// On non-Windows, bash and jq must be available — a silent skip would hide
+// every sh test from the platforms that actually run the installer.
+it.runIf(process.platform !== "win32")(
+  "bash and jq are available (non-Windows must not silently skip)",
+  () => {
+    expect(SUITE_AVAILABLE).toBe(true);
+  }
+);
+
 // Absolute path to the script under test.
 const SCRIPT_PATH = path.resolve(
   import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname),
