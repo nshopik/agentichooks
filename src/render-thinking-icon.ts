@@ -10,6 +10,10 @@
 //                      typically call setImage("", 0) instead, but renderer
 //                      must never throw)
 //
+// Caller contract: `elapsed` must be the output of formatElapsed() — digits,
+// colons, and "s" suffix only — because it is interpolated unescaped into the
+// SVG. Callers must not pass arbitrary strings.
+//
 // Pure function; deterministic; no I/O.
 
 const SIZE = 144;
