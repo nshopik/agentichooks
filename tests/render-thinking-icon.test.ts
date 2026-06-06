@@ -81,9 +81,13 @@ describe("renderThinkingIcon", () => {
     expect(sparkleIdx).toBeLessThan(timerIdx);
   });
 
-  it("sparkle positioned at the top-left coordinates (x=18, y=34)", () => {
+  it("sparkle matches the historical corner-glyph geometry (x=22 y=34, centered, font-size 33)", () => {
+    // Pinned to the pre-#38 render-count-icon corner glyph (commit b7f21a5):
+    // <text x="22" y="34" text-anchor="middle" ... font-size="33">. Restored
+    // after user feedback that the 26px sparkle read smaller than it used to.
     const svg = decodeDataUri(renderThinkingIcon("*", "35s"));
-    expect(svg).toContain(`x="18" y="34"`);
+    expect(svg).toContain(`x="22" y="34" text-anchor="middle"`);
+    expect(svg).toMatch(/font-size="33"[^>]*fill="#da7756"/);
   });
 
   // ---- Timer-only layout (null frame + elapsed) ----
