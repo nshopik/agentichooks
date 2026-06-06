@@ -52,7 +52,7 @@ All notable changes to this project will be documented in this file.
   5.1). `install-hooks.sh` was verified to already write atomically via
   temp-file-then-rename. Both installers gained a settings-path override
   (`-SettingsPath` / `SETTINGS_PATH`) and vitest suites that exercise the real
-  scripts against temp directories. (#N)
+  scripts against temp directories. (#34)
 - A garbage `flashMode` value arriving from the Property Inspector (anything
   but `"static"`/`"pulse"`) now collapses to the default instead of flowing
   through typed as valid and silently breaking pulse handling. (#31)
