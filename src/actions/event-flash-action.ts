@@ -41,6 +41,14 @@ export type EventFlashActionOpts = {
    */
   currentThinking?: () => boolean;
   /**
+   * Lazy lookup against the TurnClock so the On Stop repaint loop and
+   * onWillAppear can display the elapsed turn time on every visible On Stop
+   * key while a turn is running. Returns elapsed ms for the last-inserted
+   * still-running session, or null when no turn is in progress.
+   * Only consumed by OnStopAction. Mirrors the currentThinking precedent.
+   */
+  currentElapsedMs?: () => number | null;
+  /**
    * Lazy lookup against the SessionSetCounter (tasks instance) so OnTaskCompletedAction.onWillAppear can
    * restore the in-flight visual after a page/profile switch. Returns the
    * current global in-flight task count. Only consumed by OnTaskCompletedAction.

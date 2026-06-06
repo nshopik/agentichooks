@@ -8,46 +8,151 @@ function decodeDataUri(uri: string): string {
 }
 
 describe("renderThinkingIcon", () => {
+  // ---- THINKING_FRAMES constant ----
+
   it("THINKING_FRAMES is the 8-frame pulse sequence", () => {
     expect(THINKING_FRAMES).toEqual(["·", "*", "✶", "✢", "✻", "✢", "✶", "*"]);
     expect(THINKING_FRAMES).toHaveLength(8);
   });
 
-  it("returns a base64 data URI for each frame", () => {
+  // ---- Legacy: frame + null elapsed (centered big glyph, current layout) ----
+
+  it("returns a base64 data URI for each frame when elapsed is null", () => {
     for (const frame of THINKING_FRAMES) {
-      expect(renderThinkingIcon(frame).startsWith("data:image/svg+xml;base64,")).toBe(true);
+      expect(renderThinkingIcon(frame, null).startsWith("data:image/svg+xml;base64,")).toBe(true);
     }
   });
 
-  it("SVG contains the frame glyph as visible text", () => {
+  it("SVG contains the frame glyph as visible text (frame + null elapsed)", () => {
     for (const frame of THINKING_FRAMES) {
-      const svg = decodeDataUri(renderThinkingIcon(frame));
+      const svg = decodeDataUri(renderThinkingIcon(frame, null));
       expect(svg).toContain(frame);
     }
   });
 
-  it("SVG uses the coral color #da7756 for the glyph", () => {
+  it("SVG uses the coral color #da7756 for the glyph (frame + null elapsed)", () => {
     for (const frame of THINKING_FRAMES) {
-      const svg = decodeDataUri(renderThinkingIcon(frame));
+      const svg = decodeDataUri(renderThinkingIcon(frame, null));
       expect(svg).toContain("#da7756");
     }
   });
 
-  it("SVG has a black background (#000000)", () => {
-    const svg = decodeDataUri(renderThinkingIcon("*"));
+  it("SVG has a black background (#000000) for all layouts", () => {
+    const svg = decodeDataUri(renderThinkingIcon("*", null));
     expect(svg).toContain("#000000");
   });
 
-  it("is deterministic — same frame produces byte-identical output", () => {
+  it("is deterministic — same args produce byte-identical output", () => {
     for (const frame of THINKING_FRAMES) {
-      expect(renderThinkingIcon(frame)).toBe(renderThinkingIcon(frame));
+      expect(renderThinkingIcon(frame, null)).toBe(renderThinkingIcon(frame, null));
+      expect(renderThinkingIcon(frame, "1:23")).toBe(renderThinkingIcon(frame, "1:23"));
     }
   });
 
-  it("different frames produce different output", () => {
-    // Not all adjacent frames are different glyphs (✢ repeats at idx 3 and 5),
-    // but the overall sequence has at least 5 unique glyphs.
-    const unique = new Set(THINKING_FRAMES.map((f) => renderThinkingIcon(f)));
+  it("different frames produce different output (frame + null elapsed)", () => {
+    const unique = new Set(THINKING_FRAMES.map((f) => renderThinkingIcon(f, null)));
     expect(unique.size).toBeGreaterThanOrEqual(5);
+  });
+
+  // ---- Sparkle + timer layout (frame + elapsed) ----
+
+  it("sparkle + timer: SVG contains both the frame glyph and the elapsed label", () => {
+    const svg = decodeDataUri(renderThinkingIcon("✶", "4:37"));
+    expect(svg).toContain("✶");
+    expect(svg).toContain("4:37");
+  });
+
+  it("sparkle + timer: elapsed label uses gray color #9a9a9a", () => {
+    const svg = decodeDataUri(renderThinkingIcon("*", "35s"));
+    expect(svg).toContain("#9a9a9a");
+  });
+
+  it("sparkle + timer: coral sparkle #da7756 still present", () => {
+    const svg = decodeDataUri(renderThinkingIcon("*", "35s"));
+    expect(svg).toContain("#da7756");
+  });
+
+  it("sparkle + timer: sparkle text element appears before the timer text element in SVG source", () => {
+    const svg = decodeDataUri(renderThinkingIcon("✶", "35s"));
+    const sparkleIdx = svg.indexOf("#da7756");
+    const timerIdx = svg.indexOf("#9a9a9a");
+    expect(sparkleIdx).toBeGreaterThan(-1);
+    expect(timerIdx).toBeGreaterThan(-1);
+    expect(sparkleIdx).toBeLessThan(timerIdx);
+  });
+
+  it("sparkle positioned at the top-left coordinates (x=18, y=34)", () => {
+    const svg = decodeDataUri(renderThinkingIcon("*", "35s"));
+    expect(svg).toContain(`x="18" y="34"`);
+  });
+
+  // ---- Timer-only layout (null frame + elapsed) ----
+
+  it("timer-only: SVG contains the elapsed label", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, "59s"));
+    expect(svg).toContain("59s");
+  });
+
+  it("timer-only: elapsed label uses gray color #9a9a9a", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
+    expect(svg).toContain("#9a9a9a");
+  });
+
+  it("timer-only: coral color #da7756 is ABSENT (no sparkle element)", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
+    expect(svg).not.toContain("#da7756");
+  });
+
+  it("timer-only: SVG does not contain an empty text element", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
+    expect(svg).not.toMatch(/<text[^>]*><\/text>/);
+  });
+
+  it("timer-only: returns a valid data URI", () => {
+    expect(renderThinkingIcon(null, "1:23").startsWith("data:image/svg+xml;base64,")).toBe(true);
+  });
+
+  // ---- Small font for labels with length >= 7 ----
+
+  it("uses smaller font size when elapsed label length >= 7 (h:mm:ss tier)", () => {
+    const svgShort = decodeDataUri(renderThinkingIcon("*", "9:59"));   // length 4 → large
+    const svgLong  = decodeDataUri(renderThinkingIcon("*", "1:00:00")); // length 7 → smaller
+    const extractTimerFontSize = (svg: string): number => {
+      const match = svg.match(/font-size="([^"]+)" font-weight="700" fill="#9a9a9a"/);
+      return Number(match?.[1] ?? "0");
+    };
+    const shortSize = extractTimerFontSize(svgShort);
+    const longSize  = extractTimerFontSize(svgLong);
+    expect(shortSize).toBeGreaterThan(0);
+    expect(longSize).toBeGreaterThan(0);
+    expect(shortSize).toBeGreaterThan(longSize);
+  });
+
+  it("5-char label uses the large font; 7-char label uses the smaller font", () => {
+    const svgFive  = decodeDataUri(renderThinkingIcon("*", "59:59"));   // length 5
+    const svgSeven = decodeDataUri(renderThinkingIcon("*", "9:59:59")); // length 7
+    const extractTimerFontSize = (svg: string): number => {
+      const match = svg.match(/font-size="([^"]+)" font-weight="700" fill="#9a9a9a"/);
+      return Number(match?.[1] ?? "0");
+    };
+    expect(extractTimerFontSize(svgFive)).toBeGreaterThan(extractTimerFontSize(svgSeven));
+  });
+
+  // ---- null + null: total function, valid plain black rounded square ----
+
+  it("null frame + null elapsed returns a valid data URI (total function)", () => {
+    expect(renderThinkingIcon(null, null).startsWith("data:image/svg+xml;base64,")).toBe(true);
+  });
+
+  it("null + null: SVG has black background but no coral and no gray timer text", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, null));
+    expect(svg).toContain("#000000");
+    expect(svg).not.toContain("#da7756");
+    expect(svg).not.toContain("#9a9a9a");
+  });
+
+  it("null + null: SVG contains no text elements", () => {
+    const svg = decodeDataUri(renderThinkingIcon(null, null));
+    expect(svg).not.toContain("<text");
   });
 });
