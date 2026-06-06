@@ -9,7 +9,7 @@ import type { EventFlashActionOpts } from "./actions/event-flash-action.js";
 import { HttpListener } from "./http-listener.js";
 import { AudioPlayer } from "./audio-player.js";
 import { Dispatcher, deriveRoute, type DispatchableButton } from "./dispatcher.js";
-import { TaskCounter } from "./task-counter.js";
+import { SessionSetCounter } from "./session-set-counter.js";
 import { defaultSoundPath } from "./system-sounds.js";
 import { ALL_EVENT_TYPES, DEFAULT_GLOBAL_SETTINGS, HTTP_PORT, type GlobalSettings, type Logger } from "./types.js";
 import { pickLogLevel } from "./log-level.js";
@@ -63,10 +63,11 @@ const actionOpts: EventFlashActionOpts = {
   // alerting state for buttons revealed by a page or profile switch. The
   // explicit return type breaks a TS inference cycle (action ↔ dispatcher).
   armedMsAgo: (eventType): number | null => dispatcher.armedMsAgo(eventType),
-  // Lazy: taskCounter is constructed below, so this arrow captures the outer
-  // binding and resolves at willAppear time. Same indirection pattern as
-  // armedMsAgo above.
-  currentCount: (): number => taskCounter.current(),
+  // Lazy: taskCounters is constructed below, so these arrows capture the outer
+  // binding and resolve at willAppear time. Same indirection pattern as armedMsAgo above.
+  currentCount: (): number => taskCounters.tasks.sum(),
+  currentThinking: (): boolean => taskCounters.thinking.sum() > 0,
+  currentAgentCount: (): number => taskCounters.subagents.sum(),
   // Lazy: dispatcher is constructed below. Called when a button's keypress or
   // auto-timeout dismisses an alert; the dispatcher clears ARMED state and
   // dismisses every alerting button of that type (type-wide semantics). Same
@@ -74,9 +75,10 @@ const actionOpts: EventFlashActionOpts = {
   onDismissed: (eventType): void => dispatcher.dismissArmed(eventType),
 };
 
+const stopAction = new OnStopAction(actionOpts);
 const taskCompletedAction = new OnTaskCompletedAction(actionOpts);
 const actions = [
-  new OnStopAction(actionOpts),
+  stopAction,
   new OnPermissionAction(actionOpts),
   taskCompletedAction,
 ];
@@ -117,22 +119,35 @@ streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
   globals = mergeGlobals(ev.settings);
 });
 
-// Construct the counter before the dispatcher so the dispatcher can take
-// it as an opt. onZeroReached uses a lazy arrow because dispatcher is
-// declared on the next line — same circular-reference dance as armedMsAgo.
-const taskCounter = new TaskCounter({
-  onCountChanged: (n) => taskCompletedAction.broadcastCounts(n, 0), // agentSum placeholder — Task 10 wires the real subagent sum.
-  onZeroReached: () => dispatcher.fireTaskCompleted(),
-  log: makeLogger("counter"),
-});
-
 const dispatchLog = makeLogger("dispatch");
 
-// Bridge: Task 3 widens the counter seam from DispatcherTaskCounter (increment/decrement/reset)
-// to DispatcherOpts.counters (three-slot add/remove/reset interface). The TaskCounter instance
-// is still in play until Task 10 replaces the wiring wholesale. This adapter maps the old
-// sessionId-only calls to the new (sessionId, id) signature; the task/agent id params
-// (_taskId, _agentId) are unused by the current TaskCounter — Task 10 wires them properly.
+// Three id-set counters — declared before Dispatcher so Dispatcher can take
+// them as opts. Lazy arrows break the circular reference (counter → dispatcher
+// via onSessionDrained / onChanged callbacks, dispatcher → counter via counters opt).
+const taskCounters = {
+  tasks: new SessionSetCounter({
+    name: "tasks",
+    // onSessionDrained fires BEFORE onChanged(sum) per spec contract —
+    // dispatcher.fireTaskCompleted() is called first so ARMED state is set
+    // before the visual layer's broadcastCounts queries it.
+    onSessionDrained: () => dispatcher.fireTaskCompleted(),
+    onChanged: (n) => taskCompletedAction.broadcastCounts(n, taskCounters.subagents.sum()),
+    log: makeLogger("counter"),
+  }),
+  subagents: new SessionSetCounter({
+    name: "subagents",
+    // Subagent drain never chimes — onSessionDrained omitted.
+    onChanged: (n) => taskCompletedAction.broadcastCounts(taskCounters.tasks.sum(), n),
+    log: makeLogger("counter"),
+  }),
+  thinking: new SessionSetCounter({
+    name: "thinking",
+    // Thinking drain is silent — onSessionDrained omitted.
+    onChanged: (n) => stopAction.broadcastThinking(n > 0),
+    log: makeLogger("counter"),
+  }),
+};
+
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
@@ -142,13 +157,7 @@ const dispatcher = new Dispatcher({
     return merged;
   },
   log: dispatchLog,
-  counters: {
-    tasks: {
-      add: (sessionId: string, _taskId: string) => taskCounter.increment(sessionId),
-      remove: (sessionId: string, _taskId: string) => taskCounter.decrement(sessionId),
-      reset: (sessionId: string) => taskCounter.reset(sessionId),
-    },
-  },
+  counters: taskCounters,
 });
 
 let listener: HttpListener | undefined;
