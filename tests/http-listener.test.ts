@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import http from "node:http";
+import net from "node:net";
 import { HttpListener } from "../src/http-listener.js";
 
 let listener: HttpListener | undefined;
@@ -519,5 +520,69 @@ describe("HttpListener — session-id warn on action routes", () => {
     await new Promise((r) => setTimeout(r, 20));
     const sessionWarn = logs.find((l) => l.level === "warn" && l.msg.includes("session_id"));
     expect(sessionWarn).toBeUndefined();
+  });
+});
+
+describe("HttpListener — connection-lifetime timeouts", () => {
+  // Helper: open a raw TCP socket to the listener port and return it.
+  // The caller controls what (if anything) is written.
+  function openRawSocket(port: number): Promise<net.Socket> {
+    return new Promise((resolve, reject) => {
+      const sock = net.createConnection({ host: "127.0.0.1", port });
+      sock.once("connect", () => resolve(sock));
+      sock.once("error", reject);
+    });
+  }
+
+  it("destroys a completely idle socket after idleTimeoutMs", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 80,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    const sock = await openRawSocket(port);
+    // Send nothing — pure idle connection.
+    const t0 = Date.now();
+    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
+    const elapsed = Date.now() - t0;
+    // Should have been destroyed within ~3× the timeout (generous for CI jitter).
+    expect(elapsed).toBeGreaterThanOrEqual(60);
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it("destroys a socket that sends one byte and then goes idle within idleTimeoutMs", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 80,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    const sock = await openRawSocket(port);
+    // Send a single byte — not idle at that instant, but then goes idle.
+    // server.timeout resets on each received byte; after 80ms of silence it fires.
+    sock.write("P");
+    const t0 = Date.now();
+    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
+    const elapsed = Date.now() - t0;
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  it("does NOT destroy a normal fast POST before idleTimeoutMs fires", async () => {
+    listener = new HttpListener({
+      port: 0,
+      onEvent: () => { /* no-op */ },
+      idleTimeoutMs: 200,
+    });
+    await listener.start();
+    const port = listener.port();
+
+    const body = JSON.stringify({ session_id: "fast-test" });
+    const res = await requestWithBody("POST", "/event/stop", port, body);
+    expect(res.status).toBe(204);
   });
 });

@@ -57,6 +57,10 @@ function basename(cwd: string): string {
   return cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
 }
 
+// Production default for idle-socket timeout.
+// Safe with the 2-second client timeout Claude Code hooks use.
+const DEFAULT_IDLE_TIMEOUT_MS = 5_000;
+
 export type HttpListenerOpts = {
   port: number;
   // Called for every action route; the URL path and parsed body are forwarded
@@ -64,6 +68,11 @@ export type HttpListenerOpts = {
   // invoke this callback.
   onEvent: (route: string, body?: ParsedBody) => void;
   log?: Logger;
+  // Idle-socket timeout (maps to server.timeout). Node 24 auto-destroys the
+  // socket when no data has flowed for this many ms. Primary slowloris defence
+  // for connections arriving via ssh -R. Override in tests to use small values
+  // (tens of ms) so timeout tests stay fast. Default: 5 000 ms.
+  idleTimeoutMs?: number;
 };
 
 export class HttpListener {
@@ -77,6 +86,9 @@ export class HttpListener {
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => this.handle(req, res));
+      // server.timeout is the idle-socket timeout. In Node 24 it auto-destroys
+      // the socket after no data flows for the configured duration.
+      this.server.timeout = this.opts.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
       this.server.once("error", reject);
       this.server.listen(this.opts.port, "127.0.0.1", () => resolve());
     });
