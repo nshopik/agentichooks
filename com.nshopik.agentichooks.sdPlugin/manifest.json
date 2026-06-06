@@ -71,6 +71,18 @@
         { "Image": "images/keys/task-completed-idle",  "Name": "Idle"  },
         { "Image": "images/keys/task-completed-alert", "Name": "Alert" }
       ]
+    },
+    {
+      "Name": "Trigger Hook",
+      "UUID": "com.nshopik.agentichooks.trigger",
+      "Icon": "images/actions/trigger",
+      "Controllers": ["Keypad"],
+      "Tooltip": "POST to a Claude Code hook route on key press",
+      "PropertyInspectorPath": "ui/trigger.html",
+      "SupportedInMultiActions": true,
+      "States": [
+        { "Image": "images/keys/trigger-idle", "Name": "Ready" }
+      ]
     }
   ]
 }
