@@ -63,8 +63,8 @@ describe("AudioPlayer", () => {
     const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
     expect(spawnCalls.length).toBe(1);
-    expect(spawnCalls[0].cmd).toMatch(/powershell\.exe$/i);
-    expect(spawnCalls[0].args).toEqual([
+    expect(spawnCalls[0]!.cmd).toMatch(/powershell\.exe$/i);
+    expect(spawnCalls[0]!.args).toEqual([
       "-NoProfile",
       "-Command",
       `(New-Object Media.SoundPlayer '${wav}').PlaySync()`,
@@ -77,8 +77,8 @@ describe("AudioPlayer", () => {
     writeMinimalWav(wav);
     const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
-    expect(spawnCalls[0].args[2]).toContain(wav.replace(/'/g, "''"));
-    expect(spawnCalls[0].args[2]).not.toContain(`'${wav}'`);
+    expect(spawnCalls[0]!.args[2]).toContain(wav.replace(/'/g, "''"));
+    expect(spawnCalls[0]!.args[2]).not.toContain(`'${wav}'`);
   });
 
   it("does not spawn with detached:true (DETACHED_PROCESS breaks Media.SoundPlayer.PlaySync on Windows)", () => {
@@ -87,7 +87,7 @@ describe("AudioPlayer", () => {
     const player = new AudioPlayer({ spawn: fakeSpawn, platform: "win32" });
     player.play(wav);
     expect(spawnCalls.length).toBe(1);
-    expect(spawnCalls[0].opts.detached).not.toBe(true);
+    expect(spawnCalls[0]!.opts.detached).not.toBe(true);
   });
 });
 
@@ -127,7 +127,7 @@ describe("AudioPlayer — in-flight guard", () => {
     writeMinimalWav(wav);
     const player = new AudioPlayer({ spawn: trackingSpawn, platform: "win32" });
     player.play(wav);
-    children[0].emit("exit", 0, null);
+    children[0]!.emit("exit", 0, null);
     player.play(wav);
     expect(spawnCalls.length).toBe(2);
   });
@@ -137,7 +137,7 @@ describe("AudioPlayer — in-flight guard", () => {
     writeMinimalWav(wav);
     const player = new AudioPlayer({ spawn: trackingSpawn, platform: "win32" });
     player.play(wav);
-    children[0].emit("error", new Error("spawn ENOENT"));
+    children[0]!.emit("error", new Error("spawn ENOENT"));
     player.play(wav);
     expect(spawnCalls.length).toBe(2);
   });
@@ -159,8 +159,8 @@ describe("AudioPlayer — macOS", () => {
     const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
     player.play(wav);
     expect(spawnCalls.length).toBe(1);
-    expect(spawnCalls[0].cmd).toBe("/usr/bin/afplay");
-    expect(spawnCalls[0].args).toEqual([wav]);
+    expect(spawnCalls[0]!.cmd).toBe("/usr/bin/afplay");
+    expect(spawnCalls[0]!.args).toEqual([wav]);
   });
 
   it("does not spawn when file is missing on darwin", () => {
@@ -187,6 +187,6 @@ describe("AudioPlayer — macOS", () => {
     writeMinimalWav(wav);
     const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
     player.play(wav);
-    expect(spawnCalls[0].args).toEqual([wav]);
+    expect(spawnCalls[0]!.args).toEqual([wav]);
   });
 });

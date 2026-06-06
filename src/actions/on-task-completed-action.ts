@@ -12,10 +12,10 @@ export class OnTaskCompletedAction extends EventFlashAction {
   // 5 fps stays well inside Stream Deck's 10 fps key-update budget. The
   // sequence is a hand-tuned ease in/out so the glyph "pulses" rather than
   // ticking through unrelated shapes.
-  private static readonly FRAMES = ["·", "*", "✶", "✢", "✻", "✢", "✶", "*"];
+  private static readonly FRAMES = ["·", "*", "✶", "✢", "✻", "✢", "✶", "*"] as const;
 
   private frameIdx = 0;
-  private animInterval: ReturnType<typeof setInterval> | null = null;
+  private animInterval: NodeJS.Timeout | null = null;
 
   private startAnimation(): void {
     if (this.animInterval !== null) return;

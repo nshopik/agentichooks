@@ -42,7 +42,30 @@ type RouteSpec = {
 const SESSION_START_SOFT = "/event/session-start-soft";
 const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
 
-const ROUTES: Readonly<Record<string, RouteSpec>> = {
+// Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
+// missing key a compile error instead of a silent runtime no-op; unknown
+// runtime strings still take the isKnownRoute guard path in handleRoute.
+type Route =
+  | "/event/stop"
+  | "/event/stop-failure"
+  | "/event/permission-request"
+  | "/event/task-created"
+  | "/event/task-completed"
+  | "/event/session-start"
+  | "/event/session-end"
+  | "/event/user-prompt-submit"
+  | "/event/permission-denied"
+  | "/event/post-tool-use"
+  | "/event/post-tool-use-failure"
+  | "/event/pre-tool-use"
+  | typeof SESSION_START_SOFT
+  | typeof TASK_COMPLETED_AGENT;
+
+function isKnownRoute(route: string): route is Route {
+  return Object.hasOwn(ROUTES, route);
+}
+
+const ROUTES: Readonly<Record<Route, RouteSpec>> = {
   "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
   "/event/permission-request":    { arms: "permission",     clears: [] },
@@ -131,11 +154,11 @@ export class Dispatcher {
   // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
   // extension), so a burst of arming events still produces exactly one alert.
   handleRoute(route: string): void {
-    const spec = ROUTES[route];
-    if (!spec) {
+    if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
     }
+    const spec = ROUTES[route];
     this.opts.log?.debug(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
     for (const t of spec.clears) this.clearType(t);
     if (spec.arms) this.armType(spec.arms);

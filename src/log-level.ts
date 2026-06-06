@@ -6,7 +6,7 @@ export type LogLevel = "info" | "debug" | "trace";
 const INSPECT_FLAGS = new Set(["--inspect", "--inspect-brk", "--inspect-port"]);
 
 function isDebugMode(execArgv: readonly string[]): boolean {
-  return execArgv.some((arg) => INSPECT_FLAGS.has(arg.split("=")[0]));
+  return execArgv.some((arg) => INSPECT_FLAGS.has(arg.split("=")[0] ?? arg));
 }
 
 /**
