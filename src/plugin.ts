@@ -132,7 +132,7 @@ const taskCounters = {
     // onSessionDrained fires BEFORE onChanged(sum) per spec contract —
     // dispatcher.fireTaskCompleted() is called first so ARMED state is set
     // before the visual layer's broadcastCounts queries it.
-    onSessionDrained: () => dispatcher.fireTaskCompleted(),
+    onSessionDrained: (sid) => dispatcher.fireTaskCompleted(sid),
     onChanged: (n) => taskCompletedAction.broadcastCounts(n, taskCounters.subagents.sum()),
     log: makeLogger("counter"),
   }),
@@ -189,7 +189,7 @@ async function startListener(): Promise<void> {
         }
         return;
       }
-      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId });
+      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId, cwd: body?.cwd });
     },
     log: makeLogger("http"),
   });

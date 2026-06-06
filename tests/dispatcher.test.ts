@@ -169,7 +169,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     buttons.set("stop", makeButton("stop"));
     const d = dispatcher();
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -221,7 +221,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/permission-request", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -240,7 +240,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/session-start", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -257,7 +257,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/user-prompt-submit", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -283,7 +283,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
     d.handleRoute("/event/permission-request", "sess-test");
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/session-end", "sess-test");
     vi.advanceTimersByTime(5000);
@@ -409,7 +409,7 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed alert is now armed via fireTaskCompleted (counter→zero path).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500);
     d.handleRoute("/event/pre-tool-use", "sess-test");
     vi.advanceTimersByTime(2000);
@@ -532,7 +532,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
     // Visual flash still fires.
@@ -544,7 +544,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
@@ -554,7 +554,7 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     buttons.set("a", makeButton("task-completed"));
     const d = dispatcher();
     // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(1000);
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
@@ -586,7 +586,7 @@ describe("Dispatcher.handleRoute — counter directives", () => {
   it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
     buttons.set("task", makeButton("task-completed"));
     const d = dispatcher();
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(999);
     expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
@@ -696,7 +696,7 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
       counters,
     });
     // Simulate the pending alert by calling fireTaskCompleted (enters PENDING).
-    d.fireTaskCompleted();
+    d.fireTaskCompleted("sess-test");
     vi.advanceTimersByTime(500); // half the 1s delay
     d.handleRoute("/event/task-created", "sess-test", { taskId: "task-1" });
     vi.advanceTimersByTime(5000);

@@ -222,11 +222,8 @@ export class Dispatcher {
   // Public seam used by SessionSetCounter (tasks instance) onSessionDrained. Wraps the
   // existing private armType so external callers can fire only the task-completed
   // alert and cannot bypass the matrix for arbitrary types.
-  // sessionId is temporarily optional (becomes required when plugin.ts is updated).
-  fireTaskCompleted(sessionId?: string): void {
-    // When called without sessionId (existing test compat only), use a synthetic id.
-    // TODO(task4): remove the `?` and the fallback once plugin.ts passes sessionId.
-    this.armType("task-completed", sessionId ?? "__legacy__", null);
+  fireTaskCompleted(sessionId: string): void {
+    this.armType("task-completed", sessionId, null);
   }
 
   /**
@@ -330,12 +327,6 @@ export class Dispatcher {
   // Button dismiss loop runs when the entire type's armed map is idle (empty or
   // was never populated) — so the key stays lit while other sessions are still armed.
   // Fires onArmedChanged iff an armed entry was actually removed.
-  //
-  // Legacy compat: also clears the "__legacy__" sentinel entry when present.
-  // fireTaskCompleted() without sessionId uses "__legacy__" as its key; any session's
-  // clearing route should cancel that entry just as the old global-keyed clear did.
-  // This preserves existing test behavior without affecting the per-session semantics
-  // of real (non-legacy) session entries.
   private clearType(type: EventType, sessionId: string): void {
     const pendingInner = this.pending.get(type);
     if (pendingInner) {
@@ -345,26 +336,12 @@ export class Dispatcher {
         pendingInner.delete(sessionId);
         if (pendingInner.size === 0) this.pending.delete(type); // prune-on-empty
       }
-      // Legacy compat: also cancel the __legacy__ pending entry if present.
-      if (sessionId !== "__legacy__") {
-        const legacyTimer = pendingInner.get("__legacy__");
-        if (legacyTimer) {
-          clearTimeout(legacyTimer);
-          pendingInner.delete("__legacy__");
-          if (pendingInner.size === 0) this.pending.delete(type); // prune-on-empty
-        }
-      }
     }
     const armedInner = this.armed.get(type);
     let removedArmed = false;
     if (armedInner) {
       if (armedInner.has(sessionId)) {
         armedInner.delete(sessionId);
-        removedArmed = true;
-      }
-      // Legacy compat: also remove the __legacy__ armed entry if present.
-      if (sessionId !== "__legacy__" && armedInner.has("__legacy__")) {
-        armedInner.delete("__legacy__");
         removedArmed = true;
       }
       if (removedArmed && armedInner.size === 0) {
