@@ -10,6 +10,31 @@ export const TRIGGER_ROUTES: ReadonlyArray<string> = [...ACTION_ROUTES].sort();
 
 const TRIGGER_SESSION_ID = "streamdeck-trigger";
 
+// Per-route synthetic id injection.
+//
+// The dispatcher's missing-id gate drops routes whose counter entries require
+// an id (task_id for task-created/task-completed; agent_id for subagent-start/
+// subagent-stop) when that id is absent from the body. Without this, pressing a
+// Trigger Hook key for any of these four routes silently produces a WARN-drop.
+//
+// The fixed id value is deliberately idempotent under the dispatcher's Set
+// semantics: repeated task-created presses don't inflate the in-flight count
+// (Set.add("streamdeck-trigger") is a no-op on re-insertion), and a create →
+// complete round-trip exercises the chime correctly (add then remove).
+//
+// CRITICAL: agent_id must NOT be added to any other route — deriveRoute's
+// agent-context check would drop /event/stop carrying agent_id, breaking
+// the stop alert trigger. Per-route selection only.
+function buildBody(route: string): Record<string, string> {
+  if (route === "/event/task-created" || route === "/event/task-completed") {
+    return { session_id: TRIGGER_SESSION_ID, task_id: TRIGGER_SESSION_ID };
+  }
+  if (route === "/event/subagent-start" || route === "/event/subagent-stop") {
+    return { session_id: TRIGGER_SESSION_ID, agent_id: TRIGGER_SESSION_ID };
+  }
+  return { session_id: TRIGGER_SESSION_ID };
+}
+
 /**
  * Builds the fetch URL and RequestInit for a trigger POST.
  * Pure function — no network I/O, no side effects.
@@ -20,7 +45,7 @@ export function buildTriggerRequest(route: string): { url: string; init: Request
     init: {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ session_id: TRIGGER_SESSION_ID }),
+      body: JSON.stringify(buildBody(route)),
     },
   };
 }

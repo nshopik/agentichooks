@@ -45,6 +45,45 @@ describe("buildTriggerRequest", () => {
     const { url } = buildTriggerRequest("/event/permission-request");
     expect(url).toBe("http://127.0.0.1:9123/event/permission-request");
   });
+
+  // ── Per-route synthetic id injection (missing-id gate regression guard) ──
+  // The dispatcher requires task_id for task-created/task-completed and agent_id
+  // for subagent-start/subagent-stop. Without these, the routes are WARN-dropped.
+
+  it("task-created body includes task_id: 'streamdeck-trigger' and session_id", () => {
+    const { init } = buildTriggerRequest("/event/task-created");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.task_id).toBe("streamdeck-trigger");
+    expect(parsed.session_id).toBe("streamdeck-trigger");
+  });
+
+  it("task-completed body includes task_id: 'streamdeck-trigger'", () => {
+    const { init } = buildTriggerRequest("/event/task-completed");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.task_id).toBe("streamdeck-trigger");
+  });
+
+  it("subagent-start body includes agent_id: 'streamdeck-trigger' and NO task_id", () => {
+    const { init } = buildTriggerRequest("/event/subagent-start");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.agent_id).toBe("streamdeck-trigger");
+    expect(parsed.task_id).toBeUndefined();
+  });
+
+  it("subagent-stop body includes agent_id: 'streamdeck-trigger'", () => {
+    const { init } = buildTriggerRequest("/event/subagent-stop");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.agent_id).toBe("streamdeck-trigger");
+  });
+
+  it("/event/stop body has NO task_id and NO agent_id (agent-context-drop regression guard)", () => {
+    // CRITICAL: adding agent_id to /event/stop would cause deriveRoute to drop it
+    // (agent-context check), silently breaking the stop alert trigger.
+    const { init } = buildTriggerRequest("/event/stop");
+    const parsed = JSON.parse(init.body as string);
+    expect(parsed.task_id).toBeUndefined();
+    expect(parsed.agent_id).toBeUndefined();
+  });
 });
 
 // ─────────────────────────────────────────────────────────
