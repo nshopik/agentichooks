@@ -108,6 +108,11 @@ All notable changes to this project will be documented in this file.
   skips the normal row's permission-clear, so team workflows still reach zero
   and fire the task-completed alert. `[http]` result lines now include
   `agent=<8-char id>` when present (#24)
+- Task counter is now keyed by `session_id` so concurrent Claude Code sessions
+  each drive their own in-flight count bucket. The "all tasks done" chime fires
+  when a *session's* count reaches zero (per-session chime), not when the global
+  sum across all sessions hits zero. The badge on the Stream Deck button continues
+  to show the total in-flight count across all sessions. (#TBD)
 
 ## [0.9.2] - 2026-05-11
 
