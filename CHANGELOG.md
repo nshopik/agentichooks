@@ -17,11 +17,27 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- `SubagentStart` and `SubagentStop` hooks are now processed as action routes (14 action
+  + 15 info = 29 total) instead of log-only, so the subagent pill updates in real time.
+  The installer entry count is unchanged. (#TBD)
+- Manual curl recipes for `task-created`/`task-completed` now require a `task_id` field;
+  `subagent-start`/`subagent-stop` recipes require `agent_id`. Bare bodies are dropped
+  with a WARN log. (#TBD)
+- Trigger Hook action now sends synthetic `task_id`/`agent_id` (`streamdeck-trigger`) on
+  the four id-gated routes so manual key presses still fire them. (#TBD)
 - Trigger Hook tooltip reworded to "Send a Claude Code hook event on key
   press" (drops the implementation verb). (#36)
 
 ### Added
 
+- **Dual-metric badge on Task Completed button** — the big yellow number now tracks
+  in-flight *task* count (based on `TaskCreated`/`TaskCompleted` event ids); a coral
+  notification pill in the top-right corner shows the running subagent count (fed by
+  `SubagentStart`/`SubagentStop`). Both metrics use per-session id-sets, eliminating
+  drift from duplicate or orphan events. (#TBD)
+- **On Stop thinking indicator** — per-button opt-in animated coral glyph (8-frame pulse)
+  while any session is thinking (`UserPromptSubmit` → `Stop`). Enable via "Animate while
+  Claude is thinking" checkbox in the On Stop Property Inspector. (#TBD)
 - **Trigger Hook action** — a fourth Stream Deck button that POSTs to a
   configurable `http://127.0.0.1:9123/event/<route>` on key press, using the
   same HTTP transport as real Claude Code hooks. Useful for manual alert
@@ -45,6 +61,8 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking
 
+- `animateCounter` per-button setting removed; any stored value is silently ignored on
+  next load. Replace with `animateThinking` on the On Stop button if desired. (#TBD)
 - Action-route POSTs without a `session_id` body field are now dropped with a warn
   log and produce no alert, sound, or state change. Affected callers:
   - **Bare `curl.exe -X POST …/event/stop`** (no body) — now a no-op. Add
