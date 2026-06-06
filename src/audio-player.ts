@@ -27,6 +27,7 @@ export class AudioPlayer {
   private log?: Logger;
   private platform: NodeJS.Platform;
   private warnedMissing = new Set<string>();
+  private inFlight = false;
 
   constructor(opts: AudioPlayerOpts = {}) {
     this.spawn = opts.spawn ?? ((cmd, args, o) => cp.spawn(cmd, args as string[], o ?? {}) as unknown as SpawnedChild);
@@ -36,6 +37,10 @@ export class AudioPlayer {
 
   play(wavPath: string): void {
     this.log?.info(`play() called: path=${wavPath} platform=${this.platform}`);
+    if (this.inFlight) {
+      this.log?.debug(`skip: previous sound still playing`);
+      return;
+    }
     if (!fs.existsSync(wavPath)) {
       if (!this.warnedMissing.has(wavPath)) {
         this.warnedMissing.add(wavPath);
@@ -67,9 +72,18 @@ export class AudioPlayer {
   }
 
   private attachLifecycle(child: SpawnedChild): void {
+    // Guard engages only when the child is trackable — without `on` we could
+    // never release and would block all future sounds.
     if (typeof child.on === "function") {
-      child.on("error", (err) => this.log?.error(`spawn error: ${err}`));
-      child.on("exit", (code, signal) => this.log?.info(`child exit code=${code} signal=${signal}`));
+      this.inFlight = true;
+      child.on("error", (err) => {
+        this.inFlight = false;
+        this.log?.error(`spawn error: ${err}`);
+      });
+      child.on("exit", (code, signal) => {
+        this.inFlight = false;
+        this.log?.info(`child exit code=${code} signal=${signal}`);
+      });
     }
     child.unref();
   }

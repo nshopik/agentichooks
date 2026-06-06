@@ -30,6 +30,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Rapid arm→clear→arm cycling (e.g. alternating `permission-request`/
+  `permission-denied`) no longer spawns overlapping sound processes — the
+  audio player now skips `play()` while a previous sound is still playing
+  and re-arms when that process exits. (#29)
 - Warn logs for empty/unparseable/oversize POST bodies on info-only routes
   (e.g. `/event/notification`) no longer carry the misleading
   `(session_id required)` suffix — info routes are never session-gated; they
