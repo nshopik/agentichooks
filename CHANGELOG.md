@@ -8,6 +8,12 @@ All notable changes to this project will be documented in this file.
 
 ### Security
 
+- Warn-line logging in the HTTP listener is no longer attacker-amplifiable:
+  attacker-controlled values (`Origin`/`Host` headers, request URL,
+  notification message) are truncated to 120 chars with an explicit
+  `…(+N more)` marker, and warn diagnostics are rate-limited to 10 per
+  60-second window (one suppression notice marks the cut). Normal result
+  log lines are unaffected. (#30)
 - The HTTP listener now destroys connections that stay idle for 5 seconds
   (no data flowing in either direction). Previously a peer reached over an SSH
   remote forward could hold sockets open indefinitely (slowloris); the 64 KB
