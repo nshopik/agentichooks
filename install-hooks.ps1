@@ -26,8 +26,32 @@ function Read-Settings {
 function Write-Settings($obj) {
     $dir = Split-Path $settingsPath -Parent
     if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-    $json = $obj | ConvertTo-Json -Depth 10
-    Set-Content -Path $settingsPath -Value $json -Encoding UTF8
+    # Resolve to absolute path so [System.IO.File]::WriteAllText (which uses .NET's
+    # working directory, not PowerShell's) always receives an absolute path — even
+    # if the caller passed a relative -SettingsPath.  The directory was just ensured
+    # to exist above, so Resolve-Path will always succeed here.
+    $dir = (Resolve-Path -LiteralPath $dir).Path
+    $json = $obj | ConvertTo-Json -Depth 100
+    # Write atomically: write to a temp file in the SAME directory as the target
+    # (same-directory guarantees the rename is on the same volume, which makes
+    # Move-Item atomic on Windows; cross-volume would fall back to copy+delete).
+    # Use [System.IO.File]::WriteAllText so encoding is identical under both
+    # Windows PowerShell 5.1 and pwsh 7 (UTF-8 without BOM).
+    # The "settings.json.*.tmp" naming makes orphans from a crashed run
+    # recognizable (vs. an opaque random name).
+    $tmp = Join-Path $dir ("settings.json." + [System.IO.Path]::GetRandomFileName() + ".tmp")
+    try {
+        [System.IO.File]::WriteAllText(
+            $tmp,
+            $json,
+            [System.Text.UTF8Encoding]::new($false)
+        )
+        Move-Item -Path $tmp -Destination $settingsPath -Force
+    } catch {
+        # Clean up temp file on failure so no partial file lingers.
+        if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        throw
+    }
 }
 
 function Get-OrAdd-Property($obj, $name, $default) {
