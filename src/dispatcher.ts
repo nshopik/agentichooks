@@ -30,6 +30,13 @@ export type DispatcherOpts = {
     subagents?: DispatcherCounter;
     thinking?: DispatcherCounter;
   };
+  /**
+   * Fires exactly once per ARMED-map mutation: inside fire() (arm or re-fire),
+   * inside clearType() when it removes an armed entry, and inside dismissArmed()
+   * when it wipes a non-empty map. Does NOT fire on PENDING entry — a session
+   * in its delay window is invisible to the key-lit OR and to armedContext.
+   */
+  onArmedChanged?: (type: EventType) => void;
 };
 
 // Each incoming HTTP route maps to a set of event types whose alerts it clears
@@ -147,15 +154,25 @@ export function deriveRoute(route: string, source: string | undefined, agentId: 
   return route;
 }
 
+// Per-session armed entry: timestamp and cwd captured when this session's alert fired.
+type ArmedEntry = { armedAt: number; cwd: string | null };
+
 export class Dispatcher {
   private opts: DispatcherOpts;
-  private pending = new Map<EventType, NodeJS.Timeout>();
+  // pending: per-session delay timers, keyed by EventType → sessionId → timer handle.
+  // Prune-on-empty invariant: when the last sessionId entry is removed from an inner
+  // Map, the inner Map is deleted from the outer Map. This makes "nothing pending for
+  // this type" representable as `pending.get(type) === undefined` with no edge case.
+  private pending = new Map<EventType, Map<string, NodeJS.Timeout>>();
   // ARMED state lives on the dispatcher, not on the visible buttons. Stream Deck
   // tears down (willDisappear) and rebuilds (willAppear) per-key contexts on every
   // page or profile switch, which would otherwise wipe alerting state. Tracking
   // armed types here lets onWillAppear restore the visual + remaining timeout.
-  private armed = new Set<EventType>();
-  private armedAt = new Map<EventType, number>();
+  //
+  // armed: per-session armed entries, keyed by EventType → sessionId → ArmedEntry.
+  // Prune-on-empty invariant: same as pending — an inner Map is deleted when empty,
+  // so `armed.get(type) === undefined` means "nothing armed for this type."
+  private armed = new Map<EventType, Map<string, ArmedEntry>>();
 
   constructor(opts: DispatcherOpts) {
     this.opts = opts;
@@ -167,9 +184,10 @@ export class Dispatcher {
   //   PENDING  — delay timer running; will fire (audio + flash) on expiry
   //   ARMED    — delay elapsed; alert is active for this type (independent of
   //              whether any button is currently visible to render it)
-  // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
-  // extension), so a burst of arming events still produces exactly one alert.
-  handleRoute(route: string, sessionId: string, ids?: { taskId?: string; agentId?: string }): void {
+  // Same-session same-type arm during PENDING is a deliberate no-op (timer keeps
+  // running, no extension), so a burst of arming events from one session still
+  // produces exactly one alert. Different sessions each get independent timers.
+  handleRoute(route: string, sessionId: string, ctx?: { taskId?: string; agentId?: string; cwd?: string }): void {
     if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
@@ -184,7 +202,7 @@ export class Dispatcher {
     if (spec.counters) {
       for (const entry of spec.counters) {
         if (entry.op === "reset") continue;
-        const id = this.resolveId(entry.metric, sessionId, ids);
+        const id = this.resolveId(entry.metric, sessionId, ctx);
         if (id === undefined) {
           this.opts.log?.warn(`drop missing-id route=${route} metric=${entry.metric}`);
           return;
@@ -195,34 +213,47 @@ export class Dispatcher {
     this.opts.log?.debug(
       `handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counters=${spec.counters?.map((e) => `${e.metric}.${e.op}`).join(",") ?? "-"}`
     );
-    for (const t of spec.clears) this.clearType(t);
-    if (spec.arms) this.armType(spec.arms);
-    if (spec.counters) this.applyCounters(spec.counters, sessionId, ids);
-    this.opts.log?.trace(`state stop=${this.stateOf("stop")} permission=${this.stateOf("permission")} task-completed=${this.stateOf("task-completed")}`);
+    for (const t of spec.clears) this.clearType(t, sessionId);
+    if (spec.arms) this.armType(spec.arms, sessionId, ctx?.cwd ?? null);
+    if (spec.counters) this.applyCounters(spec.counters, sessionId, ctx);
+    this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)}`);
   }
 
   // Public seam used by SessionSetCounter (tasks instance) onSessionDrained. Wraps the
   // existing private armType so external callers can fire only the task-completed
   // alert and cannot bypass the matrix for arbitrary types.
-  fireTaskCompleted(): void {
-    this.armType("task-completed");
+  // sessionId is temporarily optional (becomes required when plugin.ts is updated).
+  fireTaskCompleted(sessionId?: string): void {
+    // When called without sessionId (existing test compat only), use a synthetic id.
+    // TODO(task4): remove the `?` and the fallback once plugin.ts passes sessionId.
+    this.armType("task-completed", sessionId ?? "__legacy__", null);
   }
 
   /**
    * Public seam used by the action layer when a user keypress or per-button
    * auto-timeout dismisses an alert. Clears ARMED state for the given event
-   * type and dismisses every currently-alerting button of that type.
+   * type across ALL sessions and dismisses every currently-alerting button of
+   * that type.
    *
-   * Alert-only scope: does NOT touch the SessionSetCounter instances or the in-flight count
-   * visual. Covers all three dispatcher states by delegating to clearType:
-   * IDLE (no-op on dispatcher state; still dismisses stray alerting visuals),
-   * PENDING (cancels the timer so the alert never fires), ARMED (clears state
-   * + visuals). Mirrors the fireTaskCompleted() pattern: a narrow public seam
-   * that cannot bypass the route matrix for arbitrary state.
+   * Alert-only scope: does NOT touch the SessionSetCounter instances or the in-flight
+   * count visual. Covers all three dispatcher states: IDLE (no-op on dispatcher state;
+   * still dismisses stray alerting visuals), PENDING (cancels every per-session timer
+   * so the alert never fires), ARMED (clears all session entries + visuals).
+   * Mirrors the fireTaskCompleted() pattern: a narrow public seam that cannot bypass
+   * the route matrix for arbitrary state.
    */
   dismissArmed(type: EventType): void {
     this.opts.log?.debug(`dismissArmed type=${type}`);
-    this.clearType(type);
+    // Iterate and cancel ALL per-session pending timers for this type.
+    // TRAP: after the re-key, this.pending.get(type) is a Map<sessionId, Timeout>,
+    // and clearTimeout(someMap) is a silent no-op in Node — we MUST iterate.
+    for (const timer of this.pending.get(type)?.values() ?? []) clearTimeout(timer);
+    this.pending.delete(type);
+    const hadArmed = this.armed.delete(type); // wipes entire inner map
+    for (const [, btn] of this.opts.getButtons()) {
+      if (btn.state.alerting && btn.eventType === type) btn.dismiss();
+    }
+    if (hadArmed) this.opts.onArmedChanged?.(type);
   }
 
   private resolveId(metric: CounterMetric, sessionId: string, ids?: { taskId?: string; agentId?: string }): string | undefined {
@@ -253,60 +284,144 @@ export class Dispatcher {
     }
   }
 
-  // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was
-  // armed, or null if not armed. Lets a freshly-rebuilt button context restore
-  // the alert with the correct remaining auto-timeout.
+  // Public lookup for EventFlashAction.onWillAppear: returns ms since the latest
+  // session was armed for this type, or null if no sessions are armed.
+  // Latest-wins: uses the greatest armedAt across all armed sessions, consistent
+  // with armedContext. Null when no armed entries; prune-on-empty makes "empty but
+  // present" inner Map unrepresentable, guarding the Math.max(...[]) === -Infinity trap.
   armedMsAgo(type: EventType): number | null {
-    const at = this.armedAt.get(type);
-    if (at === undefined) return null;
-    return Date.now() - at;
+    const inner = this.armed.get(type);
+    if (!inner) return null;
+    let maxAt = -Infinity;
+    for (const { armedAt } of inner.values()) {
+      if (armedAt > maxAt) maxAt = armedAt;
+    }
+    return Date.now() - maxAt;
   }
 
-  private stateOf(type: EventType): "IDLE" | "PENDING" | "ARMED" {
-    if (this.pending.has(type)) return "PENDING";
-    if (this.armed.has(type)) return "ARMED";
+  /**
+   * Public lookup used by OnStopAction/OnPermissionAction to compute the key title.
+   * Returns null when nothing is armed (no inner Map); otherwise { count, latestCwd }
+   * where count = number of armed sessions, latestCwd = the latest session's cwd
+   * (determined by greatest armedAt, consistent with armedMsAgo latest-wins).
+   */
+  armedContext(type: EventType): { count: number; latestCwd: string | null } | null {
+    const inner = this.armed.get(type);
+    if (!inner) return null;
+    let maxAt = -Infinity;
+    let latestCwd: string | null = null;
+    for (const entry of inner.values()) {
+      if (entry.armedAt > maxAt) {
+        maxAt = entry.armedAt;
+        latestCwd = entry.cwd;
+      }
+    }
+    return { count: inner.size, latestCwd };
+  }
+
+  private stateOf(type: EventType, sessionId: string): "IDLE" | "PENDING" | "ARMED" {
+    if (this.pending.get(type)?.has(sessionId)) return "PENDING";
+    if (this.armed.get(type)?.has(sessionId)) return "ARMED";
     return "IDLE";
   }
 
-  private clearType(type: EventType): void {
-    const timer = this.pending.get(type);
-    if (timer) {
-      clearTimeout(timer);
-      this.pending.delete(type);
+  // Per-session clear: cancels this session's pending timer (if any) and removes
+  // this session's armed entry (if any). Prunes empty inner maps.
+  // Button dismiss loop runs when the entire type's armed map is idle (empty or
+  // was never populated) — so the key stays lit while other sessions are still armed.
+  // Fires onArmedChanged iff an armed entry was actually removed.
+  //
+  // Legacy compat: also clears the "__legacy__" sentinel entry when present.
+  // fireTaskCompleted() without sessionId uses "__legacy__" as its key; any session's
+  // clearing route should cancel that entry just as the old global-keyed clear did.
+  // This preserves existing test behavior without affecting the per-session semantics
+  // of real (non-legacy) session entries.
+  private clearType(type: EventType, sessionId: string): void {
+    const pendingInner = this.pending.get(type);
+    if (pendingInner) {
+      const timer = pendingInner.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        pendingInner.delete(sessionId);
+        if (pendingInner.size === 0) this.pending.delete(type); // prune-on-empty
+      }
+      // Legacy compat: also cancel the __legacy__ pending entry if present.
+      if (sessionId !== "__legacy__") {
+        const legacyTimer = pendingInner.get("__legacy__");
+        if (legacyTimer) {
+          clearTimeout(legacyTimer);
+          pendingInner.delete("__legacy__");
+          if (pendingInner.size === 0) this.pending.delete(type); // prune-on-empty
+        }
+      }
     }
-    this.armed.delete(type);
-    this.armedAt.delete(type);
-    for (const [, btn] of this.opts.getButtons()) {
-      if (btn.state.alerting && btn.eventType === type) btn.dismiss();
+    const armedInner = this.armed.get(type);
+    let removedArmed = false;
+    if (armedInner) {
+      if (armedInner.has(sessionId)) {
+        armedInner.delete(sessionId);
+        removedArmed = true;
+      }
+      // Legacy compat: also remove the __legacy__ armed entry if present.
+      if (sessionId !== "__legacy__" && armedInner.has("__legacy__")) {
+        armedInner.delete("__legacy__");
+        removedArmed = true;
+      }
+      if (removedArmed && armedInner.size === 0) {
+        this.armed.delete(type); // prune-on-empty
+      }
+      // Else: other sessions still armed — key stays lit, only title updates via onArmedChanged.
     }
+    // Dismiss alerting buttons whenever the type is fully idle (no armed sessions remain,
+    // whether because we just cleared the last entry or because there were never any
+    // dispatcher-tracked entries — e.g. buttons created with alerting=true in tests or
+    // via onWillAppear restoring visual state without re-arming through dispatcher).
+    if (this.armed.get(type) === undefined) {
+      for (const [, btn] of this.opts.getButtons()) {
+        if (btn.state.alerting && btn.eventType === type) btn.dismiss();
+      }
+    }
+    if (removedArmed) this.opts.onArmedChanged?.(type);
   }
 
-  private armType(type: EventType): void {
-    if (this.pending.has(type)) {
-      this.opts.log?.debug(`arm skip: type=${type} already PENDING`);
+  private armType(type: EventType, sessionId: string, cwd: string | null): void {
+    // This session PENDING for the type → no-op (timer keeps running, no extension;
+    // burst of arms from one session = one alert, per existing rule).
+    if (this.pending.get(type)?.has(sessionId)) {
+      this.opts.log?.debug(`arm skip: type=${type} session=${sessionId.slice(0, 8)} already PENDING`);
       return;
     }
-    if (this.armed.has(type)) {
-      this.fire(type);
+    // This session ARMED → re-fire (audio replay, pulse restart, armedAt/cwd refresh).
+    if (this.armed.get(type)?.has(sessionId)) {
+      this.fire(type, sessionId, cwd);
       return;
     }
+    // Otherwise → start this session's own delay timer.
     const delayMs = this.opts.getGlobalSettings().alertDelay[type];
     if (delayMs <= 0) {
-      this.fire(type);
+      this.fire(type, sessionId, cwd);
       return;
     }
+    let inner = this.pending.get(type);
+    if (!inner) {
+      inner = new Map<string, NodeJS.Timeout>();
+      this.pending.set(type, inner);
+    }
     const timer = setTimeout(() => {
-      this.pending.delete(type);
-      this.fire(type);
+      inner!.delete(sessionId);
+      if (inner!.size === 0) this.pending.delete(type); // prune-on-empty
+      this.fire(type, sessionId, cwd);
     }, delayMs);
-    this.pending.set(type, timer);
-    this.opts.log?.info(`pending type=${type} delayMs=${delayMs}`);
+    inner.set(sessionId, timer);
+    this.opts.log?.info(`pending type=${type} session=${sessionId.slice(0, 8)} delayMs=${delayMs}`);
   }
 
-  private fire(type: EventType): void {
+  private fire(type: EventType, sessionId: string, cwd: string | null): void {
     const buttons = this.opts.getButtons();
     let dismissed = 0;
     let armed = 0;
+    // Dismiss any currently-alerting buttons of this type before re-alerting
+    // (pulse restart: dismiss prior visual state, then re-arm).
     for (const [, btn] of buttons) {
       if (btn.state.alerting && btn.eventType === type) {
         btn.dismiss();
@@ -319,12 +434,17 @@ export class Dispatcher {
         armed++;
       }
     }
-    this.armed.add(type);
-    this.armedAt.set(type, Date.now());
+    let inner = this.armed.get(type);
+    if (!inner) {
+      inner = new Map<string, ArmedEntry>();
+      this.armed.set(type, inner);
+    }
+    inner.set(sessionId, { armedAt: Date.now(), cwd });
     const audioCfg = this.opts.getGlobalSettings().audio[type];
     const path = audioCfg.soundPath ?? defaultSoundPath(type);
-    this.opts.log?.info(`fire type=${type} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
-    if (!path) return;
-    this.opts.audioPlayer.play(path);
+    this.opts.log?.info(`fire type=${type} session=${sessionId.slice(0, 8)} buttons=${buttons.size} dismissed=${dismissed} armed=${armed} audio=${path ? "yes" : "no"}`);
+    if (path) this.opts.audioPlayer.play(path);
+    // fire() is the single ARMED-map mutation point for arms — fire onArmedChanged.
+    this.opts.onArmedChanged?.(type);
   }
 }
