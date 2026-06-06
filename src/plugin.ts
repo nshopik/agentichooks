@@ -156,7 +156,7 @@ async function startListener(): Promise<void> {
         }
         return;
       }
-      dispatcher.handleRoute(derived);
+      dispatcher.handleRoute(derived, body!.sessionId!);
     },
     log: makeLogger("http"),
   });
