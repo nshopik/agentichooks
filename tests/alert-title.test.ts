@@ -75,4 +75,15 @@ describe("formatAlertTitle", () => {
   it("returns dir name for Windows path 'C:\\Users' (not the drive designator)", () => {
     expect(formatAlertTitle(1, "C:\\Users")).toBe("Users");
   });
+
+  // Trailing separators are dropped (filter absorbs the trailing empty segment)
+  it("ignores trailing separators in both styles", () => {
+    expect(formatAlertTitle(1, "/x/repo/")).toBe("repo");
+    expect(formatAlertTitle(1, "C:\\Users\\repo\\")).toBe("repo");
+  });
+
+  // UNC path: leading \\ produces empty segments the filter must absorb
+  it("returns basename from a UNC path", () => {
+    expect(formatAlertTitle(1, "\\\\server\\share\\repo")).toBe("repo");
+  });
 });
