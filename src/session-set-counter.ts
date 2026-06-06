@@ -4,8 +4,9 @@ export type SessionSetCounterOpts = {
   onChanged: (sum: number) => void;
   // Optional — only the "tasks" instance wires this. Fires when remove() takes
   // a session's set from >0 to 0 BEFORE onChanged(sum), so the dispatcher's
-  // armed state is set before the visual layer queries it.
-  onSessionDrained?: () => void;
+  // armed state is set before the visual layer queries it. Receives the drained
+  // sessionId so callers can scope the task-completed arm to the correct session.
+  onSessionDrained?: (sessionId: string) => void;
   log?: Logger;
   // Metric label for log lines (e.g. "tasks", "subagents", "thinking").
   name?: string;
@@ -70,7 +71,8 @@ export class SessionSetCounter {
       this.opts.log?.debug(`${this.m}remove drain session=${sessionId.slice(0, 8)} sum=${s}`);
       // Drain: onSessionDrained BEFORE onChanged — so dispatcher.fireTaskCompleted()
       // sets ARMED state before the visual layer's onChanged queries sum/armed.
-      this.opts.onSessionDrained?.();
+      // Passes sessionId so the dispatcher can scope the arm to the correct session.
+      this.opts.onSessionDrained?.(sessionId);
       this.opts.onChanged(s);
     } else {
       const s = this.sum();

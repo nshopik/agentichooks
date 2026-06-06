@@ -15,7 +15,7 @@ function makeLog() {
 
 describe("SessionSetCounter", () => {
   let onChanged: ReturnType<typeof vi.fn<(sum: number) => void>>;
-  let onSessionDrained: ReturnType<typeof vi.fn<() => void>>;
+  let onSessionDrained: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
   let log: ReturnType<typeof makeLog>;
 
   beforeEach(() => {
@@ -253,5 +253,38 @@ describe("SessionSetCounter", () => {
     const c = new SessionSetCounter({ onChanged, log, name: "tasks" });
     c.add("sess-A", "task-1");
     expect(log.debug).toHaveBeenCalledWith(expect.stringContaining("metric=tasks"));
+  });
+
+  // ---- onSessionDrained receives the drained sessionId ----
+
+  it("onSessionDrained receives the drained sessionId as its argument", () => {
+    const drainedIds: string[] = [];
+    const c = new SessionSetCounter({
+      onChanged,
+      onSessionDrained: (sid) => { drainedIds.push(sid); },
+      log,
+    });
+    c.add("sess-Alpha", "task-1");
+    c.add("sess-Beta", "task-2");
+    c.remove("sess-Alpha", "task-1");
+    expect(drainedIds).toEqual(["sess-Alpha"]);
+    c.remove("sess-Beta", "task-2");
+    expect(drainedIds).toEqual(["sess-Alpha", "sess-Beta"]);
+  });
+
+  it("onSessionDrained ordering invariant holds — drained id received before onChanged fires", () => {
+    const callLog: Array<{ event: string; value: string | number }> = [];
+    const c = new SessionSetCounter({
+      onChanged: (sum) => { callLog.push({ event: "changed", value: sum }); },
+      onSessionDrained: (sid) => { callLog.push({ event: "drained", value: sid }); },
+      log,
+    });
+    c.add("sess-X", "task-1");
+    callLog.length = 0; // reset after the add
+    c.remove("sess-X", "task-1"); // drain
+    expect(callLog).toEqual([
+      { event: "drained", value: "sess-X" },
+      { event: "changed", value: 0 },
+    ]);
   });
 });
