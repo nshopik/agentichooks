@@ -549,6 +549,112 @@ describe("HttpListener — warn suffix on info routes", () => {
   });
 });
 
+describe("HttpListener — warn truncation (attacker-controlled values)", () => {
+  it("truncates a long Host header value in the rejected warn line", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const longHost = "h".repeat(500);
+    await requestWithHeaders("POST", "/event/stop", listener.port(), { Host: longHost });
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("reason=host"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).toContain("h".repeat(120) + "…(+380 more)");
+    expect(warn!.msg).not.toContain("h".repeat(121));
+  });
+
+  it("truncates a long Origin header value in the rejected warn line", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const longOrigin = "http://" + "o".repeat(500);
+    await requestWithHeaders("POST", "/event/stop", listener.port(), { Origin: longOrigin });
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("reason=origin"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).toContain("…(+387 more)");
+    expect(warn!.msg).not.toContain("o".repeat(500));
+  });
+
+  it("truncates a long url in the rejected warn line", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const longUrl = "/event/" + "u".repeat(500);
+    await requestWithHeaders("POST", longUrl, listener.port(), { Host: "attacker.example" });
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("reason=host"));
+    expect(warn).toBeDefined();
+    expect(warn!.msg).not.toContain("u".repeat(500));
+    expect(warn!.msg).toMatch(/url=\/event\/u+…\(\+\d+ more\)/);
+  });
+
+  it("truncates a long notification message in the info line", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "abc", cwd: "/a/b", message: "m".repeat(1000) });
+    await requestWithBody("POST", "/event/notification", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const notifLine = logs.find((l) => l.level === "info" && l.msg.includes("notification message="));
+    expect(notifLine).toBeDefined();
+    expect(notifLine!.msg).not.toContain("m".repeat(1000));
+    expect(notifLine!.msg).toContain("…(+880 more)");
+  });
+
+  it("leaves short values untouched (no ellipsis marker)", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    await requestWithHeaders("POST", "/event/stop", listener.port(), { Host: "attacker.example" });
+    await new Promise((r) => setTimeout(r, 20));
+    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("reason=host"));
+    expect(warn!.msg).toContain("host=attacker.example");
+    expect(warn!.msg).not.toContain("…");
+  });
+});
+
+describe("HttpListener — warn rate limiting", () => {
+  it("caps warn lines per window: 10 warns, then one suppression notice, then silence", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const port = listener.port();
+    for (let i = 0; i < 15; i++) {
+      await request("POST", "/event/stop", port); // empty body → 1 warn each
+    }
+    await new Promise((r) => setTimeout(r, 30));
+    const warns = logs.filter((l) => l.level === "warn");
+    expect(warns).toHaveLength(11);
+    expect(warns[10].msg).toMatch(/rate limit/);
+    expect(warns.slice(0, 10).every((w) => w.msg.includes("empty body"))).toBe(true);
+  });
+
+  it("warns resume after the window rolls over", async () => {
+    let t = 0;
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog(), now: () => t });
+    await listener.start();
+    const port = listener.port();
+    for (let i = 0; i < 12; i++) {
+      await request("POST", "/event/stop", port);
+    }
+    await new Promise((r) => setTimeout(r, 30));
+    expect(logs.filter((l) => l.level === "warn")).toHaveLength(11);
+    t = 61_000; // next window
+    await request("POST", "/event/stop", port);
+    await new Promise((r) => setTimeout(r, 30));
+    const warns = logs.filter((l) => l.level === "warn");
+    expect(warns).toHaveLength(12);
+    expect(warns[11].msg).toContain("empty body");
+  });
+
+  it("does not rate-limit the result info/debug lines", async () => {
+    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
+    await listener.start();
+    const port = listener.port();
+    for (let i = 0; i < 15; i++) {
+      await request("POST", "/event/stop", port);
+    }
+    await new Promise((r) => setTimeout(r, 30));
+    const results = logs.filter((l) => l.level === "info" && l.msg.includes("route=/event/stop"));
+    expect(results).toHaveLength(15);
+  });
+});
+
 describe("HttpListener — connection-lifetime timeouts", () => {
   // Helper: open a raw TCP socket to the listener port and return it.
   // The caller controls what (if anything) is written.
