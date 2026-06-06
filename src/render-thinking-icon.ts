@@ -23,7 +23,7 @@ function buildSvg(frame: string): string {
   ].join("");
 }
 
-export function renderThinkingIcon(frame: string): string {
+export function renderThinkingIcon(frame: ThinkingFrame): string {
   const svg = buildSvg(frame);
   const base64 = Buffer.from(svg, "utf-8").toString("base64");
   return `data:image/svg+xml;base64,${base64}`;
