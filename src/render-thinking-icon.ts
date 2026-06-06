@@ -1,7 +1,7 @@
 // Runtime-generated SVG icon for the On Stop key.
 // Supports four layout modes based on the (frame, elapsed) argument pair:
 //
-//   frame + elapsed  → corner sparkle (top-left, coral #da7756, ~26px) +
+//   frame + elapsed  → corner sparkle (top-left, coral #da7756, 33px) +
 //                      centered gray (#9a9a9a) elapsed timer
 //   null  + elapsed  → centered gray elapsed timer only (animateThinking unchecked)
 //   frame + null     → legacy centered big glyph layout (defensive fallback;
@@ -22,8 +22,13 @@ const BG = "#000000";
 const GLYPH_COLOR = "#da7756";     // coral — sparkle / legacy centered glyph
 const TIMER_COLOR = "#9a9a9a";     // gray  — elapsed timer
 const GLYPH_FONT_SIZE = 80;        // legacy centered glyph (frame + null)
-const SPARKLE_FONT_SIZE = 26;      // corner sparkle (frame + elapsed)
-const SPARKLE_X = 18;              // top-left corner x
+// Corner sparkle geometry restored verbatim from the pre-#38 render-count-icon
+// corner glyph (commit b7f21a5): font-size 33, centered on x=22, baseline y=34.
+// The first cut shipped at 26px and read noticeably smaller than the old badge.
+// Overlap with the timer is safe: sparkle band ends at y≈34; the large-font
+// timer's cap top starts at y≈57 (baseline 87.4 − 0.7×44).
+const SPARKLE_FONT_SIZE = 33;      // corner sparkle (frame + elapsed)
+const SPARKLE_X = 22;              // top-left corner x (text-anchor middle)
 const SPARKLE_Y = 34;              // top-left corner y (baseline)
 const TIMER_FONT_SIZE_LARGE = 44;  // elapsed labels with length < 7
 const TIMER_FONT_SIZE_SMALL = 30;  // elapsed labels with length >= 7 (h:mm:ss tier)
@@ -61,7 +66,7 @@ export function renderThinkingIcon(frame: ThinkingFrame | null, elapsed: string 
     const svg = [
       svgOpen(),
       svgBg(),
-      `<text x="${SPARKLE_X}" y="${SPARKLE_Y}" `,
+      `<text x="${SPARKLE_X}" y="${SPARKLE_Y}" text-anchor="middle" `,
       `font-family="${FONT_FAMILY}" `,
       `font-size="${SPARKLE_FONT_SIZE}" font-weight="700" fill="${GLYPH_COLOR}">${frame}</text>`,
       timerText(elapsed),
