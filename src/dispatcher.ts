@@ -9,11 +9,14 @@ export type DispatchableButton = {
   dismiss: () => void;
 };
 
-// Minimal interface — the dispatcher only mutates the counter; reads happen
-// via the counter's own callbacks wired into the action layer.
-export type DispatcherTaskCounter = {
-  increment(sessionId: string): void;
-  decrement(sessionId: string): void;
+// CounterMetric union — matrix vocabulary (NOT EventType).
+// Declared here, next to RouteSpec, so the matrix and the interface stay in sync.
+export type CounterMetric = "tasks" | "subagents" | "thinking";
+
+// Minimal interface the dispatcher calls on each counter slot.
+export type DispatcherCounter = {
+  add(sessionId: string, id: string): void;
+  remove(sessionId: string, id: string): void;
   reset(sessionId: string): void;
 };
 
@@ -22,25 +25,28 @@ export type DispatcherOpts = {
   getGlobalSettings: () => GlobalSettings;
   getButtons: () => Map<string, DispatchableButton>;
   log?: Logger;
-  taskCounter?: DispatcherTaskCounter;
+  counters?: {
+    tasks?: DispatcherCounter;
+    subagents?: DispatcherCounter;
+    thinking?: DispatcherCounter;
+  };
 };
 
 // Each incoming HTTP route maps to a set of event types whose alerts it clears
 // and (optionally) the event type it arms. Apply order is clears-first then arm,
 // so a fresh stop cancels stale permission/task-completed before entering its
 // own pending window.
-type CounterDirective = "increment" | "decrement" | "reset";
+type CounterEntry = { metric: CounterMetric; op: "add" | "remove" | "reset" };
 type RouteSpec = {
   clears: ReadonlyArray<EventType>;
   arms?: EventType;
-  // Counter directive applied AFTER clears/arms. No-op if no taskCounter
-  // is wired into the Dispatcher (kept optional so unit tests targeting
-  // unrelated routes don't need a stub).
-  counter?: CounterDirective;
+  // Applied AFTER clears/arms. Missing-id gate in handleRoute prevents application
+  // when any add/remove entry's required id is absent.
+  counters?: ReadonlyArray<CounterEntry>;
 };
 
-const SESSION_START_SOFT = "/event/session-start-soft";
-const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
+export const SESSION_START_SOFT = "/event/session-start-soft";
+export const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
 
 // Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
 // missing key a compile error instead of a silent runtime no-op; unknown
@@ -51,6 +57,8 @@ type Route =
   | "/event/permission-request"
   | "/event/task-created"
   | "/event/task-completed"
+  | "/event/subagent-start"
+  | "/event/subagent-stop"
   | "/event/session-start"
   | "/event/session-end"
   | "/event/user-prompt-submit"
@@ -66,34 +74,38 @@ function isKnownRoute(route: string): route is Route {
 }
 
 const ROUTES: Readonly<Record<Route, RouteSpec>> = {
-  "/event/stop":                  { arms: "stop",           clears: ["permission", "task-completed"] },
-  "/event/stop-failure":          { arms: "stop",           clears: ["permission", "task-completed"] },
-  "/event/permission-request":    { arms: "permission",     clears: [] },
+  "/event/stop":                  { arms: "stop",       clears: ["permission", "task-completed"], counters: [{ metric: "thinking", op: "remove" }] },
+  "/event/stop-failure":          { arms: "stop",       clears: ["permission", "task-completed"], counters: [{ metric: "thinking", op: "remove" }] },
+  "/event/permission-request":    { arms: "permission", clears: [] },
   // Clears task-completed so a fresh task arriving during the post-zero alert (or its 1s
   // pre-fire delay) dismisses the alert immediately and lets the in-flight count visual
   // take over — without this, the count "1" only appears after the 30s auto-timeout.
-  "/event/task-created":          {                         clears: ["task-completed"], counter: "increment" },
+  "/event/task-created":          {                     clears: ["task-completed"],                counters: [{ metric: "tasks", op: "add" }] },
   // arms: "task-completed" REMOVED — arming is now indirect, driven by
   // TaskCounter.onZeroReached → dispatcher.fireTaskCompleted().
-  "/event/task-completed":        {                         clears: ["permission"], counter: "decrement" },
-  "/event/session-start":         {                         clears: ["stop", "permission", "task-completed"], counter: "reset" },
-  "/event/session-end":           {                         clears: ["stop", "permission", "task-completed"], counter: "reset" },
-  "/event/user-prompt-submit":    {                         clears: ["stop", "permission", "task-completed"] },
-  "/event/permission-denied":     {                         clears: ["permission"] },
-  "/event/post-tool-use":         {                         clears: ["permission"] },
-  "/event/post-tool-use-failure": {                         clears: ["permission"] },
+  "/event/task-completed":        {                     clears: ["permission"],                   counters: [{ metric: "tasks", op: "remove" }] },
+  // Synthetic agent-only routes — always routed here via deriveRoute (agentId present).
+  // Counter-only: no alert state change.
+  "/event/subagent-start":        {                     clears: [],                               counters: [{ metric: "subagents", op: "add" }] },
+  "/event/subagent-stop":         {                     clears: [],                               counters: [{ metric: "subagents", op: "remove" }] },
+  "/event/session-start":         {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
+  "/event/session-end":           {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
+  "/event/user-prompt-submit":    {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "thinking", op: "add" }] },
+  "/event/permission-denied":     {                     clears: ["permission"] },
+  "/event/post-tool-use":         {                     clears: ["permission"] },
+  "/event/post-tool-use-failure": {                     clears: ["permission"] },
   // The agentic loop can restart after Stop without a UserPromptSubmit (auto-continue,
   // /continue, compact-and-continue). A fresh PreToolUse means the agent is working
   // again, so a still-armed stop alert is stale.
-  "/event/pre-tool-use":          {                         clears: ["stop"] },
+  "/event/pre-tool-use":          {                     clears: ["stop"] },
   // Synthetic route — never registered in ACTION_ROUTES (a direct POST 404s).
   // Reachable only via deriveRoute() for SessionStart source=compact|resume:
   // mid-run compaction / resume must not clear alerts or reset the counter.
-  [SESSION_START_SOFT]:           {                         clears: [] },
+  [SESSION_START_SOFT]:           {                     clears: [] },
   // Synthetic route — never in ACTION_ROUTES (a direct POST 404s). Reachable only
   // via deriveRoute() for agent-context TaskCompleted: teammate completions drive
   // the counter but must not clear the user's armed permission alert.
-  [TASK_COMPLETED_AGENT]:         {                         clears: [], counter: "decrement" },
+  [TASK_COMPLETED_AGENT]:         {                     clears: [],                               counters: [{ metric: "tasks", op: "remove" }] },
 };
 
 // Maps an incoming route + body fields to the effective ROUTES key, or null (drop).
@@ -102,9 +114,9 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
 //   1. Session gate (FIRST): sessionId falsy → null. Applies to every action route
 //      without exception, including task-created / task-completed — real Claude Code
 //      hooks always carry session_id, so the counter never sees gated traffic.
-//   2. Agent context: agentId present + route is /event/task-created → passthrough
-//      (increment + clears task-completed: an armed "all done" alert is deliberately
-//      superseded by new agent work). agentId present + route is /event/task-completed
+//   2. Agent context: agentId present + route is /event/task-created,
+//      /event/subagent-start, or /event/subagent-stop → passthrough (these are
+//      always agent-context events). agentId present + route is /event/task-completed
 //      → TASK_COMPLETED_AGENT (counter-only). agentId present, any other route → null
 //      (drop; caller must not call handleRoute).
 //   3. Source derivation: agentId absent → source logic. session-start with
@@ -120,7 +132,11 @@ export function deriveRoute(route: string, source: string | undefined, agentId: 
   if (!sessionId) return null;
   // 2. Agent-context check.
   if (agentId !== undefined) {
-    if (route === "/event/task-created") return route;
+    if (
+      route === "/event/task-created" ||
+      route === "/event/subagent-start" ||
+      route === "/event/subagent-stop"
+    ) return route;
     if (route === "/event/task-completed") return TASK_COMPLETED_AGENT;
     return null;
   }
@@ -153,16 +169,35 @@ export class Dispatcher {
   //              whether any button is currently visible to render it)
   // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
   // extension), so a burst of arming events still produces exactly one alert.
-  handleRoute(route: string, sessionId: string): void {
+  handleRoute(route: string, sessionId: string, ids?: { taskId?: string; agentId?: string }): void {
     if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
     }
     const spec = ROUTES[route];
-    this.opts.log?.debug(`handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
+
+    // Missing-id gate — runs BEFORE clears and arms.
+    // If any counters entry with op add/remove has no matching id, the entire
+    // route is dropped (no clears, no arms, no counter application). Rationale:
+    // task-created without task_id must not fire clears: ["task-completed"] while
+    // adding nothing (silent dismissal of an armed all-done alert).
+    if (spec.counters) {
+      for (const entry of spec.counters) {
+        if (entry.op === "reset") continue;
+        const id = this.resolveId(entry.metric, sessionId, ids);
+        if (id === undefined) {
+          this.opts.log?.warn(`drop missing-id route=${route} metric=${entry.metric}`);
+          return;
+        }
+      }
+    }
+
+    this.opts.log?.debug(
+      `handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counters=${spec.counters?.map((e) => `${e.metric}.${e.op}`).join(",") ?? "-"}`
+    );
     for (const t of spec.clears) this.clearType(t);
     if (spec.arms) this.armType(spec.arms);
-    if (spec.counter) this.applyCounter(spec.counter, sessionId);
+    if (spec.counters) this.applyCounters(spec.counters, sessionId, ids);
     this.opts.log?.trace(`state stop=${this.stateOf("stop")} permission=${this.stateOf("permission")} task-completed=${this.stateOf("task-completed")}`);
   }
 
@@ -190,12 +225,32 @@ export class Dispatcher {
     this.clearType(type);
   }
 
-  private applyCounter(directive: CounterDirective, sessionId: string): void {
-    const c = this.opts.taskCounter;
+  private resolveId(metric: CounterMetric, sessionId: string, ids?: { taskId?: string; agentId?: string }): string | undefined {
+    if (metric === "tasks") return ids?.taskId;
+    if (metric === "subagents") return ids?.agentId;
+    if (metric === "thinking") return sessionId; // thinking id IS the sessionId
+    return undefined;
+  }
+
+  private applyCounters(
+    entries: ReadonlyArray<CounterEntry>,
+    sessionId: string,
+    ids?: { taskId?: string; agentId?: string }
+  ): void {
+    const c = this.opts.counters;
     if (!c) return;
-    if (directive === "increment") c.increment(sessionId);
-    else if (directive === "decrement") c.decrement(sessionId);
-    else if (directive === "reset") c.reset(sessionId);
+    for (const entry of entries) {
+      const slot = c[entry.metric];
+      if (!slot) continue;
+      if (entry.op === "reset") {
+        slot.reset(sessionId);
+      } else {
+        const id = this.resolveId(entry.metric, sessionId, ids);
+        if (id === undefined) continue; // gate already ran; this path is unreachable in production
+        if (entry.op === "add") slot.add(sessionId, id);
+        else slot.remove(sessionId, id);
+      }
+    }
   }
 
   // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was

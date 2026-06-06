@@ -128,6 +128,11 @@ const taskCounter = new TaskCounter({
 
 const dispatchLog = makeLogger("dispatch");
 
+// Bridge: Task 3 widens the counter seam from DispatcherTaskCounter (increment/decrement/reset)
+// to DispatcherOpts.counters (three-slot add/remove/reset interface). The TaskCounter instance
+// is still in play until Task 10 replaces the wiring wholesale. This adapter maps the old
+// sessionId-only calls to the new (sessionId, id) signature; the task/agent id params
+// (_taskId, _agentId) are unused by the current TaskCounter — Task 10 wires them properly.
 const dispatcher = new Dispatcher({
   audioPlayer,
   getGlobalSettings: () => globals,
@@ -137,7 +142,13 @@ const dispatcher = new Dispatcher({
     return merged;
   },
   log: dispatchLog,
-  taskCounter,
+  counters: {
+    tasks: {
+      add: (sessionId: string, _taskId: string) => taskCounter.increment(sessionId),
+      remove: (sessionId: string, _taskId: string) => taskCounter.decrement(sessionId),
+      reset: (sessionId: string) => taskCounter.reset(sessionId),
+    },
+  },
 });
 
 let listener: HttpListener | undefined;
@@ -156,7 +167,7 @@ async function startListener(): Promise<void> {
         }
         return;
       }
-      dispatcher.handleRoute(derived, body!.sessionId!);
+      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId });
     },
     log: makeLogger("http"),
   });
