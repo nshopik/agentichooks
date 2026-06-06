@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- `install-hooks.ps1` no longer crashes on a bare-filename `-SettingsPath`
+  (e.g. `settings.json`): the path is normalized to an absolute path against
+  the shell's current directory before use. The test suite also gains an
+  explicit BOM-absence assertion (raw-byte check) so the PR #34 BOM fix can't
+  silently regress. (#TBD)
+- `install-hooks.sh` now creates its temp files next to the target
+  `settings.json` instead of in the system temp dir, making the final rename
+  atomic even when `~/.claude` lives on a different mount than `/tmp`. (#TBD)
+
+### Changed
+
+- Trigger Hook tooltip reworded to "Send a Claude Code hook event on key
+  press" (drops the implementation verb). (#TBD)
+
 ### Added
 
 - **Trigger Hook action** — a fourth Stream Deck button that POSTs to a
