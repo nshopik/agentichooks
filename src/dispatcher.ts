@@ -12,9 +12,9 @@ export type DispatchableButton = {
 // Minimal interface — the dispatcher only mutates the counter; reads happen
 // via the counter's own callbacks wired into the action layer.
 export type DispatcherTaskCounter = {
-  increment(): void;
-  decrement(): void;
-  reset(): void;
+  increment(sessionId: string): void;
+  decrement(sessionId: string): void;
+  reset(sessionId: string): void;
 };
 
 export type DispatcherOpts = {
@@ -153,16 +153,16 @@ export class Dispatcher {
   //              whether any button is currently visible to render it)
   // Same-type arm during PENDING is a deliberate no-op (timer keeps running, no
   // extension), so a burst of arming events still produces exactly one alert.
-  handleRoute(route: string): void {
+  handleRoute(route: string, sessionId: string): void {
     if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
     }
     const spec = ROUTES[route];
-    this.opts.log?.debug(`handleRoute route=${route} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
+    this.opts.log?.debug(`handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counter=${spec.counter ?? "-"}`);
     for (const t of spec.clears) this.clearType(t);
     if (spec.arms) this.armType(spec.arms);
-    if (spec.counter) this.applyCounter(spec.counter);
+    if (spec.counter) this.applyCounter(spec.counter, sessionId);
     this.opts.log?.trace(`state stop=${this.stateOf("stop")} permission=${this.stateOf("permission")} task-completed=${this.stateOf("task-completed")}`);
   }
 
@@ -190,12 +190,12 @@ export class Dispatcher {
     this.clearType(type);
   }
 
-  private applyCounter(directive: CounterDirective): void {
+  private applyCounter(directive: CounterDirective, sessionId: string): void {
     const c = this.opts.taskCounter;
     if (!c) return;
-    if (directive === "increment") c.increment();
-    else if (directive === "decrement") c.decrement();
-    else if (directive === "reset") c.reset();
+    if (directive === "increment") c.increment(sessionId);
+    else if (directive === "decrement") c.decrement(sessionId);
+    else if (directive === "reset") c.reset(sessionId);
   }
 
   // Public lookup for EventFlashAction.onWillAppear: returns ms since this type was
