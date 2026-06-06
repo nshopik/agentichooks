@@ -112,7 +112,7 @@ All notable changes to this project will be documented in this file.
   each drive their own in-flight count bucket. The "all tasks done" chime fires
   when a *session's* count reaches zero (per-session chime), not when the global
   sum across all sessions hits zero. The badge on the Stream Deck button continues
-  to show the total in-flight count across all sessions. (#TBD)
+  to show the total in-flight count across all sessions. (#37)
 
 ## [0.9.2] - 2026-05-11
 
