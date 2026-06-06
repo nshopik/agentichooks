@@ -33,6 +33,20 @@ function makeButton(eventType: EventType, alerting = false): FakeButton {
   return btn;
 }
 
+// Single typed counter fake shared by every describe block (previously three
+// local copies, one of them untyped).
+function fakeCounter(): DispatcherTaskCounter & {
+  increment: ReturnType<typeof vi.fn<() => void>>;
+  decrement: ReturnType<typeof vi.fn<() => void>>;
+  reset: ReturnType<typeof vi.fn<() => void>>;
+} {
+  return {
+    increment: vi.fn<() => void>(),
+    decrement: vi.fn<() => void>(),
+    reset: vi.fn<() => void>(),
+  };
+}
+
 let audioPlayer: { play: ReturnType<typeof vi.fn> };
 let buttons: Map<string, FakeButton>;
 let globals: GlobalSettings;
@@ -168,7 +182,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
   it("/event/task-completed clears pending permission and decrements counter; no direct alert", () => {
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
-    const counter = { increment: vi.fn(), decrement: vi.fn(), reset: vi.fn() };
+    const counter = fakeCounter();
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
       getGlobalSettings: () => globals,
@@ -533,14 +547,6 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
 });
 
 describe("Dispatcher.handleRoute — counter directives", () => {
-  function fakeCounter(): DispatcherTaskCounter & { increment: ReturnType<typeof vi.fn<() => void>>; decrement: ReturnType<typeof vi.fn<() => void>>; reset: ReturnType<typeof vi.fn<() => void>> } {
-    return {
-      increment: vi.fn<() => void>(),
-      decrement: vi.fn<() => void>(),
-      reset: vi.fn<() => void>(),
-    };
-  }
-
   it("calls counter.increment for /event/task-created", () => {
     const counter = fakeCounter();
     const d = new Dispatcher({
@@ -574,14 +580,6 @@ describe("Dispatcher.handleRoute — counter directives", () => {
 });
 
 describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", () => {
-  function fakeCounter() {
-    return {
-      increment: vi.fn(),
-      decrement: vi.fn(),
-      reset: vi.fn(),
-    };
-  }
-
   it("/event/session-start calls counter.reset after applying its existing clears", () => {
     buttons.set("perm", makeButton("permission", true));
     const counter = fakeCounter();
@@ -872,11 +870,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
 
   it("handleRoute(/event/session-start-soft) makes zero counter calls and leaves ARMED state intact", () => {
     buttons.set("perm", makeButton("permission"));
-    const counter = {
-      increment: vi.fn<() => void>(),
-      decrement: vi.fn<() => void>(),
-      reset: vi.fn<() => void>(),
-    };
+    const counter = fakeCounter();
     globals.alertDelay.permission = 0; // permission fires immediately on arm
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
@@ -906,11 +900,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     // This mirrors the SESSION_START_SOFT invariant test pattern exactly.
     const debug = vi.fn<(msg: string) => void>();
     const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
-    const counter = {
-      increment: vi.fn<() => void>(),
-      decrement: vi.fn<() => void>(),
-      reset: vi.fn<() => void>(),
-    };
+    const counter = fakeCounter();
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
       getGlobalSettings: () => globals,
@@ -928,14 +918,6 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
 });
 
 describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-context task-completed)", () => {
-  function fakeCounter() {
-    return {
-      increment: vi.fn<() => void>(),
-      decrement: vi.fn<() => void>(),
-      reset: vi.fn<() => void>(),
-    };
-  }
-
   it("handleRoute(TASK_COMPLETED_AGENT) decrements the counter exactly once", () => {
     const counter = fakeCounter();
     const d = new Dispatcher({
@@ -1003,11 +985,7 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
 
 describe("deriveRoute bug-repro regression — hard vs soft session-start counter behavior", () => {
   it("hard session-start calls counter.reset; soft session-start-soft does not", () => {
-    const counter = {
-      increment: vi.fn<() => void>(),
-      decrement: vi.fn<() => void>(),
-      reset: vi.fn<() => void>(),
-    };
+    const counter = fakeCounter();
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
       getGlobalSettings: () => globals,

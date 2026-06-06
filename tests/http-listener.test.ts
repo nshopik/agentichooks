@@ -332,7 +332,7 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
     const warns = logs.filter((l) => l.level === "warn");
     expect(warns).toHaveLength(1);
-    expect(warns[0].msg).toContain("reason=origin");
+    expect(warns[0]!.msg).toContain("reason=origin");
   });
 
   it("POST /event/stop with non-loopback Host header returns 403 and does not call onEvent", async () => {
@@ -346,7 +346,7 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
     const warns = logs.filter((l) => l.level === "warn");
     expect(warns).toHaveLength(1);
-    expect(warns[0].msg).toContain("reason=host");
+    expect(warns[0]!.msg).toContain("reason=host");
   });
 
   it("POST /event/stop with Host: localhost:<port> returns 204 and calls onEvent", async () => {
@@ -656,7 +656,7 @@ describe("HttpListener — warn rate limiting", () => {
     await new Promise((r) => setTimeout(r, 30));
     const warns = logs.filter((l) => l.level === "warn");
     expect(warns).toHaveLength(11);
-    expect(warns[10].msg).toMatch(/rate limit/);
+    expect(warns[10]!.msg).toMatch(/rate limit/);
     expect(warns.slice(0, 10).every((w) => w.msg.includes("empty body"))).toBe(true);
   });
 
@@ -675,7 +675,7 @@ describe("HttpListener — warn rate limiting", () => {
     await new Promise((r) => setTimeout(r, 30));
     const warns = logs.filter((l) => l.level === "warn");
     expect(warns).toHaveLength(12);
-    expect(warns[11].msg).toContain("empty body");
+    expect(warns[11]!.msg).toContain("empty body");
   });
 
   it("does not rate-limit the result info/debug lines", async () => {

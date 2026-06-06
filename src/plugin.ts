@@ -86,7 +86,10 @@ for (const a of actions) streamDeck.actions.registerAction(a);
 type StoredAlertDelay = Partial<Record<typeof ALL_EVENT_TYPES[number], { seconds?: number | string }>>;
 type StoredGlobalSettings = Partial<GlobalSettings> & { alertDelay?: StoredAlertDelay };
 
-function mergeGlobals(stored: StoredGlobalSettings | undefined): GlobalSettings {
+function mergeGlobals(raw: JsonObject | undefined): GlobalSettings {
+  // Single narrowing point for the untyped settings payload — call sites pass
+  // the SDK's JsonObject straight through instead of double-casting.
+  const stored = raw as StoredGlobalSettings | undefined;
   const base = JSON.parse(JSON.stringify(DEFAULT_GLOBAL_SETTINGS)) as GlobalSettings;
   if (!stored) return base;
   if (stored.audio) {
@@ -105,11 +108,11 @@ function mergeGlobals(stored: StoredGlobalSettings | undefined): GlobalSettings 
 
 async function loadGlobals(): Promise<void> {
   const stored = await streamDeck.settings.getGlobalSettings<JsonObject>();
-  globals = mergeGlobals(stored as unknown as StoredGlobalSettings);
+  globals = mergeGlobals(stored);
 }
 
 streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
-  globals = mergeGlobals(ev.settings as unknown as StoredGlobalSettings);
+  globals = mergeGlobals(ev.settings);
 });
 
 // Construct the counter before the dispatcher so the dispatcher can take
