@@ -188,5 +188,68 @@ describe.skipIf(!POWERSHELL_AVAILABLE)(
 
       expect(JSON.parse(afterFirst)).toEqual(JSON.parse(afterSecond));
     }, 75000);
+
+    // ------------------------------------------------------------------
+    // Test 5: BOM-absence — the written settings.json must NOT start with
+    // a UTF-8 BOM (0xEF 0xBB 0xBF). Node's readFileSync("utf8") silently
+    // strips BOMs, so this test reads the raw Buffer instead.
+    // As a sanity anchor: the first byte must be '{' (0x7B), confirming
+    // the file starts with valid JSON rather than whitespace or a BOM.
+    // ------------------------------------------------------------------
+    it("writes settings.json without a UTF-8 BOM", () => {
+      const result = runInstaller(settingsPath);
+      expect(result.status, `stdout: ${result.stdout}\nstderr: ${result.stderr}\nerror: ${result.error?.message ?? "none"}`).toBe(0);
+
+      const buf = fs.readFileSync(settingsPath);
+      // Sanity anchor: file must start with '{' (0x7B).
+      expect(buf[0], "first byte should be '{' (0x7B) — file must start with valid JSON").toBe(0x7b);
+      // BOM guard: first three bytes must NOT be EF BB BF.
+      const hasBom = buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
+      expect(hasBom, "settings.json must not begin with a UTF-8 BOM (EF BB BF)").toBe(false);
+    }, 45000);
+
+    // ------------------------------------------------------------------
+    // Test 6: Bare-filename -SettingsPath — passing a plain filename (no
+    // directory component) must succeed. The installer must resolve it
+    // against the process CWD, create the file there, and exit 0.
+    // Previously, Split-Path "settings.json" -Parent returned "" which
+    // caused Test-Path "" to throw a confusing error.
+    // ------------------------------------------------------------------
+    it("accepts a bare filename -SettingsPath and writes the file in the CWD", () => {
+      // Use a fresh temp dir as the CWD for the child process.
+      const bareTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "hooks-bare-"));
+      try {
+        const result = spawnSync(
+          "powershell.exe",
+          [
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            SCRIPT_PATH,
+            "-SettingsPath",
+            "settings.json",
+          ],
+          {
+            encoding: "utf8",
+            timeout: 45000,
+            cwd: bareTmpDir,
+          }
+        );
+        const status = result.status ?? 1;
+        const stdout = result.stdout ?? "";
+        const stderr = result.stderr ?? "";
+        const errorMsg = result.error?.message ?? "none";
+        expect(status, `stdout: ${stdout}\nstderr: ${stderr}\nerror: ${errorMsg}`).toBe(0);
+
+        const bareSettingsPath = path.join(bareTmpDir, "settings.json");
+        expect(fs.existsSync(bareSettingsPath), "settings.json should exist in the CWD").toBe(true);
+        const raw = fs.readFileSync(bareSettingsPath, "utf8");
+        const parsed = JSON.parse(raw);
+        // Verify at least one of our managed hook entries is present.
+        expect(parsed?.hooks?.Stop).toBeDefined();
+      } finally {
+        fs.rmSync(bareTmpDir, { recursive: true, force: true });
+      }
+    }, 45000);
   }
 );

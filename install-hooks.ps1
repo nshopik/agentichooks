@@ -9,7 +9,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$settingsPath = $SettingsPath
+# Normalize to an absolute path resolved against the PowerShell CWD ($PWD), not
+# the CLR process CWD.  This handles bare filenames like -SettingsPath settings.json
+# where Split-Path … -Parent would otherwise return "" and crash downstream.
+$settingsPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($SettingsPath)
 $marker = "_agentic-hooks-installer"
 $CURRENT_VERSION = "v2"
 $staleHelperPath = Join-Path $env:USERPROFILE ".claude\claude-notify-hook.ps1"

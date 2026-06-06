@@ -71,8 +71,9 @@ declare -a EVENTS=(
 declare -a DROPPED_EVENTS=()
 
 changed=0
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+settings_dir="$(dirname "$SETTINGS")"
+tmp="$(mktemp "${settings_dir}/.settings.json.XXXXXX")"
+trap 'rm -f "$tmp" "${tmp}.new"' EXIT
 cp "$SETTINGS" "$tmp"
 
 # Find the marker version of any existing Agentic Hooks hook for this event,

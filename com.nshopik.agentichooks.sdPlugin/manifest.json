@@ -77,7 +77,7 @@
       "UUID": "com.nshopik.agentichooks.trigger",
       "Icon": "images/actions/trigger",
       "Controllers": ["Keypad"],
-      "Tooltip": "POST to a Claude Code hook route on key press",
+      "Tooltip": "Send a Claude Code hook event on key press",
       "PropertyInspectorPath": "ui/trigger.html",
       "SupportedInMultiActions": true,
       "States": [
