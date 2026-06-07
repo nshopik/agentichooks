@@ -35,6 +35,12 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- Elapsed turn timer no longer shows stale idle time after an Esc-cancelled
+  turn: `Stop` hooks don't fire on user interrupts, so the resubmitted prompt's
+  `UserPromptSubmit` arrived for an already-tracked session and kept the old
+  start timestamp. A duplicate prompt now refreshes the timestamp (a queued
+  prompt mid-turn restarts the timer — accepted trade-off) while still never
+  stealing the display from a newer session. (#45)
 - Session-scoped alert clearing: a clearing hook from one Claude Code session (e.g. `post-tool-use`, `session-end`, `user-prompt-submit`) no longer dismisses armed alerts raised by another session. Pending/armed alert state is tracked per session; keypress and per-button auto-timeout still dismiss all sessions for that key's type. (#44)
 - `install-hooks.ps1` no longer crashes on a bare-filename `-SettingsPath`
   (e.g. `settings.json`): the path is normalized to an absolute path against
