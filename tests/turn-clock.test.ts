@@ -103,20 +103,35 @@ describe("TurnClock", () => {
     expect(clockSeenMs).toBe(3000);
   });
 
-  // ---- Dedup-add: no-op on timestamp AND Map position ----
+  // ---- Duplicate add: refreshes timestamp, no-op on Map position ----
 
-  it("duplicate add for already-tracked session is no-op on timestamp and Map position", () => {
-    // Session A added at t=1000, session B added at t=2000.
-    // Duplicate add for A must not change A's timestamp (stays 1000) and must not
-    // re-insert A at tail (B must still be the last-inserted = displayed session).
+  it("duplicate add refreshes the timestamp — cancel-resubmit restarts the displayed timer", () => {
+    // Esc-cancel fires no hook (Stop skips user interrupts), so the session stays
+    // tracked with a stale start. The resubmit's user-prompt-submit (duplicate add)
+    // must refresh the timestamp or the timer shows idle wall-clock time.
     now
-      .mockReturnValueOnce(1000)  // A add
-      .mockReturnValueOnce(2000)  // B add
+      .mockReturnValueOnce(1000)  // A first add
+      .mockReturnValueOnce(4000)  // A duplicate add — refresh
       .mockReturnValue(5000);     // currentElapsedMs calls
     const clock = new TurnClock({ inner, now });
     clock.add("sess-A", "sess-A");
+    clock.add("sess-A", "sess-A"); // duplicate — timestamp refreshed to 4000
+    // Elapsed = 5000 - 4000 = 1000 (NOT 5000 - 1000 = 4000).
+    expect(clock.currentElapsedMs()).toBe(1000);
+  });
+
+  it("duplicate add for already-tracked session is no-op on Map position", () => {
+    // Session A added at t=1000, session B added at t=2000.
+    // Duplicate add for A refreshes A's timestamp but must not re-insert A at tail
+    // (B must still be the last-inserted = displayed session).
+    now
+      .mockReturnValueOnce(1000)  // A add
+      .mockReturnValueOnce(2000)  // B add
+      .mockReturnValue(5000);     // A duplicate add + currentElapsedMs calls
+    const clock = new TurnClock({ inner, now });
+    clock.add("sess-A", "sess-A");
     clock.add("sess-B", "sess-B");
-    clock.add("sess-A", "sess-A"); // duplicate — no-op on timestamp + position
+    clock.add("sess-A", "sess-A"); // duplicate — position no-op (B stays displayed)
 
     // B is the last-inserted non-duplicate → displayed. Elapsed = 5000 - 2000 = 3000.
     expect(clock.currentElapsedMs()).toBe(3000);

@@ -14,10 +14,14 @@ export type TurnClockOpts = {
 //
 // Invariants:
 //   - A session entry exists in the Map iff the session is currently tracked.
-//   - Duplicate add()s for an already-tracked session are no-ops on both the
-//     timestamp and the Map position — a queued prompt mid-turn must not restart
-//     the timer or steal the display from a newer session.
-//   - Delegation to inner always happens, regardless of the dedup guard.
+//   - Duplicate add()s for an already-tracked session REFRESH the timestamp but
+//     are no-ops on the Map position (Map.set on an existing key preserves
+//     insertion order). Rationale: Esc-cancel fires no hook (Stop skips user
+//     interrupts), so a resubmit arrives as a duplicate add with a stale start —
+//     without the refresh the timer shows unbounded idle wall-clock time. The
+//     cost is bounded: a queued prompt mid-turn restarts the timer (time since
+//     latest input), but never steals the display from a newer session.
+//   - Delegation to inner always happens.
 //   - Timestamp is recorded BEFORE delegating to inner.add, so that any
 //     synchronous callback fired by inner.add (e.g. broadcastThinking → repaint)
 //     already sees the clock entry via currentElapsedMs().
@@ -33,12 +37,12 @@ export class TurnClock implements DispatcherCounter {
   }
 
   add(sessionId: string, id: string): void {
-    // Dedup guard — no-op on timestamp AND Map position if already tracked.
-    if (!this.sessions.has(sessionId)) {
-      // Record timestamp BEFORE delegating — inner.add may synchronously fire
-      // broadcastThinking → repaint, which calls currentElapsedMs().
-      this.sessions.set(sessionId, this.now());
-    }
+    // Unconditional set: refreshes the timestamp on duplicate add (cancel-resubmit
+    // gap — no hook fires on user interrupt) while preserving Map position for an
+    // already-tracked session (Map.set on an existing key keeps insertion order).
+    // Record timestamp BEFORE delegating — inner.add may synchronously fire
+    // broadcastThinking → repaint, which calls currentElapsedMs().
+    this.sessions.set(sessionId, this.now());
     // Always delegate: the inner counter manages its own Set dedup.
     this.inner.add(sessionId, id);
   }
