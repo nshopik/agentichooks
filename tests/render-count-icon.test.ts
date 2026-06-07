@@ -118,4 +118,32 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     const first = Number(m![1]);
     expect(first).toBeGreaterThanOrEqual(56); // task number sizes: 96, 72, 56
   });
+
+  // ---- Pill geometry: pinned to top-right corner ----
+  // These assertions pin the pill's (cx, cy) = (118, 26) position.
+  // Without them, a wrong-corner regression (e.g. cx="26" cy="118") would pass
+  // all shape/order checks above but still be visually broken.
+
+  it("circle pill (agentCount = 1) is positioned at cx=118 cy=26 r=19", () => {
+    const svg = decodeDataUri(renderCountIcon(3, 1));
+    // Match the coral <circle> specifically to avoid confusing it with other elements
+    expect(svg).toMatch(/<circle cx="118" cy="26" r="19" fill="#da7756"\/>/);
+  });
+
+  it("capsule pill (agentCount = 10) rect is centered at (118, 26) with correct dimensions", () => {
+    // agentCount = 10 → display "10" (2 digits) → capsule rect shape
+    const svg = decodeDataUri(renderCountIcon(3, 10));
+    // x = PILL_CX - CAPSULE_W/2 = 118 - 25 = 93; y = PILL_CY - CAPSULE_H/2 = 26 - 19 = 7
+    expect(svg).toMatch(/<rect x="93" y="7" width="50" height="38" rx="19" fill="#da7756"\/>/);
+  });
+
+  it("pill <text> is anchored at x=118 and y = PILL_CY + PILL_FONT_SIZE * 0.35", () => {
+    const svg = decodeDataUri(renderCountIcon(3, 1));
+    // Use the same expression the source uses to avoid float-serialization surprises
+    const expectedY = `${26 + 24 * 0.35}`;
+    // Match text-anchor="middle" to select the pill <text>, not the task-count text
+    expect(svg).toMatch(
+      new RegExp(`<text x="118" y="${expectedY}" text-anchor="middle"`)
+    );
+  });
 });
