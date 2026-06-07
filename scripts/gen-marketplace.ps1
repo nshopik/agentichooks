@@ -4,10 +4,8 @@ $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Drawing
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $out  = Join-Path $root "marketplace"
-$drafts = Join-Path $out "drafts"
 $keys = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images\keys"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
-New-Item -ItemType Directory -Force -Path $drafts | Out-Null
 
 # ---- shared primitives ----
 
@@ -50,18 +48,6 @@ function Draw-Sparkle {
     $brush.Dispose()
 }
 
-function Draw-Clock {
-    param($g, [single]$cx, [single]$cy, [single]$diameter, [single]$strokeWidth, [System.Drawing.Color]$color)
-    $r = $diameter / 2
-    $pen = New-Object System.Drawing.Pen($color, $strokeWidth)
-    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-    $g.DrawEllipse($pen, ($cx - $r), ($cy - $r), ($r * 2), ($r * 2))
-    $g.DrawLine($pen, $cx, $cy, $cx, ($cy - $r * 0.6))
-    $g.DrawLine($pen, $cx, $cy, ($cx + $r * 0.5), $cy)
-    $pen.Dispose()
-}
 
 function Draw-Bell {
     param($g, [single]$cx, [single]$cy, [single]$size, [System.Drawing.Color]$color)
@@ -126,7 +112,8 @@ function Draw-CenteredText {
         [single]$cy,
         [single]$emSize,
         [System.Drawing.Color]$color,
-        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold
+        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold,
+        [switch]$AssertGlyph
     )
     $family = New-Object System.Drawing.FontFamily("Segoe UI")
     $sf = New-Object System.Drawing.StringFormat
@@ -138,6 +125,10 @@ function Draw-CenteredText {
     $rect  = New-Object System.Drawing.RectangleF(($cx - $halfW), ($cy - $halfH), ($halfW * 2), ($halfH * 2))
     $path  = New-Object System.Drawing.Drawing2D.GraphicsPath
     $path.AddString($text, $family, [int]$fontStyle, $emSize, $rect, $sf)
+    # Guard relies on one string per fresh GraphicsPath (PointCount is per-call).
+    if ($AssertGlyph -and $path.PointCount -le 0) {
+        throw "Draw-CenteredText: glyph for '$text' rendered empty (PointCount=0) - font 'Segoe UI' missing this codepoint?"
+    }
     $brush = New-Object System.Drawing.SolidBrush($color)
     $g.FillPath($brush, $path)
     $brush.Dispose()
@@ -235,17 +226,6 @@ function Draw-KeyCounting {
 
 # ---- 288×288 app icon variants ----
 
-function New-AppIconCanvas {
-    param([int]$size, [string]$fromHex, [string]$toHex)
-    $canvas = New-Canvas -w $size -h $size
-    $bg = New-GradientBrush -x 0 -y 0 -w $size -h $size -fromHex $fromHex -toHex $toHex -angleDeg 135
-    $radius = [single]($size * 0.16)
-    $rect = New-RoundedRectPath -x 0 -y 0 -w $size -h $size -radius $radius
-    $canvas.g.FillPath($bg, $rect)
-    $bg.Dispose()
-    $rect.Dispose()
-    return $canvas
-}
 
 function Save-IconCanvas {
     param([hashtable]$canvas, [string]$outPath)
@@ -254,64 +234,37 @@ function Save-IconCanvas {
     $canvas.bmp.Dispose()
 }
 
-# Variant — AH typography (refined: brand-consistent navy → blue gradient)
-function Make-AppIcon-AH {
-    param([string]$outPath, [int]$size = 288)
-    $canvas = New-AppIconCanvas -size $size -fromHex "#0f172a" -toHex "#3b82f6"
-    $g = $canvas.g
 
-    $textPath = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $family = New-Object System.Drawing.FontFamily("Segoe UI")
-    $emSize = [single]($size * 0.50)
-    $sf = New-Object System.Drawing.StringFormat
-    $sf.Alignment = [System.Drawing.StringAlignment]::Center
-    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $rect = New-Object System.Drawing.RectangleF(0, 0, [single]$size, [single]$size)
-    $textPath.AddString("AH", $family, [int][System.Drawing.FontStyle]::Bold, $emSize, $rect, $sf)
-
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-    $g.FillPath($brush, $textPath)
-    $brush.Dispose()
-    $textPath.Dispose()
-    $family.Dispose()
-
-    Save-IconCanvas -canvas $canvas -outPath $outPath
-}
-
-# Variant — Bell + sparkle (keeps bell, adds AI signifier)
-function Make-AppIcon-BellSparkle {
-    param([string]$outPath, [int]$size = 288)
-    $canvas = New-AppIconCanvas -size $size -fromHex "#0f172a" -toHex "#3b82f6"
-    $g = $canvas.g
-
-    # Bell slightly off-center to make room for sparkle in upper-right
-    Draw-Bell -g $g -cx ([single]($size * 0.46)) -cy ([single]($size * 0.52)) -size ([single]($size * 0.50)) -color ([System.Drawing.Color]::White)
-
-    # Sparkle in upper-right corner
-    Draw-Sparkle -g $g -cx ([single]($size * 0.78)) -cy ([single]($size * 0.24)) -size ([single]($size * 0.22)) -color ([System.Drawing.Color]::White)
-
-    Save-IconCanvas -canvas $canvas -outPath $outPath
-}
-
-# Variant — Clock + sparkle (the "actually great" reference)
-function Make-AppIcon-ClockSparkle {
-    param([string]$outPath, [int]$size = 288)
-    $canvas = New-AppIconCanvas -size $size -fromHex "#0f172a" -toHex "#3b82f6"
-    $g = $canvas.g
-
-    # Clock centered
-    Draw-Clock -g $g -cx ([single]($size * 0.5)) -cy ([single]($size * 0.5)) -diameter ([single]($size * 0.55)) -strokeWidth ([single]($size * 0.07)) -color ([System.Drawing.Color]::White)
-
-    # Sparkle pushed further into upper-right corner to clear the centered clock
-    Draw-Sparkle -g $g -cx ([single]($size * 0.83)) -cy ([single]($size * 0.20)) -size ([single]($size * 0.20)) -color ([System.Drawing.Color]::White)
-
-    Save-IconCanvas -canvas $canvas -outPath $outPath
-}
-
-# Production app icon — clock + sparkle.
+# Production app icon - black key face + coral eight-point star (U+2734) + grey "1:24" caption.
+# Kept IN SYNC with gen-icons.ps1's Make-PluginIcon (the deployed plugin icon). Geometry in a
+# 144-unit reference space scaled by s = size/144.
 function Make-AppIcon {
     param([string]$outPath, [int]$size = 288)
-    Make-AppIcon-ClockSparkle -outPath $outPath -size $size
+    $canvas = New-Canvas -w $size -h $size
+    $g = $canvas.g
+    $s = $size / 144.0
+
+    # Black rounded face (radius 26*s ~ 0.18 squircle)
+    $radius = [single](26 * $s)
+    $rect = New-RoundedRectPath -x 0 -y 0 -w $size -h $size -radius $radius
+    $blackBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
+    $g.FillPath($blackBrush, $rect)
+    $blackBrush.Dispose()
+    $rect.Dispose()
+
+    # Coral eight-point star, centered-upper
+    $coral = [System.Drawing.Color]::FromArgb(255, 218, 119, 86)   # #da7756
+    Draw-CenteredText -g $g -text ([string][char]0x2734) `
+        -cx ([single](72 * $s)) -cy ([single](58 * $s)) -emSize ([single](88 * $s)) `
+        -color $coral -AssertGlyph
+
+    # Grey "1:24" caption
+    $grey = [System.Drawing.Color]::FromArgb(255, 207, 207, 207)   # #cfcfcf
+    Draw-CenteredText -g $g -text "1:24" `
+        -cx ([single](72 * $s)) -cy ([single](120 * $s)) -emSize ([single](28 * $s)) `
+        -color $grey
+
+    Save-IconCanvas -canvas $canvas -outPath $outPath
 }
 
 
@@ -688,11 +641,6 @@ function Make-GalleryStates {
 }
 
 # ---- generate ----
-
-# Draft variants for app icon comparison
-Make-AppIcon-AH           -outPath (Join-Path $drafts "app-icon-ah.png")
-Make-AppIcon-BellSparkle  -outPath (Join-Path $drafts "app-icon-bell-sparkle.png")
-Make-AppIcon-ClockSparkle -outPath (Join-Path $drafts "app-icon-clock-sparkle.png")
 
 # Production assets
 Make-AppIcon -outPath (Join-Path $out "app-icon-288.png")
