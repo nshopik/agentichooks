@@ -4,7 +4,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 ![preview](com.nshopik.agentichooks.sdPlugin/previews/main.png)
 
-> **Beta — pre-1.0.** This is the first public release of Agentic Hooks. Expect rough edges; please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases (not Elgato Marketplace) until 1.0.
+> Please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases.
 
 > **Requires Claude Code 2.1.128+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight task counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Upgrade Claude Code if button responses look incomplete after running the installer.
 

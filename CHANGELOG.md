@@ -2,10 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.9.3] - 2026-06-07
 
 ### Removed
 
+- **Test flash button** — the debug-only Property Inspector button (and its
+  `test-flash` `sendToPlugin` handler) that pulsed the key without a real hook
+  event. Also dropped the outdated `curl …` trigger-command tip from the
+  Property Inspector, which no longer reflected the installed hook wiring. (#47)
 - **Trigger Hook action** — the debug-only fourth button that POSTed hook routes
   on key press. The manual curl playbook covers the same need without shipping a
   debug surface; removal also pre-empts special-casing its synthetic
