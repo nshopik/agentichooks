@@ -35,6 +35,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- The On Stop thinking-repaint interval no longer ticks while no On Stop key is
+  visible (e.g. after a page switch mid-turn): it stops when the last key
+  context disappears and restarts when one reappears. Previously it fired every
+  200 ms over an empty context map — harmless but wasteful. (#46)
 - Elapsed turn timer no longer shows stale idle time after an Esc-cancelled
   turn: `Stop` hooks don't fire on user interrupts, so the resubmitted prompt's
   `UserPromptSubmit` arrived for an already-tracked session and kept the old
