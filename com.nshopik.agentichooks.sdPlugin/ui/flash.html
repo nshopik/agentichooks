@@ -6,10 +6,6 @@
   <script src="sdpi-components.js"></script>
 </head>
 <body>
-  <sdpi-item>
-    <code id="trigger-cmd" style="font-size:11px;user-select:all;display:block;padding:4px 0;">curl -X POST http://localhost:9123/event/stop</code>
-  </sdpi-item>
-
   <sdpi-item label="Flash mode">
     <sdpi-radio setting="flashMode" default="static">
       <option value="static">Static</option>
@@ -23,10 +19,6 @@
 
   <sdpi-item label="Auto-dismiss (sec)">
     <sdpi-textfield id="auto-dismiss-field" setting="autoTimeoutSeconds" placeholder="0 = never" default="0" pattern="[0-9]+"></sdpi-textfield>
-  </sdpi-item>
-
-  <sdpi-item>
-    <sdpi-button onclick="testFlash()">Test flash</sdpi-button>
   </sdpi-item>
 
   <div id="audio-stop-section" style="display:none">
@@ -76,12 +68,6 @@
   </div>
 
   <script>
-    const ROUTE_BY_EVENT = {
-      stop: "stop",
-      permission: "permission-request",
-      "task-completed": "task-completed",
-    };
-
     const UUID_TO_EVENT = {
       "com.nshopik.agentichooks.stop": "stop",
       "com.nshopik.agentichooks.permission": "permission",
@@ -92,12 +78,6 @@
     // safety net for the brief window before getConnectionInfo() resolves; the
     // audio sections stay inline-hidden until updateAudioVisibility() reveals the right one.
     let eventType = "stop";
-
-    function testFlash() {
-      const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
-      if (!client) return;
-      client.send("sendToPlugin", { kind: "test-flash" });
-    }
 
     function testAudio(event) {
       const client = window.SDPIComponents && window.SDPIComponents.streamDeckClient;
@@ -120,10 +100,6 @@
       const radio = document.querySelector('sdpi-radio[setting="flashMode"]');
       const mode = radio && radio.value;
       if (row) row.style.display = mode === "pulse" ? "" : "none";
-    };
-    const updateTriggerCommand = () => {
-      const cmd = document.getElementById("trigger-cmd");
-      if (cmd) cmd.textContent = "curl -X POST http://localhost:9123/event/" + (ROUTE_BY_EVENT[eventType]);
     };
     const updateAudioVisibility = () => {
       for (const ev of ["stop", "permission", "task-completed"]) {
@@ -163,7 +139,6 @@
         console.warn("resolveEventType: getConnectionInfo failed", e);
       }
       updateAudioVisibility();
-      updateTriggerCommand();
       updateAutoDismissDefault();
     }
     document.addEventListener("DOMContentLoaded", () => {

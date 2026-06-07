@@ -200,11 +200,6 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     }
     const payload = ev.payload as { kind?: string; event?: EventType } | null;
     streamDeck.logger.info(`onSendToPlugin: kind=${payload?.kind} event=${payload?.event ?? this.eventType}`);
-    if (payload?.kind === "test-flash") {
-      this.alertContext(ctx);
-      this.opts.onTestSound?.(this.eventType);
-      return;
-    }
     if (payload?.kind === "test-audio" && payload.event) {
       const ok = this.opts.onTestSound?.(payload.event);
       if (ok === false) {
