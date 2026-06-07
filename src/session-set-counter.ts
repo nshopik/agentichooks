@@ -24,7 +24,7 @@ export type SessionSetCounterOpts = {
 // (accepted).
 //
 // Three instances in plugin.ts:
-//   tasks     — id=task_id;   onSessionDrained → dispatcher.fireTaskCompleted()
+//   tasks     — id=task_id;   onSessionDrained → dispatcher.fireTaskCompleted(sessionId)
 //   subagents — id=agent_id;  no onSessionDrained (subagent drain never chimes)
 //   thinking  — id=sessionId; no onSessionDrained (thinking drain is silent)
 export class SessionSetCounter {
