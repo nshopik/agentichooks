@@ -142,6 +142,32 @@ describe("renderThinkingIcon", () => {
     expect(extractTimerFontSize(svgFive)).toBeGreaterThan(extractTimerFontSize(svgSeven));
   });
 
+  // ---- Timer baseline: pinned vertical centering ----
+  // These pins ensure a vertical-centering regression (e.g. dropping the `timerFontSize * 0.35`
+  // term and using SIZE/2 alone) is caught. Same class of regression guard as the pill-geometry
+  // pin in render-count-icon tests. The regex anchors on the timer element's gray fill so it
+  // cannot accidentally match the sparkle text element (coral #da7756, x=22 y=34).
+
+  it("large font tier (length < 7): timer text is at x=72 and y=SIZE/2 + 44*0.35", () => {
+    // "35s" has length 3 → TIMER_FONT_SIZE_LARGE = 44
+    const svg = decodeDataUri(renderThinkingIcon("*", "35s"));
+    const match = svg.match(/<text x="([^"]+)" y="([^"]+)" text-anchor="middle" [^>]*fill="#9a9a9a"/);
+    expect(match).not.toBeNull();
+    expect(match![1]).toBe("72");
+    const expectedY = 144 / 2 + 44 * 0.35;
+    expect(Number(match![2])).toBeCloseTo(expectedY, 10);
+  });
+
+  it("small font tier (length >= 7): timer text is at x=72 and y=SIZE/2 + 30*0.35", () => {
+    // "1:00:00" has length 7 → TIMER_FONT_SIZE_SMALL = 30
+    const svg = decodeDataUri(renderThinkingIcon(null, "1:00:00"));
+    const match = svg.match(/<text x="([^"]+)" y="([^"]+)" text-anchor="middle" [^>]*fill="#9a9a9a"/);
+    expect(match).not.toBeNull();
+    expect(match![1]).toBe("72");
+    const expectedY = 144 / 2 + 30 * 0.35;
+    expect(Number(match![2])).toBeCloseTo(expectedY, 10);
+  });
+
   // ---- null + null: total function, valid plain black rounded square ----
 
   it("null frame + null elapsed returns a valid data URI (total function)", () => {
