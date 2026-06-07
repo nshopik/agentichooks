@@ -313,165 +313,134 @@ function Make-AppIcon {
     Make-AppIcon-ClockSparkle -outPath $outPath -size $size
 }
 
-# ---- 1920×960 marketplace thumbnail ----
 
-function Make-Thumbnail {
-    param([string]$outPath, [int]$w = 1920, [int]$h = 960)
-    $canvas = New-Canvas -w $w -h $h
-    $g = $canvas.g
-    $bmp = $canvas.bmp
-
-    # Background gradient — navy bottom-left to bright blue top-right.
-    $bg = New-GradientBrush -x 0 -y 0 -w $w -h $h -fromHex "#0f172a" -toHex "#1e3a8a" -angleDeg 45
-    $g.FillRectangle($bg, 0, 0, $w, $h)
-    $bg.Dispose()
-
-    # Subtle decorative bells in background, low opacity
-    $deco = [System.Drawing.Color]::FromArgb(30, 255, 255, 255)
-    Draw-Bell -g $g -cx 200 -cy 180 -size 60 -color $deco
-    Draw-Bell -g $g -cx 1700 -cy 800 -size 80 -color $deco
-    Draw-Bell -g $g -cx 1820 -cy 200 -size 40 -color $deco
-    Draw-Bell -g $g -cx 100 -cy 820 -size 50 -color $deco
-
-    # LEFT — three alert-state buttons in a row, large
-    $btnSize = 280
-    $btnGap = 48
-    $rowWidth = $btnSize * 3 + $btnGap * 2
-    $rowX = 140
-    $rowY = [int](($h - $btnSize) / 2)
-
-    $iconFiles = @(
-        (Join-Path $keys "stop-alert@2x.png"),
-        (Join-Path $keys "permission-alert@2x.png"),
-        (Join-Path $keys "task-completed-alert@2x.png")
-    )
-    for ($i = 0; $i -lt $iconFiles.Count; $i++) {
-        $iconBmp = [System.Drawing.Image]::FromFile($iconFiles[$i])
-        $x = $rowX + ($i * ($btnSize + $btnGap))
-        # Soft drop shadow under each button
-        $shadowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(80, 0, 0, 0))
-        $shadowPath = New-RoundedRectPath -x ($x + 6) -y ($rowY + 16) -w $btnSize -h $btnSize -radius ($btnSize * 0.14)
-        $g.FillPath($shadowBrush, $shadowPath)
-        $shadowBrush.Dispose()
-        $shadowPath.Dispose()
-        $g.DrawImage($iconBmp, $x, $rowY, $btnSize, $btnSize)
-        $iconBmp.Dispose()
-    }
-
-    # RIGHT — tagline
-    $textX = $rowX + $rowWidth + 80
-    $textY = 280
-    Draw-Tagline -g $g -lines @("STREAM DECK", "ALERTS FOR", "CLAUDE CODE.") `
-        -x $textX -y $textY -maxWidth 700 -lineHeight 100 -fontSize 64 -color ([System.Drawing.Color]::White)
-
-    $g.Dispose()
-    $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
-}
-
-# ---- 1920×960 thumbnail v2 — panel-framed ----
+# ---- 1920×960 marketplace thumbnail B2 — live-deck panel ----
+# Production thumbnail. Replaces Make-ThumbnailPanel (draft) and Make-Thumbnail (v1).
+#
+# Panel geometry (arithmetic for maintainers):
+#   keySize=240, keyGap=36, gridW=3*240+2*36=792
+#   labelSlot=120 (right-aligned label area left of grid, slot >= 120 per spec)
+#   paddingLeft=60 (panel left edge to label slot start)
+#   paddingRight=80 (grid right edge to panel right edge)
+#   panelW = paddingLeft + labelSlot + gridW + paddingRight = 60+120+792+80 = 1052
+#   panelX=80, panelY=130, panelH=700
+#   panelMidY = panelY + panelH/2 = 130 + 350 = 480
+#   gridX = panelX + paddingLeft + labelSlot = 80+60+120 = 260
+#   rowGap=36; topRowY = panelY + (panelH - (2*240+rowGap))/2 = 222
+#   botRowY = topRowY + 240 + rowGap = 498
+#   textY = panelMidY - 150 = 330  (top of 3-line * 100px = 300px headline block)
+#   textX = panelX + panelW + 80 = 1212
+#
+# Bell centroids cx=1700 and cx=1820 are both > panelX+panelW (1132) — right-half only.
+# Guard: do not move bells left of x=1132 without verifying they clear the panel.
 
 function Make-ThumbnailPanel {
     param([string]$outPath, [int]$w = 1920, [int]$h = 960)
     $canvas = New-Canvas -w $w -h $h
-    $g = $canvas.g
-    $bmp = $canvas.bmp
+    $g      = $canvas.g
+    $bmp    = $canvas.bmp
 
-    # Background gradient — same as v1
+    # --- Background: 45-degree gradient, navy to blue ---
     $bg = New-GradientBrush -x 0 -y 0 -w $w -h $h -fromHex "#0f172a" -toHex "#1e3a8a" -angleDeg 45
     $g.FillRectangle($bg, 0, 0, $w, $h)
     $bg.Dispose()
 
-    # Subtle decorative bells in background, low opacity — only in the right margin area
+    # --- Decorative bells — RIGHT HALF ONLY (cx > panelX+panelW=1132). ---
+    # Guard: bell cx values (1700, 1820) must stay > 1132. Do not reposition left.
     $deco = [System.Drawing.Color]::FromArgb(30, 255, 255, 255)
     Draw-Bell -g $g -cx 1700 -cy 800 -size 80 -color $deco
     Draw-Bell -g $g -cx 1820 -cy 200 -size 40 -color $deco
 
-    # Stream Deck panel — left half. Slightly lighter than bg so it pops as a "surface".
-    $panelX = 80
-    $panelY = 130
-    $panelW = 980
-    $panelH = 700
-    $panelRadius = 24
+    # --- Panel geometry ---
+    [single]$panelX  = 80
+    [single]$panelY  = 130
+    [single]$panelW  = 1052   # paddingLeft(60)+labelSlot(120)+gridW(792)+paddingRight(80)
+    [single]$panelH  = 700
+    [int]$panelRadius = 24
 
-    # Panel drop shadow
+    # Panel drop shadow (offset 8/18, alpha 120)
     $shadowBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(120, 0, 0, 0))
-    $shadowPath = New-RoundedRectPath -x ($panelX + 8) -y ($panelY + 18) -w $panelW -h $panelH -radius $panelRadius
+    $shadowPath  = New-RoundedRectPath -x ($panelX + 8) -y ($panelY + 18) -w $panelW -h $panelH -radius $panelRadius
     $g.FillPath($shadowBrush, $shadowPath)
     $shadowBrush.Dispose()
     $shadowPath.Dispose()
 
-    # Panel surface
-    $panelBrush = New-GradientBrush -x $panelX -y $panelY -w $panelW -h $panelH -fromHex "#1e293b" -toHex "#0f172a" -angleDeg 90
-    $panelPath = New-RoundedRectPath -x $panelX -y $panelY -w $panelW -h $panelH -radius $panelRadius
+    # Panel surface — solid graphite fill (B2: no gradient, separates cleanly from bg at 50% zoom)
+    $panelColor = [System.Drawing.ColorTranslator]::FromHtml("#13161c")
+    $panelBrush = New-Object System.Drawing.SolidBrush($panelColor)
+    $panelPath  = New-RoundedRectPath -x $panelX -y $panelY -w $panelW -h $panelH -radius $panelRadius
     $g.FillPath($panelBrush, $panelPath)
     $panelBrush.Dispose()
+
+    # 1px hairline border ARGB(23,255,255,255) — subtle panel edge
+    $borderColor = [System.Drawing.Color]::FromArgb(23, 255, 255, 255)
+    $borderPen   = New-Object System.Drawing.Pen($borderColor, [single]1)
+    $g.DrawPath($borderPen, $panelPath)
+    $borderPen.Dispose()
     $panelPath.Dispose()
 
-    # Window chrome — thin top bar with three circles (close/min/max) for window-app feel
-    $chromeH = 44
-    $chromeBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(40, 255, 255, 255))
-    $chromeRect = New-RoundedRectPath -x $panelX -y $panelY -w $panelW -h $chromeH -radius $panelRadius
-    $g.FillPath($chromeBrush, $chromeRect)
-    $chromeBrush.Dispose()
-    $chromeRect.Dispose()
-    # Three traffic-light dots
-    $dotR = 8
-    $dotY = $panelY + ($chromeH / 2) - $dotR
-    $dotColors = @("#ef4444", "#f59e0b", "#10b981")
-    for ($i = 0; $i -lt 3; $i++) {
-        $dotColor = [System.Drawing.ColorTranslator]::FromHtml($dotColors[$i])
-        $dotBrush = New-Object System.Drawing.SolidBrush($dotColor)
-        $g.FillEllipse($dotBrush, ($panelX + 24 + $i * 28), $dotY, ($dotR * 2), ($dotR * 2))
-        $dotBrush.Dispose()
-    }
+    # --- Key grid geometry ---
+    [single]$keySize  = 240
+    [single]$keyGap   = 36
+    [single]$gridX    = $panelX + 60 + 120    # paddingLeft + labelSlot = 260
+    [single]$rowGap   = 36
+    # Vertically center the 2-row grid inside the panel
+    [single]$topRowY  = $panelY + ($panelH - (2 * $keySize + $rowGap)) / 2   # = 222
+    [single]$botRowY  = $topRowY + $keySize + $rowGap                          # = 498
 
-    # 3x2 button grid inside panel — top row idle, bottom row alert
-    $btnSize = 220
-    $btnGap = 36
-    $gridW = $btnSize * 3 + $btnGap * 2
-    $gridX = $panelX + ($panelW - $gridW) / 2
-    $gridY = $panelY + $chromeH + 100
+    # --- LIVE row (top): thinking face | counting face | permission-idle@2x.png ---
+    [single]$col0X = $gridX
+    [single]$col1X = $gridX + $keySize + $keyGap
+    [single]$col2X = $gridX + 2 * ($keySize + $keyGap)
 
-    $idleFiles = @(
-        (Join-Path $keys "stop-idle@2x.png"),
-        (Join-Path $keys "permission-idle@2x.png"),
-        (Join-Path $keys "task-completed-idle@2x.png")
-    )
+    Draw-KeyThinking -g $g -x $col0X -y $topRowY -size $keySize
+    Draw-KeyCounting -g $g -x $col1X -y $topRowY -size $keySize
+
+    # permission-idle@2x.png — DrawImage scaled to keySize (must match the two GDI+ faces)
+    $permIdlePath = Join-Path $keys "permission-idle@2x.png"
+    $permIdleBmp  = [System.Drawing.Image]::FromFile($permIdlePath)
+    $g.DrawImage($permIdleBmp, $col2X, $topRowY, $keySize, $keySize)
+    $permIdleBmp.Dispose()
+
+    # --- ALERT row (bottom): stop-alert | task-completed-alert | permission-alert ---
     $alertFiles = @(
         (Join-Path $keys "stop-alert@2x.png"),
-        (Join-Path $keys "permission-alert@2x.png"),
-        (Join-Path $keys "task-completed-alert@2x.png")
+        (Join-Path $keys "task-completed-alert@2x.png"),
+        (Join-Path $keys "permission-alert@2x.png")
     )
-    $rows = @($idleFiles, $alertFiles)
-    for ($r = 0; $r -lt 2; $r++) {
-        for ($i = 0; $i -lt 3; $i++) {
-            $iconBmp = [System.Drawing.Image]::FromFile($rows[$r][$i])
-            $x = $gridX + ($i * ($btnSize + $btnGap))
-            $y = $gridY + ($r * ($btnSize + $btnGap + 20))
-            $g.DrawImage($iconBmp, $x, $y, $btnSize, $btnSize)
-            $iconBmp.Dispose()
-        }
+    $alertXs = @($col0X, $col1X, $col2X)
+    for ($i = 0; $i -lt 3; $i++) {
+        $alertBmp = [System.Drawing.Image]::FromFile($alertFiles[$i])
+        $g.DrawImage($alertBmp, $alertXs[$i], $botRowY, $keySize, $keySize)
+        $alertBmp.Dispose()
     }
 
-    # Row labels — left of the grid
-    $labelFont = New-Object System.Drawing.Font("Segoe UI", 18, [System.Drawing.FontStyle]::Regular)
+    # --- Row labels: right-aligned in label slot (labelSlot=120, labelWidth=100) ---
+    # Label rect right edge = gridX, giving 20px gutter to the first key column.
+    $labelFont  = New-Object System.Drawing.Font("Segoe UI", [single]18, [System.Drawing.FontStyle]::Regular)
     $labelBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, 255, 255, 255))
-    $sf = New-Object System.Drawing.StringFormat
-    $sf.Alignment = [System.Drawing.StringAlignment]::Far
-    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $idleRect = New-Object System.Drawing.RectangleF(($gridX - 100), $gridY, 90, $btnSize)
-    $alertRect = New-Object System.Drawing.RectangleF(($gridX - 100), ($gridY + $btnSize + $btnGap + 20), 90, $btnSize)
-    $g.DrawString("IDLE", $labelFont, $labelBrush, $idleRect, $sf)
-    $g.DrawString("ALERT", $labelFont, $labelBrush, $alertRect, $sf)
+    $sfLabel = New-Object System.Drawing.StringFormat
+    $sfLabel.Alignment     = [System.Drawing.StringAlignment]::Far
+    $sfLabel.LineAlignment = [System.Drawing.StringAlignment]::Center
+    # labelSlot=120, paddingLeft=60; label rect left = panelX+paddingLeft = 140
+    [single]$labelRectX = $panelX + 60
+    [single]$labelW     = 100   # fits within labelSlot=120 with 20px gutter
+    $liveRect  = New-Object System.Drawing.RectangleF($labelRectX, $topRowY, $labelW, $keySize)
+    $alertRect = New-Object System.Drawing.RectangleF($labelRectX, $botRowY, $labelW, $keySize)
+    $g.DrawString("LIVE",  $labelFont, $labelBrush, $liveRect,  $sfLabel)
+    $g.DrawString("ALERT", $labelFont, $labelBrush, $alertRect, $sfLabel)
     $labelFont.Dispose()
     $labelBrush.Dispose()
+    $sfLabel.Dispose()
 
-    # RIGHT — tagline
-    $textX = $panelX + $panelW + 80
-    $textY = 320
+    # --- Headline — vertically centered on panel midpoint ---
+    # panelMidY = panelY + panelH/2 = 480; block height = 3 lines * 100px = 300px
+    # textY = panelMidY - 150 = 330
+    [single]$textX    = $panelX + $panelW + 80   # = 1212
+    [single]$textY    = $panelY + $panelH / 2 - 150
     Draw-Tagline -g $g -lines @("STREAM DECK", "ALERTS FOR", "CLAUDE CODE.") `
-        -x $textX -y $textY -maxWidth 700 -lineHeight 100 -fontSize 64 -color ([System.Drawing.Color]::White)
+        -x $textX -y $textY -maxWidth 700 -lineHeight 100 -fontSize 64 `
+        -color ([System.Drawing.Color]::White)
 
     $g.Dispose()
     $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
@@ -727,7 +696,7 @@ Make-AppIcon-ClockSparkle -outPath (Join-Path $drafts "app-icon-clock-sparkle.pn
 # Production assets
 Make-AppIcon -outPath (Join-Path $out "app-icon-288.png")
 $thumbPath = Join-Path $out "thumbnail-1920x960.png"
-Make-Thumbnail -outPath $thumbPath
+Make-ThumbnailPanel -outPath $thumbPath
 Make-GalleryAnatomy -outPath (Join-Path $out "gallery-1-anatomy.png")
 Make-GalleryArchitecture -outPath (Join-Path $out "gallery-2-architecture.png")
 Make-GalleryStates -outPath (Join-Path $out "gallery-3-states.png")
