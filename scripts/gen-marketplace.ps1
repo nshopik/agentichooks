@@ -113,6 +113,125 @@ function Draw-Tagline {
     $brush.Dispose()
 }
 
+# Center-paints a single string via GraphicsPath.AddString into a StringFormat-centered
+# RectangleF anchored on (cx, cy). emSize is in world units (pixels); GDI+ AddString
+# uses em-size directly, so SVG font-size values map to this parameter as an approximation,
+# fine-tuned visually. No SVG baseline math (y = center + fontSize*0.35) — GDI+ centers
+# automatically via StringFormat.
+function Draw-CenteredText {
+    param(
+        $g,
+        [string]$text,
+        [single]$cx,
+        [single]$cy,
+        [single]$emSize,
+        [System.Drawing.Color]$color,
+        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold
+    )
+    $family = New-Object System.Drawing.FontFamily("Segoe UI")
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment     = [System.Drawing.StringAlignment]::Center
+    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+    # Bounding rect: 2×emSize tall so the StringFormat center is at (cx, cy).
+    $halfH = $emSize
+    $halfW = $emSize * 3   # generous width; AddString clips by path, not rect
+    $rect  = New-Object System.Drawing.RectangleF(($cx - $halfW), ($cy - $halfH), ($halfW * 2), ($halfH * 2))
+    $path  = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddString($text, $family, [int]$fontStyle, $emSize, $rect, $sf)
+    $brush = New-Object System.Drawing.SolidBrush($color)
+    $g.FillPath($brush, $path)
+    $brush.Dispose()
+    $path.Dispose()
+    $family.Dispose()
+    $sf.Dispose()
+}
+
+# Black rounded-rect key face. radius = 20*s, matching runtime SVG rx="20" (144-unit space).
+function Draw-KeyFace {
+    param($g, [single]$x, [single]$y, [single]$size)
+    $s      = $size / 144.0
+    $radius = [single](20 * $s)
+    $path   = New-RoundedRectPath -x $x -y $y -w $size -h $size -radius $radius
+    $brush  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
+    $g.FillPath($brush, $path)
+    $brush.Dispose()
+    $path.Dispose()
+}
+
+# Thinking key face: black key + coral sparkle (corner-weighted, top-left) + gray timer.
+# Geometry scaled from 144-unit SVG space: sparkle center=(x+22s, y+22s), size=26s;
+# timer em=44s centered on key center. Display value: "1:24" (user-confirmed 2026-06-07).
+# Uses Draw-Sparkle (polygon, not font glyph — avoids silent AddString miss for U+273B).
+function Draw-KeyThinking {
+    param($g, [single]$x, [single]$y, [single]$size)
+    $s = [single]($size / 144.0)
+
+    # Key face (black rounded rect)
+    Draw-KeyFace -g $g -x $x -y $y -size $size
+
+    # Coral sparkle — top-left corner-weighted (runtime: cx=22, cy≈22 in 144px space)
+    $coral = [System.Drawing.Color]::FromArgb(255, 218, 119, 86)   # #da7756
+    Draw-Sparkle -g $g `
+        -cx ([single]($x + 22 * $s)) `
+        -cy ([single]($y + 22 * $s)) `
+        -size ([single](26 * $s)) `
+        -color $coral
+
+    # Gray "1:24" timer — centered on key center
+    $gray  = [System.Drawing.Color]::FromArgb(255, 154, 154, 154)  # #9a9a9a
+    $emSz  = [single](44 * $s)
+    Draw-CenteredText -g $g -text "1:24" `
+        -cx ([single]($x + $size / 2)) `
+        -cy ([single]($y + $size / 2)) `
+        -emSize $emSz `
+        -color $gray `
+        -fontStyle ([System.Drawing.FontStyle]::Bold)
+}
+
+# Counting key face: black key + yellow task count (centered) + coral pill with agent count.
+# Geometry scaled from 144-unit SVG space:
+#   count "5" em=96s centered on key center (1-digit tier, largest font);
+#   pill circle: center=(x+118s, y+26s), r=22s (hero-enlarged from runtime r=19 for
+#     legibility at 50% zoom — runtime renderer is NOT changed);
+#   pill numeral "3" em=26s centered on pill center.
+# Display values: 5 tasks, 3 agents (user-confirmed 2026-06-07).
+function Draw-KeyCounting {
+    param($g, [single]$x, [single]$y, [single]$size)
+    $s = [single]($size / 144.0)
+
+    # Key face (black rounded rect)
+    Draw-KeyFace -g $g -x $x -y $y -size $size
+
+    # Yellow task count "5" — centered on key center
+    $yellow = [System.Drawing.Color]::FromArgb(255, 253, 224, 71)  # #fde047
+    $emSzCount = [single](96 * $s)
+    Draw-CenteredText -g $g -text "5" `
+        -cx ([single]($x + $size / 2)) `
+        -cy ([single]($y + $size / 2)) `
+        -emSize $emSzCount `
+        -color $yellow `
+        -fontStyle ([System.Drawing.FontStyle]::Bold)
+
+    # Coral pill circle — top-right corner (runtime cx=118, cy=26; hero r=22 for legibility)
+    $coral  = [System.Drawing.Color]::FromArgb(255, 218, 119, 86)  # #da7756
+    $pillCx = [single]($x + 118 * $s)
+    $pillCy = [single]($y + 26  * $s)
+    $pillR  = [single](22 * $s)                                     # hero-only: r=22 vs runtime r=19
+    $pillBrush = New-Object System.Drawing.SolidBrush($coral)
+    $g.FillEllipse($pillBrush, ($pillCx - $pillR), ($pillCy - $pillR), ($pillR * 2), ($pillR * 2))
+    $pillBrush.Dispose()
+
+    # Black pill numeral "3" — centered on pill center
+    $black    = [System.Drawing.Color]::Black
+    $emSzPill = [single](26 * $s)
+    Draw-CenteredText -g $g -text "3" `
+        -cx $pillCx `
+        -cy $pillCy `
+        -emSize $emSzPill `
+        -color $black `
+        -fontStyle ([System.Drawing.FontStyle]::Bold)
+}
+
 # ---- 288×288 app icon variants ----
 
 function New-AppIconCanvas {
