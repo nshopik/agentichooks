@@ -27,6 +27,41 @@ function New-RoundedRectPath {
     return $path
 }
 
+# Center-paints one string via GraphicsPath.AddString into a StringFormat-centered
+# RectangleF anchored on (cx, cy). emSize is in world units (pixels); no SVG baseline math.
+# With -AssertGlyph, throws when the font produced no glyph (GDI+ silently emits nothing for a
+# missing codepoint). Guard relies on one string per fresh GraphicsPath (PointCount is per-call).
+function Draw-CenteredText {
+    param(
+        $g,
+        [string]$text,
+        [single]$cx,
+        [single]$cy,
+        [single]$emSize,
+        [System.Drawing.Color]$color,
+        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold,
+        [switch]$AssertGlyph
+    )
+    $family = New-Object System.Drawing.FontFamily("Segoe UI")
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment     = [System.Drawing.StringAlignment]::Center
+    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
+    $halfH = $emSize
+    $halfW = $emSize * 3
+    $rect  = New-Object System.Drawing.RectangleF(($cx - $halfW), ($cy - $halfH), ($halfW * 2), ($halfH * 2))
+    $path  = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddString($text, $family, [int]$fontStyle, $emSize, $rect, $sf)
+    if ($AssertGlyph -and $path.PointCount -le 0) {
+        throw "Draw-CenteredText: glyph for '$text' rendered empty (PointCount=0) - font 'Segoe UI' missing this codepoint?"
+    }
+    $brush = New-Object System.Drawing.SolidBrush($color)
+    $g.FillPath($brush, $path)
+    $brush.Dispose()
+    $path.Dispose()
+    $family.Dispose()
+    $sf.Dispose()
+}
+
 function Draw-CheckGlyph {
     param($g, $size, $pen, $white)
     $s = [single]$size
@@ -147,62 +182,40 @@ foreach ($e in $events) {
     }
 }
 
-# Plugin icon (256 + 512): clock + sparkle on navy → blue gradient. Matches marketplace app icon.
+# Plugin icon (256 + 512): black key face + coral eight-point star (U+2734) + grey "1:24" caption.
+# Kept IN SYNC with gen-marketplace.ps1's Make-AppIcon (the marketplace listing asset) - same design,
+# different size. Geometry in a 144-unit reference space scaled by s = size/144 so all sizes match.
 function Make-PluginIcon {
     param([string]$outPath, [int]$size)
     $bmp = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::AntiAliasGridFit
     $g.Clear([System.Drawing.Color]::Transparent)
 
-    # Background — navy → blue diagonal gradient
-    $bgRect = New-Object System.Drawing.RectangleF(0, 0, $size, $size)
-    $c1 = [System.Drawing.ColorTranslator]::FromHtml("#0f172a")
-    $c2 = [System.Drawing.ColorTranslator]::FromHtml("#3b82f6")
-    $bgBrush = New-Object System.Drawing.Drawing2D.LinearGradientBrush($bgRect, $c1, $c2, [single]135)
-    $radius = [int]($size * 0.16)
+    $s = $size / 144.0
+
+    # Black rounded face (radius 26*s ~ 0.18 squircle)
+    $radius = [int](26 * $s)
     $rect = New-RoundedRectPath $g $size $size $radius
-    $g.FillPath($bgBrush, $rect)
+    $blackBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
+    $g.FillPath($blackBrush, $rect)
+    $blackBrush.Dispose()
+    $rect.Dispose()
 
-    $white = [System.Drawing.Color]::White
-    $s = [single]$size
+    # Coral eight-point star, centered-upper
+    $coral = [System.Drawing.Color]::FromArgb(255, 218, 119, 86)   # #da7756
+    Draw-CenteredText -g $g -text ([string][char]0x2734) `
+        -cx ([single](72 * $s)) -cy ([single](58 * $s)) -emSize ([single](88 * $s)) `
+        -color $coral -AssertGlyph
 
-    # Clock centered
-    $clockCx = $s * 0.5
-    $clockCy = $s * 0.5
-    $clockR = $s * 0.275
-    $strokeWidth = [single]($s * 0.07)
-    $pen = New-Object System.Drawing.Pen($white, $strokeWidth)
-    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
-    $g.DrawEllipse($pen, ($clockCx - $clockR), ($clockCy - $clockR), ($clockR * 2), ($clockR * 2))
-    $g.DrawLine($pen, $clockCx, $clockCy, $clockCx, ($clockCy - $clockR * 0.6))
-    $g.DrawLine($pen, $clockCx, $clockCy, ($clockCx + $clockR * 0.5), $clockCy)
-    $pen.Dispose()
+    # Grey "1:24" caption
+    $grey = [System.Drawing.Color]::FromArgb(255, 207, 207, 207)   # #cfcfcf
+    Draw-CenteredText -g $g -text "1:24" `
+        -cx ([single](72 * $s)) -cy ([single](120 * $s)) -emSize ([single](28 * $s)) `
+        -color $grey
 
-    # Sparkle pushed further into upper-right corner to clear the centered clock
-    $sparkSize = $s * 0.20
-    $sparkCx = $s * 0.83
-    $sparkCy = $s * 0.20
-    $r1 = $sparkSize * 0.50
-    $r2 = $sparkSize * 0.14
-    $pi4 = [Math]::PI / 4
-    $sparkPoints = @()
-    for ($i = 0; $i -lt 8; $i++) {
-        $angle = $i * $pi4 - [Math]::PI / 2
-        $r = if ($i % 2 -eq 0) { $r1 } else { $r2 }
-        $x = $sparkCx + $r * [Math]::Cos($angle)
-        $y = $sparkCy + $r * [Math]::Sin($angle)
-        $sparkPoints += New-Object System.Drawing.PointF($x, $y)
-    }
-    $sparkBrush = New-Object System.Drawing.SolidBrush($white)
-    $g.FillPolygon($sparkBrush, [System.Drawing.PointF[]]$sparkPoints)
-    $sparkBrush.Dispose()
-
-    $bgBrush.Dispose()
     $g.Dispose()
-
     $bmp.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
 }
