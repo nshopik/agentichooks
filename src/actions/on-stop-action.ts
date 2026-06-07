@@ -1,4 +1,4 @@
-import { action, type WillAppearEvent } from "@elgato/streamdeck";
+import { action, type WillAppearEvent, type WillDisappearEvent } from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
 import type { EventType } from "../types.js";
 import { renderThinkingIcon, THINKING_FRAMES } from "../render-thinking-icon.js";
@@ -15,9 +15,13 @@ export class OnStopAction extends EventFlashAction {
   private static readonly FRAMES = THINKING_FRAMES;
 
   private frameIdx = 0;
-  // Timer repaint loop: fires every 200 ms while thinking is active.
-  // Advances the sparkle frame AND repaints the elapsed timer on every context.
-  // Runs even when every context has animateThinking unchecked (timer still ticks).
+  // Timer repaint loop: fires every 200 ms while thinking is active AND at least
+  // one On Stop key context is visible. Advances the sparkle frame AND repaints
+  // the elapsed timer on every context. Runs even when every context has
+  // animateThinking unchecked (timer still ticks). Stopped by stopAnimation()
+  // when the last context disappears (onWillDisappear) or thinking ends
+  // (broadcastThinking(false)); restarted from onWillAppear when a context
+  // reappears while thinking is active.
   private animInterval: NodeJS.Timeout | null = null;
 
   private startAnimation(): void {
@@ -60,15 +64,21 @@ export class OnStopAction extends EventFlashAction {
 
   /**
    * Called by plugin.ts when the thinking counter (sum > 0) changes.
-   * active=true starts the timer repaint loop; active=false stops it and
-   * clears state-0 image overrides on ALL contexts (animateThinking guard
-   * removed from the clear path — without this, a stale timer image is
-   * stranded on unchecked buttons when the turn ends).
+   * active=true starts the timer repaint loop and paints the first frame,
+   * but only when at least one On Stop key is visible (contexts.size > 0).
+   * With zero visible contexts there is nothing to repaint — the interval
+   * is deferred until onWillAppear fires and (re)starts it.
+   * active=false stops the interval and clears state-0 image overrides on
+   * ALL contexts (animateThinking guard removed from the clear path — without
+   * this, a stale timer image is stranded on unchecked buttons when the turn
+   * ends). Safe to call when contexts is empty (the clear loop is a no-op).
    */
   broadcastThinking(active: boolean): void {
     if (active) {
-      this.startAnimation();
-      this.renderThinkingFrame();
+      if (this.contexts.size > 0) {
+        this.startAnimation();
+        this.renderThinkingFrame();
+      }
     } else {
       this.stopAnimation();
       for (const [, ctx] of this.contexts) {
@@ -124,12 +134,29 @@ export class OnStopAction extends EventFlashAction {
       void ctx.setImage("", 0);
       return;
     }
-    // Thinking active: repaint current frame + elapsed timer.
+    // Thinking active: (re)start the interval if it was stopped (e.g. page
+    // switch while a turn was running), then repaint this context immediately.
+    // startAnimation() is idempotent — safe to call if interval already runs.
+    this.startAnimation();
     // Non-null assertion safe: frameIdx is always kept in-bounds by modulo.
     const frameGlyph = OnStopAction.FRAMES[this.frameIdx]!;
     const elapsedMs = this.opts.currentElapsedMs?.() ?? null;
     const label = elapsedMs !== null ? formatElapsed(elapsedMs) : null;
     const sparkle = ctx.settings.animateThinking !== false ? frameGlyph : null;
     void ctx.setImage(renderThinkingIcon(sparkle, label), 0);
+  }
+
+  /**
+   * Stops the animation interval when the last On Stop key context disappears
+   * (page or profile switch). super.onWillDisappear removes the context from
+   * the map first, so contexts.size reflects the post-removal count.
+   * The interval restarts from onWillAppear when a context reappears while
+   * thinking is still active.
+   */
+  override async onWillDisappear(ev: WillDisappearEvent<JsonObject>): Promise<void> {
+    await super.onWillDisappear(ev);
+    if (this.contexts.size === 0) {
+      this.stopAnimation();
+    }
   }
 }
