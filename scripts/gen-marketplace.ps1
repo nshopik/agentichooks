@@ -169,12 +169,13 @@ function Draw-KeyThinking {
     # Key face (black rounded rect)
     Draw-KeyFace -g $g -x $x -y $y -size $size
 
-    # Coral sparkle — top-left corner-weighted (runtime: cx=22, cy≈22 in 144px space)
+    # Coral sparkle — top-left corner-weighted (runtime: cx=22, cy≈22 in 144px space).
+    # size=30s (bumped from 26s per final design review — reads as a star, not a plus, at 50% zoom).
     $coral = [System.Drawing.Color]::FromArgb(255, 218, 119, 86)   # #da7756
     Draw-Sparkle -g $g `
         -cx ([single]($x + 22 * $s)) `
         -cy ([single]($y + 22 * $s)) `
-        -size ([single](26 * $s)) `
+        -size ([single](30 * $s)) `
         -color $coral
 
     # Gray "1:24" timer — centered on key center
