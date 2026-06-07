@@ -21,7 +21,8 @@ export class OnStopAction extends EventFlashAction {
   // animateThinking unchecked (timer still ticks). Stopped by stopAnimation()
   // when the last context disappears (onWillDisappear) or thinking ends
   // (broadcastThinking(false)); restarted from onWillAppear when a context
-  // reappears while thinking is active.
+  // reappears while thinking is active (frameIdx resets to 0 on stop, so the
+  // sparkle pulse restarts from the beginning — cosmetic, accepted).
   private animInterval: NodeJS.Timeout | null = null;
 
   private startAnimation(): void {
