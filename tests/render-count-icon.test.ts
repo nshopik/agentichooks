@@ -72,6 +72,18 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     expect(svg).toMatch(/>1<\/text>/);
   });
 
+  // ---- Zero tasks with live subagents: center "0" + pill ----
+  // Guards the broadcastCounts / onWillAppear gate that renders whenever
+  // taskCount > 0 OR agentCount > 0. A lone subagent (taskCount = 0) must still
+  // paint its pill; the center shows a big "0".
+
+  it("renders a big '0' center and the coral pill when taskCount = 0 and agentCount > 0", () => {
+    const svg = decodeDataUri(renderCountIcon(0, 2));
+    expect(svg).toMatch(/>0<\/text>/);   // task number is a visible "0"
+    expect(svg).toContain("#da7756");      // coral pill present
+    expect(svg).toMatch(/>2<\/text>/);     // pill shows the subagent count
+  });
+
   // ---- Pill: capsule for 2+ agents ----
 
   it("pill is a capsule (rect) when agentCount = 2", () => {
