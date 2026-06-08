@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- **Subagent pill with no in-flight tasks** — the Task-Completed key only
+  rendered when the task count was > 0, so a lone subagent (a `subagent-start`
+  without a matching `task-created`, e.g. partial hook coverage on older Claude
+  Code) never showed its coral pill. Both render paths now paint whenever there
+  is a task **or** a subagent; with zero tasks the center shows a big `0`
+  alongside the pill. (#48)
+
 ## [0.9.3] - 2026-06-07
 
 ### Removed
