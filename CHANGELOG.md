@@ -8,12 +8,11 @@ All notable changes to this project will be documented in this file.
 
 - **Hold the Stop chime while subagents are still running** — when a session's
   `Stop` fires but that session still has in-flight subagents, the green-check
-  flash and sound are suppressed and the On Stop key shows a muted crescent
-  **moon** instead. The held chime fires once the session's last subagent
-  finishes (the deferred completion). Any resume of the session
-  (`UserPromptSubmit`, `PreToolUse`, session start/end) or a keypress drops the
-  held Stop and lowers the moon. Eliminates premature completion chimes during
-  multi-subagent orchestration. (#49)
+  flash and sound are suppressed silently (the key stays idle). The held chime
+  fires once the session's last subagent finishes (the deferred completion). Any
+  resume of the session (`UserPromptSubmit`, `PreToolUse`, session start/end) or
+  a keypress drops the held Stop. Eliminates premature completion chimes during
+  multi-subagent orchestration. (#49, #50)
 
 ### Fixed
 

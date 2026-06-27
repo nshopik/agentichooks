@@ -1702,25 +1702,22 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
   function withSubagents(inFlight: boolean) {
     const counters = fakeCounters();
     counters.subagents.has.mockReturnValue(inFlight);
-    const onWaitingChanged = vi.fn<(active: boolean) => void>();
     const d = new Dispatcher({
       audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
       getGlobalSettings: () => globals,
       getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
       counters,
-      onWaitingChanged,
     });
-    return { d, counters, onWaitingChanged };
+    return { d, counters };
   }
 
-  it("suppresses the stop alert (no flash, no audio) and raises the moon", () => {
+  it("suppresses the stop alert silently (no flash, no audio)", () => {
     buttons.set("stop", makeButton("stop"));
-    const { d, onWaitingChanged } = withSubagents(true);
+    const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
-    expect(onWaitingChanged).toHaveBeenCalledWith(true);
   });
 
   it("still applies the stop route's clears while suppressing the arm", () => {
@@ -1741,13 +1738,12 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("fireDeferredStop releases the held stop after the delay (deferred chime)", () => {
     buttons.set("stop", makeButton("stop"));
-    const { d, onWaitingChanged } = withSubagents(true);
+    const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
 
     d.fireDeferredStop("sess-test"); // subagents drained → release
-    expect(onWaitingChanged).toHaveBeenLastCalledWith(false);
     vi.advanceTimersByTime(999);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still in delay
     vi.advanceTimersByTime(1);
@@ -1774,10 +1770,9 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("a stop-clearing route drops the held stop — no chime on later drain", () => {
     buttons.set("stop", makeButton("stop"));
-    const { d, onWaitingChanged } = withSubagents(true);
+    const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test"); // suppressed
     d.handleRoute("/event/user-prompt-submit", "sess-test"); // agent resumed
-    expect(onWaitingChanged).toHaveBeenLastCalledWith(false);
     d.fireDeferredStop("sess-test"); // late drain — held stop already gone
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
@@ -1794,13 +1789,11 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
   });
 
-  it("dismissArmed(stop) clears all held stops and lowers the moon", () => {
-    const { d, onWaitingChanged } = withSubagents(true);
+  it("dismissArmed(stop) clears all held stops so no deferred chime survives", () => {
+    const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-A");
     d.handleRoute("/event/stop", "sess-B");
-    onWaitingChanged.mockClear();
     d.dismissArmed("stop");
-    expect(onWaitingChanged).toHaveBeenCalledWith(false);
     // Neither held stop can chime afterwards.
     d.fireDeferredStop("sess-A");
     d.fireDeferredStop("sess-B");
@@ -1810,12 +1803,11 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("arms normally (no suppression) when no subagents are in flight", () => {
     buttons.set("stop", makeButton("stop"));
-    const { d, onWaitingChanged } = withSubagents(false);
+    const { d } = withSubagents(false);
     d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(1000);
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
-    expect(onWaitingChanged).not.toHaveBeenCalled();
   });
 
   it("only one session's held stop is released on its own drain", () => {

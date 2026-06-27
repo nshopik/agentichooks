@@ -40,14 +40,6 @@ export type DispatcherOpts = {
    * in its delay window is invisible to the key-lit OR and to armedContext.
    */
   onArmedChanged?: (type: EventType) => void;
-  /**
-   * Fires whenever the set of sessions with a suppressed ("deferred") stop
-   * changes empty↔non-empty membership — i.e. whenever the moon "waiting on
-   * subagents" visual should appear or disappear. The boolean is the post-change
-   * "any session waiting?" state. Mirrors onArmedChanged's broadcast shape; the
-   * plugin wires it to OnStopAction.broadcastWaiting.
-   */
-  onWaitingChanged?: (active: boolean) => void;
 };
 
 // Each incoming HTTP route maps to a set of event types whose alerts it clears
@@ -189,7 +181,8 @@ export class Dispatcher {
   // keyed sessionId → cwd captured at suppression time (for the deferred alert's
   // title). The entry is consumed by fireDeferredStop() when the subagents
   // counter drains to 0, or dropped by any stop-clearing route / keypress
-  // (clearType("stop") / dismissArmed("stop")). Non-empty ⇒ the moon visual is up.
+  // (clearType("stop") / dismissArmed("stop")). Suppression is silent — no
+  // visual stand-in; the key simply stays idle until the deferred chime fires.
   private deferredStops = new Map<string, string | null>();
 
   constructor(opts: DispatcherOpts) {
@@ -234,9 +227,9 @@ export class Dispatcher {
     for (const t of spec.clears) this.clearType(t, sessionId);
     if (spec.arms) {
       // Stop suppression: a Stop while this session still has in-flight subagents
-      // is premature — hold the chime/flash and show the moon instead. The held
-      // alert fires later via fireDeferredStop() when the subagents counter drains.
-      // Only the arm is suppressed; clears (above) and counters (below) still run.
+      // is premature — hold the chime/flash silently. The held alert fires later
+      // via fireDeferredStop() when the subagents counter drains. Only the arm is
+      // suppressed; clears (above) and counters (below) still run.
       if (spec.arms === "stop" && this.subagentsInFlight(sessionId)) {
         this.suppressStop(sessionId, ctx?.cwd ?? null);
       } else {
@@ -258,27 +251,25 @@ export class Dispatcher {
     return this.opts.counters?.subagents?.has(sessionId) ?? false;
   }
 
-  // Records a held Stop for this session and raises the moon visual. Latest cwd
-  // wins on repeated suppression (intermediate Stops during one orchestration).
+  // Records a held Stop for this session (silent — no visual). Latest cwd wins
+  // on repeated suppression (intermediate Stops during one orchestration).
   private suppressStop(sessionId: string, cwd: string | null): void {
     this.deferredStops.set(sessionId, cwd);
     this.opts.log?.info(`suppress stop (subagents in-flight) session=${sessionId.slice(0, 8)} deferred=${this.deferredStops.size}`);
-    this.opts.onWaitingChanged?.(true); // size > 0 by construction
   }
 
   /**
    * Public seam wired to the subagents SessionSetCounter onSessionDrained.
    * If this session has a held Stop (suppressed because subagents were running),
-   * drop it, lower the moon, and arm the stop alert now — the deferred chime.
-   * No-op when the session has no held Stop (e.g. a stop-clearing route already
-   * consumed it, or the Stop never raced ahead of the subagent-stops).
+   * drop it and arm the stop alert now — the deferred chime. No-op when the
+   * session has no held Stop (e.g. a stop-clearing route already consumed it, or
+   * the Stop never raced ahead of the subagent-stops).
    */
   fireDeferredStop(sessionId: string): void {
     if (!this.deferredStops.has(sessionId)) return;
     const cwd = this.deferredStops.get(sessionId) ?? null;
     this.deferredStops.delete(sessionId);
     this.opts.log?.info(`fire deferred stop on subagent drain session=${sessionId.slice(0, 8)} remaining=${this.deferredStops.size}`);
-    this.opts.onWaitingChanged?.(this.deferredStops.size > 0);
     this.armType("stop", sessionId, cwd);
   }
 
@@ -297,13 +288,9 @@ export class Dispatcher {
    */
   dismissArmed(type: EventType): void {
     this.opts.log?.debug(`dismissArmed type=${type}`);
-    // A keypress / auto-timeout on the stop key is type-wide: also clear every
-    // held Stop and lower the moon. The user dismissed the key; the waiting
-    // visual should not survive it.
-    if (type === "stop" && this.deferredStops.size > 0) {
-      this.deferredStops.clear();
-      this.opts.onWaitingChanged?.(false);
-    }
+    // A keypress / auto-timeout on the stop key is type-wide: also drop every
+    // held Stop so a dismissed key cannot resurrect a deferred chime.
+    if (type === "stop") this.deferredStops.clear();
     // Iterate and cancel ALL per-session pending timers for this type.
     // TRAP: after the re-key, this.pending.get(type) is a Map<sessionId, Timeout>,
     // and clearTimeout(someMap) is a silent no-op in Node — we MUST iterate.
@@ -393,10 +380,7 @@ export class Dispatcher {
   private clearType(type: EventType, sessionId: string): void {
     // A stop-clearing route (user-prompt-submit, session-start/end, pre-tool-use)
     // means the agent resumed or the session reset — any held Stop is now stale.
-    // Drop this session's deferred stop and lower the moon if it was the last one.
-    if (type === "stop" && this.deferredStops.delete(sessionId)) {
-      this.opts.onWaitingChanged?.(this.deferredStops.size > 0);
-    }
+    if (type === "stop") this.deferredStops.delete(sessionId);
     const pendingInner = this.pending.get(type);
     if (pendingInner) {
       const timer = pendingInner.get(sessionId);
