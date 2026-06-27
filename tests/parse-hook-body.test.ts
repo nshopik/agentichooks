@@ -168,4 +168,21 @@ describe("makeBodyBuffer", () => {
       },
     });
   });
+
+  it("extracts isInterrupt as true only when is_interrupt is the boolean true", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", is_interrupt: true })));
+    const outcome = buf.finish();
+    expect(outcome).toMatchObject({ kind: "parsed", body: { isInterrupt: true } });
+  });
+
+  it("returns undefined for isInterrupt when is_interrupt is false, missing, or non-boolean", () => {
+    for (const value of [false, "true", 1, undefined]) {
+      const buf = makeBodyBuffer();
+      buf.push(Buffer.from(JSON.stringify({ session_id: "abc", is_interrupt: value })));
+      const outcome = buf.finish();
+      if (outcome.kind !== "parsed") throw new Error("expected parsed");
+      expect(outcome.body.isInterrupt).toBeUndefined();
+    }
+  });
 });

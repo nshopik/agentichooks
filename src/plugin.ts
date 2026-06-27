@@ -193,7 +193,7 @@ async function startListener(): Promise<void> {
   listener = new HttpListener({
     port: HTTP_PORT,
     onEvent: (route, body) => {
-      const derived = deriveRoute(route, body?.source, body?.agentId, body?.sessionId);
+      const derived = deriveRoute(route, body?.source, body?.agentId, body?.sessionId, body?.isInterrupt);
       if (derived === null) {
         // Distinguish the two drop reasons so log lines remain diagnosable.
         if (!body?.sessionId) {

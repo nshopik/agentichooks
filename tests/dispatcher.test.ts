@@ -746,6 +746,29 @@ describe("deriveRoute — pure route derivation", () => {
   });
 });
 
+describe("deriveRoute — interrupt derivation (PostToolUseFailure is_interrupt)", () => {
+  it("returns the interrupt variant for post-tool-use-failure when isInterrupt is true", () => {
+    expect(deriveRoute("/event/post-tool-use-failure", undefined, undefined, "s", true))
+      .toBe("/event/post-tool-use-failure-interrupt");
+  });
+
+  it("passes post-tool-use-failure through unchanged when isInterrupt is false/absent (a real tool error)", () => {
+    expect(deriveRoute("/event/post-tool-use-failure", undefined, undefined, "s", false))
+      .toBe("/event/post-tool-use-failure");
+    expect(deriveRoute("/event/post-tool-use-failure", undefined, undefined, "s"))
+      .toBe("/event/post-tool-use-failure");
+  });
+
+  it("agent check wins: a subagent's interrupting failure (agentId present) still drops to null", () => {
+    expect(deriveRoute("/event/post-tool-use-failure", undefined, "agt-001", "s", true)).toBeNull();
+  });
+
+  it("isInterrupt only affects post-tool-use-failure — other routes ignore it", () => {
+    expect(deriveRoute("/event/stop", undefined, undefined, "s", true)).toBe("/event/stop");
+    expect(deriveRoute("/event/post-tool-use", undefined, undefined, "s", true)).toBe("/event/post-tool-use");
+  });
+});
+
 describe("deriveRoute — agent-context drop policy", () => {
   // Derived from http-listener.ts's exported ACTION_ROUTES — so when Task 4 moves
   // subagent-start/stop to ACTION_ROUTES, this array auto-grows to 14 and the
@@ -1003,6 +1026,73 @@ describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-c
     d.handleRoute("/event/task-completed", "sess-test", { taskId: "task-abc" }); // normal row, same session
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
     expect(d.armedMsAgo("permission")).toBeNull();
+  });
+});
+
+describe("Dispatcher.handleRoute — POST_TOOL_USE_FAILURE_INTERRUPT synthetic row (user Esc during a tool call)", () => {
+  it("removes the session from the thinking counter so the sparkle/timer stop", () => {
+    const counters = fakeCounters();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    const derived = deriveRoute("/event/post-tool-use-failure", undefined, undefined, "sess-xyz", true);
+    expect(derived).not.toBeNull();
+    d.handleRoute(derived!, "sess-xyz");
+    expect(counters.thinking.remove).toHaveBeenCalledTimes(1);
+    expect(counters.thinking.remove).toHaveBeenCalledWith("sess-xyz", "sess-xyz");
+  });
+
+  it("also clears an armed permission alert (mirrors the base post-tool-use-failure row)", () => {
+    const counters = fakeCounters();
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0; // fires immediately → ARMED
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    d.handleRoute("/event/permission-request", "sess-xyz");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+
+    const derived = deriveRoute("/event/post-tool-use-failure", undefined, undefined, "sess-xyz", true);
+    d.handleRoute(derived!, "sess-xyz");
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("permission")).toBeNull();
+  });
+
+  it("never logs 'unknown route=' — the synthetic row is in ROUTES", () => {
+    const debug = vi.fn<(msg: string) => void>();
+    const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
+    const counters = fakeCounters();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      log,
+      counters,
+    });
+    const derived = deriveRoute("/event/post-tool-use-failure", undefined, undefined, "sess-xyz", true);
+    d.handleRoute(derived!, "sess-xyz");
+    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
+  });
+
+  it("contrast: the base (non-interrupt) post-tool-use-failure leaves the thinking counter untouched", () => {
+    const counters = fakeCounters();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    // A real tool error (no interrupt) must not end the turn — Claude retries.
+    const derived = deriveRoute("/event/post-tool-use-failure", undefined, undefined, "sess-xyz", false);
+    expect(derived).toBe("/event/post-tool-use-failure");
+    d.handleRoute(derived!, "sess-xyz");
+    expect(counters.thinking.remove).not.toHaveBeenCalled();
   });
 });
 
