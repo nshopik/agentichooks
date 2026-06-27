@@ -58,6 +58,17 @@ type RouteSpec = {
 export const SESSION_START_SOFT = "/event/session-start-soft";
 export const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
 
+// Backstop for a held Stop whose subagent drain never arrives — a lost
+// subagent-stop, or one without agent_id (the missing-id gate drops it before
+// applyCounters, so the subagents counter never reaches 0). Without this, the
+// chime strands until the session's next resume (UserPromptSubmit/PreToolUse/
+// session-start/-end). The safety timer releases the deferred chime after this
+// interval regardless of counter state. Tradeoff: a legitimate subagent run
+// longer than this fires the chime early (then the real drain is a no-op);
+// firing early — once — beats never. Long enough to essentially never trip
+// during normal orchestration; the strand self-heals on the next prompt anyway.
+export const STOP_SAFETY_RELEASE_MS = 10 * 60 * 1000;
+
 // Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
 // missing key a compile error instead of a silent runtime no-op; unknown
 // runtime strings still take the isKnownRoute guard path in handleRoute.
@@ -178,12 +189,15 @@ export class Dispatcher {
   private armed = new Map<EventType, Map<string, ArmedEntry>>();
 
   // Sessions whose Stop was suppressed because subagents were still in flight,
-  // keyed sessionId → cwd captured at suppression time (for the deferred alert's
-  // title). The entry is consumed by fireDeferredStop() when the subagents
-  // counter drains to 0, or dropped by any stop-clearing route / keypress
-  // (clearType("stop") / dismissArmed("stop")). Suppression is silent — no
-  // visual stand-in; the key simply stays idle until the deferred chime fires.
-  private deferredStops = new Map<string, string | null>();
+  // keyed sessionId → { cwd captured at suppression time (for the deferred
+  // alert's title), safetyTimer }. The entry is consumed by fireDeferredStop()
+  // when the subagents counter drains to 0, or dropped by any stop-clearing
+  // route / keypress (clearType("stop") / dismissArmed("stop")). Suppression is
+  // silent — no visual stand-in; the key simply stays idle until the deferred
+  // chime fires. safetyTimer is the STOP_SAFETY_RELEASE_MS backstop that fires
+  // the deferred chime if the subagent drain never arrives; every drop path must
+  // cancel it (via dropDeferredStop) so it can't double-fire or leak.
+  private deferredStops = new Map<string, { cwd: string | null; safetyTimer: NodeJS.Timeout }>();
 
   constructor(opts: DispatcherOpts) {
     this.opts = opts;
@@ -252,10 +266,29 @@ export class Dispatcher {
   }
 
   // Records a held Stop for this session (silent — no visual). Latest cwd wins
-  // on repeated suppression (intermediate Stops during one orchestration).
+  // on repeated suppression (intermediate Stops during one orchestration); the
+  // backstop timer restarts each time so the safety window tracks the latest Stop.
   private suppressStop(sessionId: string, cwd: string | null): void {
-    this.deferredStops.set(sessionId, cwd);
+    // Re-suppression: cancel the prior backstop so we don't leak a stray timer.
+    const prior = this.deferredStops.get(sessionId);
+    if (prior) clearTimeout(prior.safetyTimer);
+    const safetyTimer = setTimeout(() => {
+      this.opts.log?.warn(`safety-release held stop (subagent drain never arrived) session=${sessionId.slice(0, 8)}`);
+      this.fireDeferredStop(sessionId);
+    }, STOP_SAFETY_RELEASE_MS);
+    this.deferredStops.set(sessionId, { cwd, safetyTimer });
     this.opts.log?.info(`suppress stop (subagents in-flight) session=${sessionId.slice(0, 8)} deferred=${this.deferredStops.size}`);
+  }
+
+  // Cancels the safety timer and removes the held-stop entry. Idempotent — the
+  // single sanctioned way to drop a held Stop, so the backstop timer can never
+  // outlive its entry. Returns the dropped cwd, or undefined if none was held.
+  private dropDeferredStop(sessionId: string): { cwd: string | null } | undefined {
+    const entry = this.deferredStops.get(sessionId);
+    if (!entry) return undefined;
+    clearTimeout(entry.safetyTimer);
+    this.deferredStops.delete(sessionId);
+    return { cwd: entry.cwd };
   }
 
   /**
@@ -266,9 +299,9 @@ export class Dispatcher {
    * the Stop never raced ahead of the subagent-stops).
    */
   fireDeferredStop(sessionId: string): void {
-    if (!this.deferredStops.has(sessionId)) return;
-    const cwd = this.deferredStops.get(sessionId) ?? null;
-    this.deferredStops.delete(sessionId);
+    const held = this.dropDeferredStop(sessionId);
+    if (!held) return;
+    const cwd = held.cwd;
     this.opts.log?.info(`fire deferred stop on subagent drain session=${sessionId.slice(0, 8)} remaining=${this.deferredStops.size}`);
     // Replay the stop route's clears so the deferred completion behaves exactly
     // like a real Stop: a permission or task-completed alert that re-armed during
@@ -294,8 +327,12 @@ export class Dispatcher {
   dismissArmed(type: EventType): void {
     this.opts.log?.debug(`dismissArmed type=${type}`);
     // A keypress / auto-timeout on the stop key is type-wide: also drop every
-    // held Stop so a dismissed key cannot resurrect a deferred chime.
-    if (type === "stop") this.deferredStops.clear();
+    // held Stop so a dismissed key cannot resurrect a deferred chime. Cancel each
+    // session's backstop timer before clearing so no orphaned timer fires later.
+    if (type === "stop") {
+      for (const entry of this.deferredStops.values()) clearTimeout(entry.safetyTimer);
+      this.deferredStops.clear();
+    }
     // Iterate and cancel ALL per-session pending timers for this type.
     // TRAP: after the re-key, this.pending.get(type) is a Map<sessionId, Timeout>,
     // and clearTimeout(someMap) is a silent no-op in Node — we MUST iterate.
@@ -389,7 +426,7 @@ export class Dispatcher {
     // but reset() is silent (no onSessionDrained), so this clear — which runs in
     // the clears phase, BEFORE counters — is what drops the held Stop. Without it,
     // a session boundary would strand the held Stop instead of cancelling it.
-    if (type === "stop") this.deferredStops.delete(sessionId);
+    if (type === "stop") this.dropDeferredStop(sessionId);
     const pendingInner = this.pending.get(type);
     if (pendingInner) {
       const timer = pendingInner.get(sessionId);
