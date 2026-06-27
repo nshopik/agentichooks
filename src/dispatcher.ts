@@ -237,7 +237,7 @@ export class Dispatcher {
       }
     }
     if (spec.counters) this.applyCounters(spec.counters, sessionId, ctx);
-    this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)}`);
+    this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)} stop-held=${this.deferredStops.has(sessionId)}`);
   }
 
   // Public seam used by SessionSetCounter (tasks instance) onSessionDrained. Wraps the
@@ -270,6 +270,11 @@ export class Dispatcher {
     const cwd = this.deferredStops.get(sessionId) ?? null;
     this.deferredStops.delete(sessionId);
     this.opts.log?.info(`fire deferred stop on subagent drain session=${sessionId.slice(0, 8)} remaining=${this.deferredStops.size}`);
+    // Replay the stop route's clears so the deferred completion behaves exactly
+    // like a real Stop: a permission or task-completed alert that re-armed during
+    // the hold window (e.g. the tasks counter drained while subagents still ran)
+    // is dismissed, instead of lingering behind the chime.
+    for (const t of ROUTES["/event/stop"].clears) this.clearType(t, sessionId);
     this.armType("stop", sessionId, cwd);
   }
 
@@ -380,6 +385,10 @@ export class Dispatcher {
   private clearType(type: EventType, sessionId: string): void {
     // A stop-clearing route (user-prompt-submit, session-start/end, pre-tool-use)
     // means the agent resumed or the session reset — any held Stop is now stale.
+    // Load-bearing ordering: session-start/end ALSO reset the subagents counter,
+    // but reset() is silent (no onSessionDrained), so this clear — which runs in
+    // the clears phase, BEFORE counters — is what drops the held Stop. Without it,
+    // a session boundary would strand the held Stop instead of cancelling it.
     if (type === "stop") this.deferredStops.delete(sessionId);
     const pendingInner = this.pending.get(type);
     if (pendingInner) {

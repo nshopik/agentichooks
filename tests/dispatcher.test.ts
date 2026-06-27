@@ -10,6 +10,7 @@ import {
   type GlobalSettings,
 } from "../src/types.js";
 import type { DispatchableButton, DispatcherCounter } from "../src/dispatcher.js";
+import { SessionSetCounter } from "../src/session-set-counter.js";
 
 type FakeButton = {
   eventType: EventType;
@@ -1806,6 +1807,75 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     const { d } = withSubagents(false);
     d.handleRoute("/event/stop", "sess-test");
     vi.advanceTimersByTime(1000);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("latest cwd wins when a session is suppressed twice before draining", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/first" });
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/second" });
+    d.fireDeferredStop("sess-test");
+    expect(d.armedContext("stop")!.latestCwd).toBe("/repos/second");
+  });
+
+  it("session-start drops the held stop — no chime on a later drain", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test"); // suppressed
+    d.handleRoute("/event/session-start", "sess-test"); // boundary clears it
+    d.fireDeferredStop("sess-test");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("the deferred stop clears a task-completed alert that armed during the hold", () => {
+    // Regression guard: while subagents run, the tasks counter can drain and arm
+    // task-completed. The deferred stop must dismiss it, exactly as a real Stop
+    // (clears: ["permission", "task-completed"]) would.
+    buttons.set("stop", makeButton("stop"));
+    const task = makeButton("task-completed");
+    buttons.set("task", task);
+    globals.alertDelay.stop = 0;
+    globals.alertDelay["task-completed"] = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test"); // suppressed
+    d.fireTaskCompleted("sess-test"); // task-completed arms during the hold
+    expect(task.alert).toHaveBeenCalledTimes(1);
+    d.fireDeferredStop("sess-test"); // deferred completion
+    expect(task.dismiss).toHaveBeenCalledTimes(1);
+    expect(d.armedMsAgo("task-completed")).toBeNull();
+  });
+
+  it("drives the real subagent-stop → drain → deferred chime path end to end", () => {
+    // Integration: a real SessionSetCounter wired exactly as plugin.ts wires it
+    // (onSessionDrained → fireDeferredStop). Pins the production seam the other
+    // tests stub by calling fireDeferredStop directly.
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0; // chime fires on release
+    let d!: Dispatcher;
+    const subagents = new SessionSetCounter({
+      name: "subagents",
+      onSessionDrained: (sid) => d.fireDeferredStop(sid),
+      onChanged: () => {},
+    });
+    const mocks = fakeCounters();
+    d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters: { tasks: mocks.tasks, subagents, thinking: mocks.thinking },
+    });
+
+    d.handleRoute("/event/subagent-start", "s1", { agentId: "a1" });
+    d.handleRoute("/event/stop", "s1"); // subagent in flight → suppressed
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+
+    d.handleRoute("/event/subagent-stop", "s1", { agentId: "a1" }); // drains → deferred chime
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
