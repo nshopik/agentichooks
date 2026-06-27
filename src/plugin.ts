@@ -178,9 +178,6 @@ const dispatcher = new Dispatcher({
     if (type === "stop") stopAction.broadcastAlertTitle();
     else if (type === "permission") permissionAction.broadcastAlertTitle();
   },
-  // Raise/lower the moon "waiting on subagents" visual on the stop key as
-  // sessions enter/leave the suppressed-stop set.
-  onWaitingChanged: (active) => stopAction.broadcastWaiting(active),
   counters: {
     tasks: taskCounters.tasks,
     subagents: taskCounters.subagents,
