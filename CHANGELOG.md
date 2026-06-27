@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
   finishes (the deferred completion). Any resume of the session
   (`UserPromptSubmit`, `PreToolUse`, session start/end) or a keypress drops the
   held Stop and lowers the moon. Eliminates premature completion chimes during
-  multi-subagent orchestration. (#TBD)
+  multi-subagent orchestration. (#49)
 
 ### Fixed
 
