@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-06-27
+
 ### Added
 
 - **Hold the Stop chime while subagents are still running** — when a session's
