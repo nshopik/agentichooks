@@ -16,6 +16,15 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Thinking sparkle/timer stranded after an Esc interrupt during a tool call** —
+  `Stop` hooks do not fire on user interrupts, so pressing Esc left the session in
+  the thinking counter and the On-Stop key kept animating the sparkle and counting
+  the timer until the next prompt. A `PostToolUseFailure` carrying `is_interrupt`
+  now derives to a synthetic interrupt route that removes the session from the
+  thinking counter (and clears any armed permission alert), stopping the visuals at
+  once. Esc during pure thinking/streaming — when no tool call is in flight — fires
+  no hook and is still uncovered; no fix is possible without an interrupt hook event.
+
 - **Held Stop chime could strand on a lost `subagent-stop`** — a held Stop is
   released when the session's subagents counter drains to 0. If a `subagent-stop`
   was lost or arrived without `agent_id` (dropped by the missing-id gate before

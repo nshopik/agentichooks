@@ -16,9 +16,11 @@ export type TurnClockOpts = {
 //   - A session entry exists in the Map iff the session is currently tracked.
 //   - Duplicate add()s for an already-tracked session REFRESH the timestamp but
 //     are no-ops on the Map position (Map.set on an existing key preserves
-//     insertion order). Rationale: Esc-cancel fires no hook (Stop skips user
-//     interrupts), so a resubmit arrives as a duplicate add with a stale start —
-//     without the refresh the timer shows unbounded idle wall-clock time. The
+//     insertion order). Rationale: an Esc-cancel during pure thinking/streaming
+//     fires no hook (Stop skips user interrupts, and there's no tool call to raise
+//     the interrupt PostToolUseFailure that would clear thinking), so a resubmit
+//     arrives as a duplicate add with a stale start — without the refresh the timer
+//     shows unbounded idle wall-clock time. The
 //     cost is bounded: a queued prompt mid-turn restarts the timer (time since
 //     latest input), but never steals the display from a newer session.
 //   - Delegation to inner always happens.

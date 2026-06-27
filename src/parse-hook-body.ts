@@ -5,6 +5,7 @@ export type ParsedBody = {
   source?: string;
   agentId?: string;
   taskId?: string;
+  isInterrupt?: boolean;
 };
 
 export type BodyOutcome =
@@ -39,6 +40,11 @@ export function makeBodyBuffer(maxBytes = 64 * 1024) {
             source: typeof json.source === "string" ? json.source : undefined,
             agentId: typeof json.agent_id === "string" ? json.agent_id : undefined,
             taskId: typeof json.task_id === "string" ? json.task_id : undefined,
+            // PostToolUseFailure sets this true when a user interrupt (Esc) aborted
+            // the tool call. The only signal we get for an interrupt — Stop hooks do
+            // not fire on interrupts — so deriveRoute uses it to clear the thinking
+            // counter. Strict-true guard: a non-boolean value is treated as absent.
+            isInterrupt: json.is_interrupt === true ? true : undefined,
           },
         };
       } catch {

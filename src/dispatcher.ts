@@ -57,6 +57,7 @@ type RouteSpec = {
 
 export const SESSION_START_SOFT = "/event/session-start-soft";
 export const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
+export const POST_TOOL_USE_FAILURE_INTERRUPT = "/event/post-tool-use-failure-interrupt";
 
 // Backstop for a held Stop whose subagent drain never arrives — a lost
 // subagent-stop, or one without agent_id (the missing-id gate drops it before
@@ -88,7 +89,8 @@ type Route =
   | "/event/post-tool-use-failure"
   | "/event/pre-tool-use"
   | typeof SESSION_START_SOFT
-  | typeof TASK_COMPLETED_AGENT;
+  | typeof TASK_COMPLETED_AGENT
+  | typeof POST_TOOL_USE_FAILURE_INTERRUPT;
 
 function isKnownRoute(route: string): route is Route {
   return Object.hasOwn(ROUTES, route);
@@ -127,6 +129,13 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
   // via deriveRoute() for agent-context TaskCompleted: teammate completions drive
   // the counter but must not clear the user's armed permission alert.
   [TASK_COMPLETED_AGENT]:         {                     clears: [],                               counters: [{ metric: "tasks", op: "remove" }] },
+  // Synthetic route — never in ACTION_ROUTES (a direct POST 404s). Reachable only
+  // via deriveRoute() for a PostToolUseFailure carrying is_interrupt (user Esc during
+  // a tool call). No Stop hook fires on interrupts, so this is the only chance to
+  // drop the session from the thinking counter — otherwise the sparkle/timer run
+  // until the next prompt. Mirrors the base post-tool-use-failure clear (permission)
+  // and adds thinking.remove on top.
+  [POST_TOOL_USE_FAILURE_INTERRUPT]: {                  clears: ["permission"],                   counters: [{ metric: "thinking", op: "remove" }] },
 };
 
 // Maps an incoming route + body fields to the effective ROUTES key, or null (drop).
@@ -141,17 +150,20 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
 //      → TASK_COMPLETED_AGENT (counter-only). agentId present, any other route → null
 //      (drop; caller must not call handleRoute).
 //   3. Source derivation: agentId absent → source logic. session-start with
-//      source=compact|resume → SESSION_START_SOFT (no-op). Everything else → route.
-//      Never returns null in this branch.
+//      source=compact|resume → SESSION_START_SOFT (no-op). post-tool-use-failure
+//      with isInterrupt → POST_TOOL_USE_FAILURE_INTERRUPT (also clears thinking).
+//      Everything else → route. Never returns null in this branch.
 //
 // NOTE: sessionId is a REQUIRED parameter (no `?`, no default) so the TypeScript
 // compiler forces every call site — production and test — to state explicitly what
 // session context they pass. Callers that want to express "no session" pass `undefined`.
 // The check is a falsy guard (`!sessionId`), so `""` is treated as absent.
-export function deriveRoute(route: string, source: string | undefined, agentId: string | undefined, sessionId: string | undefined): string | null {
+export function deriveRoute(route: string, source: string | undefined, agentId: string | undefined, sessionId: string | undefined, isInterrupt?: boolean): string | null {
   // 1. Session gate — evaluated FIRST.
   if (!sessionId) return null;
-  // 2. Agent-context check.
+  // 2. Agent-context check. A subagent's interrupting PostToolUseFailure carries
+  //    agent_id and is dropped here (not in the passthrough set), so the interrupt
+  //    derivation below is reached only by main-thread interrupts.
   if (agentId !== undefined) {
     if (
       route === "/event/task-created" ||
@@ -164,6 +176,13 @@ export function deriveRoute(route: string, source: string | undefined, agentId: 
   // 3. Source derivation.
   if (route === "/event/session-start" && (source === "compact" || source === "resume")) {
     return SESSION_START_SOFT;
+  }
+  // A user interrupt (Esc) during a tool call is the only interrupt signal we get —
+  // Stop hooks do not fire on interrupts — so route it to the synthetic variant that
+  // clears the thinking counter. Does NOT cover Esc during pure thinking/streaming
+  // (no tool call in flight → no PostToolUseFailure fires).
+  if (route === "/event/post-tool-use-failure" && isInterrupt === true) {
+    return POST_TOOL_USE_FAILURE_INTERRUPT;
   }
   return route;
 }
