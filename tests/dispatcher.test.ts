@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Dispatcher, deriveRoute } from "../src/dispatcher.js";
+import { Dispatcher, deriveRoute, STOP_SAFETY_RELEASE_MS } from "../src/dispatcher.js";
 import { ACTION_ROUTES as ACTION_ROUTES_EXPORT } from "../src/http-listener.js";
 import {
   DEFAULT_GLOBAL_SETTINGS,
@@ -1891,5 +1891,66 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     // B is still held; its drain releases it independently.
     d.fireDeferredStop("sess-B");
     expect(audioPlayer.play).toHaveBeenCalledTimes(2);
+  });
+
+  it("safety timer releases a held stop when the subagent drain never arrives", () => {
+    // The bug: a lost subagent-stop (or one without agent_id) leaves the counter
+    // stuck >0, so onSessionDrained never fires fireDeferredStop. The backstop
+    // releases the chime anyway.
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0; // chime fires immediately on release
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still held
+    vi.advanceTimersByTime(1);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    expect(d.armedContext("stop")!.latestCwd).toBe("/repos/proj"); // cwd preserved
+  });
+
+  it("a real drain before the safety window cancels the backstop — exactly one chime", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test");
+    d.fireDeferredStop("sess-test"); // subagents drained normally
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS); // backstop must not re-fire
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stop-clearing route cancels the backstop — no chime at the safety deadline", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test"); // suppressed, backstop armed
+    d.handleRoute("/event/user-prompt-submit", "sess-test"); // agent resumed
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS);
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("dismissArmed(stop) cancels every backstop — no orphaned chime later", () => {
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-A");
+    d.handleRoute("/event/stop", "sess-B");
+    d.dismissArmed("stop");
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS);
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("re-suppression restarts the backstop window — one chime, at the latest deadline", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/first" });
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1000); // almost expired
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/second" }); // restarts window
+    vi.advanceTimersByTime(1000); // original deadline passes — must NOT fire
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1000); // reach the new deadline
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    expect(d.armedContext("stop")!.latestCwd).toBe("/repos/second");
   });
 });

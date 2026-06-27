@@ -16,6 +16,15 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Held Stop chime could strand on a lost `subagent-stop`** — a held Stop is
+  released when the session's subagents counter drains to 0. If a `subagent-stop`
+  was lost or arrived without `agent_id` (dropped by the missing-id gate before
+  the counter is touched), the counter never drained and the chime stranded until
+  the session's next resume. A safety-release backstop now fires the held chime
+  after 10 minutes regardless of counter state, so a dropped subagent event can
+  no longer swallow a completion chime. Every drop path (drain, stop-clearing
+  route, keypress) cancels the backstop so it can't double-fire.
+
 - **Subagent pill with no in-flight tasks** — the Task-Completed key only
   rendered when the task count was > 0, so a lone subagent (a `subagent-start`
   without a matching `task-created`, e.g. partial hook coverage on older Claude
