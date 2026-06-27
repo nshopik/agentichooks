@@ -2,6 +2,7 @@ import { action, type WillAppearEvent, type WillDisappearEvent } from "@elgato/s
 import type { JsonObject } from "@elgato/utils";
 import type { EventType } from "../types.js";
 import { renderThinkingIcon, THINKING_FRAMES } from "../render-thinking-icon.js";
+import { renderMoonIcon } from "../render-moon-icon.js";
 import { formatElapsed } from "../format-elapsed.js";
 import { formatAlertTitle } from "../alert-title.js";
 import { EventFlashAction } from "./event-flash-action.js";
@@ -15,6 +16,12 @@ export class OnStopAction extends EventFlashAction {
   private static readonly FRAMES = THINKING_FRAMES;
 
   private frameIdx = 0;
+  // True while at least one session has a suppressed ("deferred") stop — the
+  // turn ended but subagents are still running. Drives the moon visual on the
+  // idle state. Set by broadcastWaiting (dispatcher onWaitingChanged). Image
+  // precedence on state 0: thinking sparkle/timer > moon > clear — thinking is
+  // an active turn and always wins; the moon only shows once the turn is over.
+  private waiting = false;
   // Timer repaint loop: fires every 200 ms while thinking is active AND at least
   // one On Stop key context is visible. Advances the sparkle frame AND repaints
   // the elapsed timer on every context. Runs even when every context has
@@ -82,9 +89,30 @@ export class OnStopAction extends EventFlashAction {
       }
     } else {
       this.stopAnimation();
+      // Turn ended: fall back to the moon if a stop is still being held for
+      // subagents, otherwise clear the state-0 override.
+      const img = this.waiting ? renderMoonIcon() : "";
       for (const [, ctx] of this.contexts) {
-        void ctx.setImage("", 0);
+        void ctx.setImage(img, 0);
       }
+    }
+  }
+
+  /**
+   * Called by plugin.ts via dispatcher onWaitingChanged when the set of sessions
+   * with a suppressed stop changes empty↔non-empty. active=true raises the moon
+   * "waiting on subagents" visual; active=false lowers it. The moon only paints
+   * when no turn is in progress — an active thinking turn owns the state-0 image
+   * (sparkle/timer) and its repaint loop would overwrite the moon anyway. When
+   * the turn later ends, broadcastThinking(false) repaints the moon from this.waiting.
+   */
+  broadcastWaiting(active: boolean): void {
+    this.waiting = active;
+    const thinking = this.opts.currentThinking?.() ?? false;
+    if (thinking) return; // sparkle/timer loop owns the image while thinking
+    const img = active ? renderMoonIcon() : "";
+    for (const [, ctx] of this.contexts) {
+      void ctx.setImage(img, 0);
     }
   }
 
@@ -132,7 +160,8 @@ export class OnStopAction extends EventFlashAction {
     }
     const isThinking = this.opts.currentThinking?.() ?? false;
     if (!isThinking) {
-      void ctx.setImage("", 0);
+      // Restore the moon if a stop is being held for subagents, else clear.
+      void ctx.setImage(this.waiting ? renderMoonIcon() : "", 0);
       return;
     }
     // Thinking active: (re)start the interval if it was stopped (e.g. page

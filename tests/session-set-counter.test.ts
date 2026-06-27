@@ -38,6 +38,29 @@ describe("SessionSetCounter", () => {
     expect(newCounter().sum()).toBe(0);
   });
 
+  // ---- has() ----
+
+  it("has() is false for an untracked session, true after add, false after drain", () => {
+    const c = newCounter();
+    expect(c.has("sess-A")).toBe(false);
+    c.add("sess-A", "id-1");
+    expect(c.has("sess-A")).toBe(true);
+    c.remove("sess-A", "id-1");
+    expect(c.has("sess-A")).toBe(false);
+  });
+
+  it("has() is per-session and stays true while any id remains", () => {
+    const c = newCounter();
+    c.add("sess-A", "id-1");
+    c.add("sess-A", "id-2");
+    expect(c.has("sess-A")).toBe(true);
+    expect(c.has("sess-B")).toBe(false);
+    c.remove("sess-A", "id-1");
+    expect(c.has("sess-A")).toBe(true); // id-2 still present
+    c.reset("sess-A");
+    expect(c.has("sess-A")).toBe(false);
+  });
+
   // ---- add() dedup ----
 
   it("add(sessionId, id) increments sum and fires onChanged with new sum", () => {

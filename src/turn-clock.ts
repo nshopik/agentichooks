@@ -57,6 +57,10 @@ export class TurnClock implements DispatcherCounter {
     this.inner.reset(sessionId);
   }
 
+  has(sessionId: string): boolean {
+    return this.inner.has(sessionId);
+  }
+
   // Returns elapsed ms for the last-inserted still-tracked session, or null
   // when no sessions are tracked. "Last-inserted" is defined by Map insertion
   // order — the spec's latest-wins semantic (decision 5).
