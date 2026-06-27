@@ -45,6 +45,15 @@ export class SessionSetCounter {
     return total;
   }
 
+  // True when this session currently holds at least one id. Map hygiene
+  // guarantees a session entry is deleted when its set empties (remove/reset),
+  // so a present entry always has size > 0 — but the guard keeps the predicate
+  // honest if that invariant ever regresses.
+  has(sessionId: string): boolean {
+    const set = this.sessions.get(sessionId);
+    return set !== undefined && set.size > 0;
+  }
+
   add(sessionId: string, id: string): void {
     let set = this.sessions.get(sessionId);
     if (!set) {

@@ -40,22 +40,28 @@ function fakeCounters(): {
     add: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     remove: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     reset: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
+    has: ReturnType<typeof vi.fn<(sessionId: string) => boolean>>;
   };
   subagents: DispatcherCounter & {
     add: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     remove: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     reset: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
+    has: ReturnType<typeof vi.fn<(sessionId: string) => boolean>>;
   };
   thinking: DispatcherCounter & {
     add: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     remove: ReturnType<typeof vi.fn<(sessionId: string, id: string) => void>>;
     reset: ReturnType<typeof vi.fn<(sessionId: string) => void>>;
+    has: ReturnType<typeof vi.fn<(sessionId: string) => boolean>>;
   };
 } {
   const make = () => ({
     add: vi.fn<(sessionId: string, id: string) => void>(),
     remove: vi.fn<(sessionId: string, id: string) => void>(),
     reset: vi.fn<(sessionId: string) => void>(),
+    // Default: no subagents in flight. Tests that exercise stop-suppression
+    // override subagents.has per-case.
+    has: vi.fn<(sessionId: string) => boolean>(() => false),
   });
   return { tasks: make(), subagents: make(), thinking: make() };
 }
@@ -1689,5 +1695,139 @@ describe("Dispatcher — session-scoped alert clearing (new)", () => {
     expect(ctx!.count).toBe(1);
     expect(ctx!.latestCwd).toBe("/repos/beta");
     expect(d.armedMsAgo("permission")).not.toBeNull();
+  });
+});
+
+describe("Dispatcher.handleRoute — stop suppressed while subagents in flight", () => {
+  function withSubagents(inFlight: boolean) {
+    const counters = fakeCounters();
+    counters.subagents.has.mockReturnValue(inFlight);
+    const onWaitingChanged = vi.fn<(active: boolean) => void>();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+      onWaitingChanged,
+    });
+    return { d, counters, onWaitingChanged };
+  }
+
+  it("suppresses the stop alert (no flash, no audio) and raises the moon", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d, onWaitingChanged } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    expect(onWaitingChanged).toHaveBeenCalledWith(true);
+  });
+
+  it("still applies the stop route's clears while suppressing the arm", () => {
+    buttons.set("perm", makeButton("permission"));
+    const { d } = withSubagents(true);
+    globals.alertDelay.permission = 0;
+    d.handleRoute("/event/permission-request", "sess-test"); // ARMED immediately
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+    d.handleRoute("/event/stop", "sess-test"); // suppressed arm, but clears permission
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("still decrements the thinking counter when the stop is suppressed", () => {
+    const { d, counters } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test");
+    expect(counters.thinking.remove).toHaveBeenCalledWith("sess-test", "sess-test");
+  });
+
+  it("fireDeferredStop releases the held stop after the delay (deferred chime)", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d, onWaitingChanged } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+
+    d.fireDeferredStop("sess-test"); // subagents drained → release
+    expect(onWaitingChanged).toHaveBeenLastCalledWith(false);
+    vi.advanceTimersByTime(999);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still in delay
+    vi.advanceTimersByTime(1);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("the deferred stop carries the cwd captured at suppression time", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/captured" });
+    d.fireDeferredStop("sess-test");
+    expect(d.armedContext("stop")!.latestCwd).toBe("/repos/captured");
+  });
+
+  it("fireDeferredStop is a no-op when the session has no held stop", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d } = withSubagents(true);
+    d.fireDeferredStop("never-suppressed");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+  });
+
+  it("a stop-clearing route drops the held stop — no chime on later drain", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d, onWaitingChanged } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test"); // suppressed
+    d.handleRoute("/event/user-prompt-submit", "sess-test"); // agent resumed
+    expect(onWaitingChanged).toHaveBeenLastCalledWith(false);
+    d.fireDeferredStop("sess-test"); // late drain — held stop already gone
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("pre-tool-use also drops the held stop (agentic loop restarted)", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test");
+    d.handleRoute("/event/pre-tool-use", "sess-test");
+    d.fireDeferredStop("sess-test");
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+  });
+
+  it("dismissArmed(stop) clears all held stops and lowers the moon", () => {
+    const { d, onWaitingChanged } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-A");
+    d.handleRoute("/event/stop", "sess-B");
+    onWaitingChanged.mockClear();
+    d.dismissArmed("stop");
+    expect(onWaitingChanged).toHaveBeenCalledWith(false);
+    // Neither held stop can chime afterwards.
+    d.fireDeferredStop("sess-A");
+    d.fireDeferredStop("sess-B");
+    vi.advanceTimersByTime(5000);
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("arms normally (no suppression) when no subagents are in flight", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d, onWaitingChanged } = withSubagents(false);
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(1000);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    expect(onWaitingChanged).not.toHaveBeenCalled();
+  });
+
+  it("only one session's held stop is released on its own drain", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0;
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-A");
+    d.handleRoute("/event/stop", "sess-B");
+    d.fireDeferredStop("sess-A"); // only A drained
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+    // B is still held; its drain releases it independently.
+    d.fireDeferredStop("sess-B");
+    expect(audioPlayer.play).toHaveBeenCalledTimes(2);
   });
 });

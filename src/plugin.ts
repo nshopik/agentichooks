@@ -142,7 +142,10 @@ const taskCounters = {
   }),
   subagents: new SessionSetCounter({
     name: "subagents",
-    // Subagent drain never chimes — onSessionDrained omitted.
+    // When a session's subagents drain to 0, release any Stop that was held back
+    // because subagents were still running (the deferred chime). No-op when the
+    // session has no held Stop. Fires BEFORE onChanged per the counter contract.
+    onSessionDrained: (sid) => dispatcher.fireDeferredStop(sid),
     onChanged: (n) => taskCompletedAction.broadcastCounts(taskCounters.tasks.sum(), n),
     log: makeLogger("counter"),
   }),
@@ -175,6 +178,9 @@ const dispatcher = new Dispatcher({
     if (type === "stop") stopAction.broadcastAlertTitle();
     else if (type === "permission") permissionAction.broadcastAlertTitle();
   },
+  // Raise/lower the moon "waiting on subagents" visual on the stop key as
+  // sessions enter/leave the suppressed-stop set.
+  onWaitingChanged: (active) => stopAction.broadcastWaiting(active),
   counters: {
     tasks: taskCounters.tasks,
     subagents: taskCounters.subagents,
