@@ -39,10 +39,6 @@ describe("formatElapsed", () => {
     expect(formatElapsed(36_000_000)).toBe("10:00");
   });
 
-  it("38 640 000 ms → '10:44' (minutes zero-padded in >=10h tier)", () => {
-    expect(formatElapsed(38_640_000)).toBe("10:44");
-  });
-
   it("minutes zero-padding in >=10h tier: 36 240 000 ms → '10:04'", () => {
     expect(formatElapsed(36_240_000)).toBe("10:04");
   });

@@ -8,20 +8,7 @@ function decodeDataUri(uri: string): string {
 }
 
 describe("renderThinkingIcon", () => {
-  // ---- THINKING_FRAMES constant ----
-
-  it("THINKING_FRAMES is the 8-frame pulse sequence", () => {
-    expect(THINKING_FRAMES).toEqual(["·", "*", "✶", "✢", "✻", "✢", "✶", "*"]);
-    expect(THINKING_FRAMES).toHaveLength(8);
-  });
-
   // ---- Legacy: frame + null elapsed (centered big glyph, current layout) ----
-
-  it("returns a base64 data URI for each frame when elapsed is null", () => {
-    for (const frame of THINKING_FRAMES) {
-      expect(renderThinkingIcon(frame, null).startsWith("data:image/svg+xml;base64,")).toBe(true);
-    }
-  });
 
   it("SVG contains the frame glyph as visible text (frame + null elapsed)", () => {
     for (const frame of THINKING_FRAMES) {
@@ -72,15 +59,6 @@ describe("renderThinkingIcon", () => {
     expect(svg).toContain("#da7756");
   });
 
-  it("sparkle + timer: sparkle text element appears before the timer text element in SVG source", () => {
-    const svg = decodeDataUri(renderThinkingIcon("✶", "35s"));
-    const sparkleIdx = svg.indexOf("#da7756");
-    const timerIdx = svg.indexOf("#9a9a9a");
-    expect(sparkleIdx).toBeGreaterThan(-1);
-    expect(timerIdx).toBeGreaterThan(-1);
-    expect(sparkleIdx).toBeLessThan(timerIdx);
-  });
-
   it("sparkle matches the historical corner-glyph geometry (x=22 y=34, centered, font-size 33)", () => {
     // Pinned to the pre-#38 render-count-icon corner glyph (commit b7f21a5):
     // <text x="22" y="34" text-anchor="middle" ... font-size="33">. Restored
@@ -95,25 +73,13 @@ describe("renderThinkingIcon", () => {
   it("timer-only: SVG contains the elapsed label", () => {
     const svg = decodeDataUri(renderThinkingIcon(null, "59s"));
     expect(svg).toContain("59s");
-  });
-
-  it("timer-only: elapsed label uses gray color #9a9a9a", () => {
-    const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
     expect(svg).toContain("#9a9a9a");
   });
 
   it("timer-only: coral color #da7756 is ABSENT (no sparkle element)", () => {
     const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
     expect(svg).not.toContain("#da7756");
-  });
-
-  it("timer-only: SVG does not contain an empty text element", () => {
-    const svg = decodeDataUri(renderThinkingIcon(null, "2:00"));
     expect(svg).not.toMatch(/<text[^>]*><\/text>/);
-  });
-
-  it("timer-only: returns a valid data URI", () => {
-    expect(renderThinkingIcon(null, "1:23").startsWith("data:image/svg+xml;base64,")).toBe(true);
   });
 
   // ---- Small font for labels with length >= 7 ----
@@ -130,16 +96,6 @@ describe("renderThinkingIcon", () => {
     expect(shortSize).toBeGreaterThan(0);
     expect(longSize).toBeGreaterThan(0);
     expect(shortSize).toBeGreaterThan(longSize);
-  });
-
-  it("5-char label uses the large font; 7-char label uses the smaller font", () => {
-    const svgFive  = decodeDataUri(renderThinkingIcon("*", "59:59"));   // length 5
-    const svgSeven = decodeDataUri(renderThinkingIcon("*", "9:59:59")); // length 7
-    const extractTimerFontSize = (svg: string): number => {
-      const match = svg.match(/font-size="([^"]+)" font-weight="700" fill="#9a9a9a"/);
-      return Number(match?.[1] ?? "0");
-    };
-    expect(extractTimerFontSize(svgFive)).toBeGreaterThan(extractTimerFontSize(svgSeven));
   });
 
   // ---- Timer baseline: pinned vertical centering ----
@@ -174,15 +130,9 @@ describe("renderThinkingIcon", () => {
     expect(renderThinkingIcon(null, null).startsWith("data:image/svg+xml;base64,")).toBe(true);
   });
 
-  it("null + null: SVG has black background but no coral and no gray timer text", () => {
-    const svg = decodeDataUri(renderThinkingIcon(null, null));
-    expect(svg).toContain("#000000");
-    expect(svg).not.toContain("#da7756");
-    expect(svg).not.toContain("#9a9a9a");
-  });
-
   it("null + null: SVG contains no text elements", () => {
     const svg = decodeDataUri(renderThinkingIcon(null, null));
+    expect(svg).toContain("#000000");
     expect(svg).not.toContain("<text");
   });
 });

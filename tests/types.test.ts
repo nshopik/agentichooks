@@ -18,11 +18,9 @@ describe("normalizeFlashMode", () => {
     expect(normalizeFlashMode(42)).toBe(DEFAULT_FLASH_SETTINGS.flashMode);
   });
 
-  it("falls back to the default for undefined", () => {
+  it("non-(static|pulse) input falls back to default", () => {
     expect(normalizeFlashMode(undefined)).toBe(DEFAULT_FLASH_SETTINGS.flashMode);
-  });
-
-  it("falls back to the default for null", () => {
     expect(normalizeFlashMode(null)).toBe(DEFAULT_FLASH_SETTINGS.flashMode);
+    expect(normalizeFlashMode([])).toBe(DEFAULT_FLASH_SETTINGS.flashMode);
   });
 });

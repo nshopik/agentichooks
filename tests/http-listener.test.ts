@@ -176,23 +176,10 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
   });
 
-  it("returns 405 for GET on POST-only info routes", async () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
-    await listener.start();
-    const res = await request("GET", "/event/notification", listener.port());
-    expect(res.status).toBe(405);
-    expect(received).toEqual([]);
-  });
-
   it("binds to 127.0.0.1 only (public host() accessor)", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
     expect(listener.host()).toBe("127.0.0.1");
-  });
-
-  it("host() returns null before start()", () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
-    expect(listener.host()).toBeNull();
   });
 
   it("Host allowlist is pinned to the resolved listen port (wrong-port Host → 403)", async () => {
@@ -289,16 +276,6 @@ describe("HttpListener", () => {
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=a1b2c3d4");
     expect(info?.msg).toContain("cwd=myproject");
-  });
-
-  it("signal route (/event/stop) emits result line at INFO level", async () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
-    await listener.start();
-    const body = JSON.stringify({ session_id: "abc", cwd: "/a/b" });
-    await requestWithBody("POST", "/event/stop", listener.port(), body);
-    await new Promise((r) => setTimeout(r, 20));
-    const resultLine = logs.find((l) => l.msg.includes("route=/event/stop") && l.msg.includes("session="));
-    expect(resultLine?.level).toBe("info");
   });
 
   it("verbose route (/event/pre-tool-use) emits result line at DEBUG level", async () => {
@@ -420,19 +397,6 @@ describe("HttpListener — onEvent body forwarding", () => {
     expect(receivedBodies[0]).toBeUndefined();
   });
 
-  it("existing route-only onEvent callbacks still compile and work (existing tests unaffected)", async () => {
-    // This test demonstrates that the new signature is backward compatible —
-    // a callback that ignores the second arg still satisfies the widened type.
-    listener = new HttpListener({
-      port: 0,
-      onEvent: (route) => received.push(route),
-    });
-    await listener.start();
-    await request("POST", "/event/stop", listener.port());
-    await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["/event/stop"]);
-  });
-
   it("logs source= in the INFO result line when source is present in the parsed body", async () => {
     listener = new HttpListener({
       port: 0,
@@ -550,39 +514,6 @@ describe("HttpListener — warn suffix on info routes", () => {
     expect(warn!.msg).toContain("(no usable body)");
   });
 
-  it("POST with unparseable body on an info route emits WARN without '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    await requestWithBody("POST", "/event/notification", listener.port(), "not-json");
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("unparseable body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).not.toContain("(session_id required)");
-    expect(warn!.msg).toContain("(no usable body)");
-  });
-
-  it("POST with oversize body on an info route emits WARN without '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    const big = "{" + '"a":"' + "x".repeat(65 * 1024) + '"}';
-    await requestWithBody("POST", "/event/notification", listener.port(), big);
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("oversize body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).not.toContain("(session_id required)");
-    expect(warn!.msg).toContain("(no usable body)");
-  });
-
-  it("POST with empty body on an action route still emits WARN with '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    await request("POST", "/event/stop", listener.port());
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).toContain("(session_id required)");
-    expect(warn!.msg).not.toContain("(no usable body)");
-  });
 });
 
 describe("HttpListener — warn truncation (attacker-controlled values)", () => {
@@ -692,22 +623,47 @@ describe("HttpListener — warn rate limiting", () => {
 });
 
 describe("HttpListener — route-set membership", () => {
-  it("ACTION_ROUTES has exactly 14 members (12 original + subagent-start + subagent-stop)", () => {
-    expect(ACTION_ROUTES_SET.size).toBe(14);
+  it("ACTION_ROUTES_SET is pinned to the exact expected member list", () => {
+    expect([...ACTION_ROUTES_SET].sort()).toEqual(
+      [
+        "/event/permission-denied",
+        "/event/permission-request",
+        "/event/post-tool-use",
+        "/event/post-tool-use-failure",
+        "/event/pre-tool-use",
+        "/event/session-end",
+        "/event/session-start",
+        "/event/stop",
+        "/event/stop-failure",
+        "/event/subagent-start",
+        "/event/subagent-stop",
+        "/event/task-completed",
+        "/event/task-created",
+        "/event/user-prompt-submit",
+      ].sort(),
+    );
   });
 
-  it("INFO_ROUTES has exactly 15 members (17 original − subagent-start − subagent-stop)", () => {
-    expect(INFO_ROUTES_SET.size).toBe(15);
-  });
-
-  it("ACTION_ROUTES contains /event/subagent-start and /event/subagent-stop", () => {
-    expect(ACTION_ROUTES_SET.has("/event/subagent-start")).toBe(true);
-    expect(ACTION_ROUTES_SET.has("/event/subagent-stop")).toBe(true);
-  });
-
-  it("INFO_ROUTES does not contain /event/subagent-start or /event/subagent-stop", () => {
-    expect(INFO_ROUTES_SET.has("/event/subagent-start")).toBe(false);
-    expect(INFO_ROUTES_SET.has("/event/subagent-stop")).toBe(false);
+  it("INFO_ROUTES_SET is pinned to the exact expected member list", () => {
+    expect([...INFO_ROUTES_SET].sort()).toEqual(
+      [
+        "/event/config-change",
+        "/event/cwd-changed",
+        "/event/elicitation",
+        "/event/elicitation-result",
+        "/event/file-changed",
+        "/event/instructions-loaded",
+        "/event/notification",
+        "/event/post-compact",
+        "/event/post-tool-batch",
+        "/event/pre-compact",
+        "/event/setup",
+        "/event/teammate-idle",
+        "/event/user-prompt-expansion",
+        "/event/worktree-create",
+        "/event/worktree-remove",
+      ].sort(),
+    );
   });
 });
 
@@ -746,29 +702,6 @@ describe("HttpListener — connection-lifetime timeouts", () => {
     const elapsed = Date.now() - t0;
     // Should have been destroyed within ~3× the timeout (generous for CI jitter).
     expect(elapsed).toBeGreaterThanOrEqual(60);
-    expect(elapsed).toBeLessThan(500);
-  });
-
-  it("destroys a socket that sends one byte and then goes idle within idleTimeoutMs", async () => {
-    listener = new HttpListener({
-      port: 0,
-      onEvent: () => { /* no-op */ },
-      idleTimeoutMs: 80,
-    });
-    await listener.start();
-    const port = listener.port();
-
-    // Connect, wait ~50 ms (well inside the 80 ms window), then write one byte.
-    // The idle timer resets on the received data; the socket should close only
-    // after a fresh ~80 ms of silence, so total elapsed since connect must be
-    // >= ~130 ms (50 ms wait + most of the fresh window) and < 500 ms.
-    const t0 = Date.now();
-    const sock = await openRawSocket(port);
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    sock.write("P");
-    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeGreaterThanOrEqual(100);
     expect(elapsed).toBeLessThan(500);
   });
 

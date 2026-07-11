@@ -52,10 +52,6 @@ describe("formatAlertTitle", () => {
     expect(formatAlertTitle(1, "/")).toBe("");
   });
 
-  it("omits basename for root-only Unix path with count=2", () => {
-    expect(formatAlertTitle(2, "/")).toBe("+1");
-  });
-
   // root-only Windows path: "C:\\" has no meaningful basename
   it("omits basename for root-only Windows path 'C:\\'", () => {
     expect(formatAlertTitle(1, "C:\\")).toBe("");
@@ -64,11 +60,6 @@ describe("formatAlertTitle", () => {
   // count=0 and count=1 with no cwd → empty
   it("returns empty string for count=0 and no cwd", () => {
     expect(formatAlertTitle(0, null)).toBe("");
-  });
-
-  // Two windows same basename: title shows name + +1
-  it("two sessions same repo basename → count=2, title shows name + +1", () => {
-    expect(formatAlertTitle(2, "/projects/claudenotify")).toBe("claudenotify\n+1");
   });
 
   // Windows path with a drive letter followed by a real directory

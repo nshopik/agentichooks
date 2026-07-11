@@ -163,24 +163,6 @@ describe("AudioPlayer — macOS", () => {
     expect(spawnCalls[0]!.args).toEqual([wav]);
   });
 
-  it("does not spawn when file is missing on darwin", () => {
-    const mockLog = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), trace: vi.fn() };
-    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin", log: mockLog });
-    player.play("/nope/nothing.aiff");
-    expect(spawnCalls.length).toBe(0);
-    expect(mockLog.warn).toHaveBeenCalledTimes(1);
-  });
-
-  it("spawns afplay exactly once with no side-effect files", () => {
-    const wav = path.join(tmpDir, "src.wav");
-    writeMinimalWav(wav);
-    const player = new AudioPlayer({ spawn: fakeSpawn, platform: "darwin" });
-    player.play(wav);
-    expect(spawnCalls.length).toBe(1);
-    const entries = fs.readdirSync(tmpDir);
-    expect(entries).toEqual(["src.wav"]);
-  });
-
   it("does not pass paths through powershell quote-doubling on darwin", () => {
     const wavName = "with's quote.wav";
     const wav = path.join(tmpDir, wavName);

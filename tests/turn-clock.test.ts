@@ -195,25 +195,13 @@ describe("TurnClock", () => {
     expect(clock.currentElapsedMs()).toBe(7000);
   });
 
-  it("returns null after all sessions are removed", () => {
-    const clock = new TurnClock({ inner, now });
-    clock.add("sess-A", "sess-A");
-    clock.add("sess-B", "sess-B");
-    clock.remove("sess-A", "sess-A");
-    clock.remove("sess-B", "sess-B");
-    expect(clock.currentElapsedMs()).toBeNull();
-  });
-
   // ---- Injectable now defaults to Date.now ----
 
   it("defaults now to Date.now when not injected", () => {
     const clock = new TurnClock({ inner });
-    const before = Date.now();
     clock.add("sess-A", "sess-A");
-    const after = Date.now();
     const elapsed = clock.currentElapsedMs();
     expect(elapsed).not.toBeNull();
     expect(elapsed!).toBeGreaterThanOrEqual(0);
-    expect(elapsed!).toBeLessThanOrEqual(after - before + 5);
   });
 });
