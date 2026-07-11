@@ -108,8 +108,12 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
   // SessionSetCounter (tasks instance) onSessionDrained → dispatcher.fireTaskCompleted().
   "/event/task-completed":        {                     clears: ["permission"],                   counters: [{ metric: "tasks", op: "remove" }] },
   // Synthetic agent-only routes — always routed here via deriveRoute (agentId present).
-  // Counter-only: no alert state change.
-  "/event/subagent-start":        {                     clears: [],                               counters: [{ metric: "subagents", op: "add" }] },
+  // subagent-start clears stop for the SAME reason pre-tool-use does: a new subagent
+  // means the agent is working again, so a still-armed (or mid-delay PENDING) stop is
+  // stale. This closes the between-wave race — a Stop that arrived while the subagents
+  // counter was momentarily 0 goes PENDING; the next wave's subagent-start then cancels
+  // it instead of letting the green checkmark fire over running agents.
+  "/event/subagent-start":        {                     clears: ["stop"],                         counters: [{ metric: "subagents", op: "add" }] },
   "/event/subagent-stop":         {                     clears: [],                               counters: [{ metric: "subagents", op: "remove" }] },
   "/event/session-start":         {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
   "/event/session-end":           {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
