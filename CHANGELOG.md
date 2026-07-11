@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Green check firing over running subagents** — Stop suppression was checked only
+  when the `Stop` arrived. In the gap between orchestration waves the subagents
+  counter momentarily reads 0, so a `Stop` landing there went into its delay window
+  unsuppressed and fired while the next wave was already starting. `SubagentStart`
+  now clears a still-armed or mid-delay `Stop` for that session (same rationale as
+  `PreToolUse`), cancelling the stale completion flash the instant the next agent
+  starts. (#54)
+
 ## [0.9.4] - 2026-06-27
 
 ### Added
