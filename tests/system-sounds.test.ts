@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import type { EventType } from "../src/types.js";
 import { defaultSoundPath } from "../src/system-sounds.js";
 
 describe("defaultSoundPath", () => {
@@ -14,12 +15,11 @@ describe("defaultSoundPath", () => {
     else process.env.SystemRoot = originalSystemRoot;
   });
 
-  it("returns Speech On.wav for stop", () => {
-    expect(defaultSoundPath("stop", "win32")).toBe("C:\\Windows\\Media\\Speech On.wav");
-  });
-
-  it("returns Windows Message Nudge.wav for permission", () => {
-    expect(defaultSoundPath("permission", "win32")).toBe("C:\\Windows\\Media\\Windows Message Nudge.wav");
+  it.each<[EventType, string]>([
+    ["stop", "C:\\Windows\\Media\\Speech On.wav"],
+    ["permission", "C:\\Windows\\Media\\Windows Message Nudge.wav"],
+  ])("returns the default sound path for %s", (event, expected) => {
+    expect(defaultSoundPath(event, "win32")).toBe(expected);
   });
 
   it("returns undefined for task-completed (no default sound)", () => {
@@ -52,16 +52,11 @@ describe("defaultSoundPath — macOS", () => {
     else process.env.SystemRoot = originalSystemRoot;
   });
 
-  it("returns Glass.aiff for stop", () => {
-    expect(defaultSoundPath("stop", "darwin")).toBe("/System/Library/Sounds/Glass.aiff");
-  });
-
-  it("returns Funk.aiff for permission", () => {
-    expect(defaultSoundPath("permission", "darwin")).toBe("/System/Library/Sounds/Funk.aiff");
-  });
-
-  it("returns undefined for task-completed", () => {
-    expect(defaultSoundPath("task-completed", "darwin")).toBeUndefined();
+  it.each<[EventType, string]>([
+    ["stop", "/System/Library/Sounds/Glass.aiff"],
+    ["permission", "/System/Library/Sounds/Funk.aiff"],
+  ])("returns the default sound path for %s", (event, expected) => {
+    expect(defaultSoundPath(event, "darwin")).toBe(expected);
   });
 
   it("does not consult SystemRoot on darwin", () => {

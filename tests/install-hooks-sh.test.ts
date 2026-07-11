@@ -103,6 +103,21 @@ describe.skipIf(!SUITE_AVAILABLE)(
       expect(fs.existsSync(settingsPath)).toBe(true);
       const raw = fs.readFileSync(settingsPath, "utf8");
       expect(() => JSON.parse(raw)).not.toThrow();
+
+      const parsed = JSON.parse(raw);
+
+      // (a) Stop hook entry: parsed.hooks.Stop -> [ { hooks: [ {type,url,timeout,marker} ] } ]
+      const stopHook = parsed?.hooks?.Stop?.[0]?.hooks?.[0];
+      expect(stopHook?.type).toBe("http");
+      expect(stopHook?.url).toMatch(/\/event\/stop$/);
+      expect(stopHook?.timeout).toBe(2);
+      expect(stopHook?.["_agentic-hooks-installer"]).toBe("v2");
+
+      // (b) all 29 managed event keys installed (11 action + 18 info)
+      const eventKeys = Object.keys(parsed?.hooks ?? {});
+      expect(eventKeys.length).toBe(29);
+      expect(eventKeys).toContain("Stop");
+      expect(eventKeys).toContain("SubagentStart");
     }, 45000);
 
     // ------------------------------------------------------------------

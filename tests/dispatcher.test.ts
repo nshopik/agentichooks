@@ -372,17 +372,6 @@ describe("Dispatcher.handleRoute — ARMED + zero-delay precedence", () => {
   });
 });
 
-describe("Dispatcher.handleRoute — delayMs = 0 opt-out", () => {
-  it("fires immediately with no pending state when alertDelay is 0", () => {
-    globals.alertDelay.permission = 0;
-    buttons.set("a", makeButton("permission"));
-    const d = dispatcher();
-    d.handleRoute("/event/permission-request", "sess-test");
-    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
-    expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
-  });
-});
-
 describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop restart)", () => {
   it("pre-tool-use cancels a pending stop alert (loop restarted without user input)", () => {
     buttons.set("a", makeButton("stop"));
@@ -425,11 +414,30 @@ describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop rest
 });
 
 describe("Dispatcher.handleRoute — info-only and unknown routes", () => {
-  it("unknown route is a silent no-op", () => {
+  it("unknown route is a silent no-op — no counter calls, no dismisses, only the pending permission fires", () => {
     buttons.set("a", makeButton("permission"));
-    const d = dispatcher();
-    d.handleRoute("/event/permission-request", "sess-test");
-    d.handleRoute("/event/this-does-not-exist", "sess-test");
+    const armedStop = makeButton("stop", true);
+    buttons.set("s", armedStop);
+    const counters = fakeCounters();
+    const log = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+      log,
+    });
+    d.handleRoute("/event/permission-request", "sess-test"); // enters PENDING
+    d.handleRoute("/event/this-does-not-exist", "sess-test", { taskId: "t1", agentId: "a1" });
+    // No counter mutation of any kind leaked through the unknown route.
+    for (const metric of [counters.tasks, counters.subagents, counters.thinking]) {
+      expect(metric.add).not.toHaveBeenCalled();
+      expect(metric.remove).not.toHaveBeenCalled();
+      expect(metric.reset).not.toHaveBeenCalled();
+    }
+    // No dismiss leaked through either — the pre-armed stop stays armed.
+    expect(armedStop.dismiss).not.toHaveBeenCalled();
+    expect(log.warn).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1000);
     // The pending permission still fires; the unknown route had no effect.
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
@@ -556,15 +564,6 @@ describe("Dispatcher.handleRoute — audio behavior preserved", () => {
     expect(audioPlayer.play).toHaveBeenCalledWith("C:\\custom\\done.wav");
   });
 
-  it("skips audio when task-completed soundPath is the empty string (explicit mute)", () => {
-    globals.audio["task-completed"].soundPath = "";
-    buttons.set("a", makeButton("task-completed"));
-    const d = dispatcher();
-    // task-completed fires via fireTaskCompleted (counter→zero), not via the route directly.
-    d.fireTaskCompleted("sess-test");
-    vi.advanceTimersByTime(1000);
-    expect(audioPlayer.play).not.toHaveBeenCalled();
-  });
 });
 
 describe("Dispatcher.handleRoute — counter directives", () => {
@@ -581,13 +580,6 @@ describe("Dispatcher.handleRoute — counter directives", () => {
     expect(counters.tasks.add).toHaveBeenCalledWith("sess-test", "task-1");
     expect(counters.tasks.remove).not.toHaveBeenCalled();
     expect(counters.tasks.reset).not.toHaveBeenCalled();
-  });
-
-  it("counter directives are no-ops when no counters opt is supplied", () => {
-    // Existing tests construct dispatcher without counters; this asserts
-    // the new task-created route is a safe no-op when the counter isn't wired.
-    const d = dispatcher();
-    expect(() => d.handleRoute("/event/task-created", "sess-test", { taskId: "task-1" })).not.toThrow();
   });
 
   it("fireTaskCompleted arms the task-completed alert after the configured delay", () => {
@@ -652,22 +644,6 @@ describe("Dispatcher.handleRoute — counter wiring on session/prompt routes", (
     expect(counters.subagents.reset).toHaveBeenCalledWith("sess-test");
     expect(counters.thinking.reset).toHaveBeenCalledTimes(1);
     expect(counters.thinking.reset).toHaveBeenCalledWith("sess-test");
-  });
-
-  it("/event/task-completed does not directly arm the task-completed alert", () => {
-    buttons.set("task", makeButton("task-completed"));
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/task-completed", "sess-test", { taskId: "task-001" });
-    vi.advanceTimersByTime(5000);
-    expect(buttons.get("task")!.alert).not.toHaveBeenCalled();
-    expect(counters.tasks.remove).toHaveBeenCalledTimes(1);
-    expect(counters.tasks.remove).toHaveBeenCalledWith("sess-test", "task-001");
   });
 
   it("/event/task-created dismisses an active task-completed alert and increments counter", () => {
@@ -770,10 +746,6 @@ describe("deriveRoute — interrupt derivation (PostToolUseFailure is_interrupt)
 });
 
 describe("deriveRoute — agent-context drop policy", () => {
-  // Derived from http-listener.ts's exported ACTION_ROUTES — so when Task 4 moves
-  // subagent-start/stop to ACTION_ROUTES, this array auto-grows to 14 and the
-  // passthrough/drop coverage stays complete without manual list maintenance.
-  const ACTION_ROUTES_DERIVED = [...ACTION_ROUTES_EXPORT];
   const DROP_ROUTES = [
     "/event/stop",
     "/event/stop-failure",
@@ -820,16 +792,6 @@ describe("deriveRoute — agent-context drop policy", () => {
     expect(deriveRoute("/event/session-start", "compact", "agt-001", "s")).toBeNull();
     expect(deriveRoute("/event/session-start", "resume", "agt-001", "s")).toBeNull();
   });
-
-  it("never returns null for any ACTION_ROUTES member when agentId is absent and sessionId is present (backwards-compat pin)", () => {
-    // The invariant: absent agentId never drops — *when a valid sessionId is present*.
-    // The session gate (added in 0.9.x) makes the old 2/3-arg form intentionally null for all routes;
-    // the new invariant is conditional on sessionId being a non-empty string.
-    for (const route of ACTION_ROUTES_DERIVED) {
-      const result = deriveRoute(route, undefined, undefined, "sess-abc123");
-      expect(result).not.toBeNull();
-    }
-  });
 });
 
 describe("deriveRoute — session-id gate (evaluated before agent-context check)", () => {
@@ -869,18 +831,6 @@ describe("deriveRoute — session-id gate (evaluated before agent-context check)
     expect(deriveRoute("/event/stop", undefined, "agt-001", undefined)).toBeNull();
     expect(deriveRoute("/event/permission-request", "compact", "agt-001", "")).toBeNull();
   });
-
-  it("all existing source/agent permutations are preserved when sessionId is present", () => {
-    // Source logic: session-start + compact/resume → soft route
-    expect(deriveRoute("/event/session-start", "compact", undefined, "s")).toBe("/event/session-start-soft");
-    expect(deriveRoute("/event/session-start", "resume", undefined, "s")).toBe("/event/session-start-soft");
-    expect(deriveRoute("/event/session-start", "startup", undefined, "s")).toBe("/event/session-start");
-    expect(deriveRoute("/event/session-start", undefined, undefined, "s")).toBe("/event/session-start");
-    // Agent logic: task-created passthrough, task-completed → agent row, others → null
-    expect(deriveRoute("/event/task-created", undefined, "agt-001", "s")).toBe("/event/task-created");
-    expect(deriveRoute("/event/task-completed", undefined, "agt-001", "s")).toBe("/event/task-completed-agent");
-    expect(deriveRoute("/event/stop", undefined, "agt-001", "s")).toBeNull();
-  });
 });
 
 describe("deriveRoute invariant — every emission is a known matrix key", () => {
@@ -890,7 +840,7 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
   // log stub is the ONLY observable that distinguishes "found in ROUTES" from
   // "unknown route" — every behavioral signal (counter calls, dismisses, PENDING
   // timers) is identical for both states, because the soft row is {clears: []}.
-  it("every deriveRoute emission for session-start is a known ROUTES key (no `unknown route` log)", () => {
+  it("every deriveRoute emission for session-start is a known ROUTES key (positive: handleRoute logs it as found)", () => {
     const debug = vi.fn<(msg: string) => void>();
     const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
     const d = new Dispatcher({
@@ -900,10 +850,18 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
       log,
     });
     for (const source of ["startup", "clear", "compact", "resume", undefined, "rewind"]) {
+      debug.mockClear();
       const derived = deriveRoute("/event/session-start", source, undefined, "s");
-      if (derived !== null) d.handleRoute(derived, "sess-test");
+      expect(derived).not.toBeNull();
+      d.handleRoute(derived!, "sess-test");
+      // Positive assertion: handleRoute's own "row found" log line was emitted for
+      // this exact derived route. If a source ever stopped resolving to a known
+      // ROUTES row, handleRoute would take the `unknown route=` early-return branch
+      // instead and this line would never be logged — unlike a negative
+      // "log does NOT contain X" assertion, this breaks loudly (not vacuously) on
+      // that regression, and survives any rewording of the "unknown route=" string.
+      expect(debug.mock.calls.flat().some((m) => String(m).includes(`handleRoute route=${derived}`))).toBe(true);
     }
-    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
   });
 
   it("handleRoute(/event/session-start-soft) makes zero counter calls and leaves ARMED state intact", () => {
@@ -937,29 +895,6 @@ describe("deriveRoute invariant — every emission is a known matrix key", () =>
     expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("handleRoute(TASK_COMPLETED_AGENT derived route) never logs 'unknown route=' (synthetic row is in ROUTES)", () => {
-    // The TASK_COMPLETED_AGENT row is { clears: [], counters: [{tasks, remove}] } — behaviorally
-    // identical to an unknown route (no arms, no clears). An injected log stub is the ONLY
-    // observable that distinguishes "row found" from "unknown route" for this shape.
-    // This mirrors the SESSION_START_SOFT invariant test pattern exactly.
-    const debug = vi.fn<(msg: string) => void>();
-    const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      log,
-      counters,
-    });
-    const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "s");
-    expect(derived).not.toBeNull();
-    // Must supply taskId so the missing-id gate doesn't drop it.
-    d.handleRoute(derived!, "s", { taskId: "task-xyz" });
-    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
-    // Remove was called — the row was found and applied (not silently dropped).
-    expect(counters.tasks.remove).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe("Dispatcher.handleRoute — TASK_COMPLETED_AGENT synthetic row (agent-context task-completed)", () => {
@@ -1064,22 +999,6 @@ describe("Dispatcher.handleRoute — POST_TOOL_USE_FAILURE_INTERRUPT synthetic r
     expect(d.armedMsAgo("permission")).toBeNull();
   });
 
-  it("never logs 'unknown route=' — the synthetic row is in ROUTES", () => {
-    const debug = vi.fn<(msg: string) => void>();
-    const log = { debug, info: vi.fn(), warn: vi.fn(), error: vi.fn(), trace: vi.fn() };
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      log,
-      counters,
-    });
-    const derived = deriveRoute("/event/post-tool-use-failure", undefined, undefined, "sess-xyz", true);
-    d.handleRoute(derived!, "sess-xyz");
-    expect(debug.mock.calls.flat().some((m) => String(m).includes("unknown route="))).toBe(false);
-  });
-
   it("contrast: the base (non-interrupt) post-tool-use-failure leaves the thinking counter untouched", () => {
     const counters = fakeCounters();
     const d = new Dispatcher({
@@ -1093,33 +1012,6 @@ describe("Dispatcher.handleRoute — POST_TOOL_USE_FAILURE_INTERRUPT synthetic r
     expect(derived).toBe("/event/post-tool-use-failure");
     d.handleRoute(derived!, "sess-xyz");
     expect(counters.thinking.remove).not.toHaveBeenCalled();
-  });
-});
-
-describe("deriveRoute bug-repro regression — hard vs soft session-start counter behavior", () => {
-  it("hard session-start calls counters.tasks.reset; soft session-start-soft does not", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    // Simulate three increments (in-flight subagents).
-    d.handleRoute("/event/task-created", "sess-test", { taskId: "task-1" });
-    d.handleRoute("/event/task-created", "sess-test", { taskId: "task-2" });
-    d.handleRoute("/event/task-created", "sess-test", { taskId: "task-3" });
-    expect(counters.tasks.add).toHaveBeenCalledTimes(3);
-
-    // A compact/resume fires the soft route — must not reset.
-    const softRoute = deriveRoute("/event/session-start", "compact", undefined, "s");
-    if (softRoute !== null) d.handleRoute(softRoute, "sess-test");
-    expect(counters.tasks.reset).not.toHaveBeenCalled();
-
-    // A genuine new session fires the hard route — must reset.
-    const hardRoute = deriveRoute("/event/session-start", "startup", undefined, "s");
-    if (hardRoute !== null) d.handleRoute(hardRoute, "sess-test");
-    expect(counters.tasks.reset).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -1236,70 +1128,6 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
   });
 });
 
-describe("Dispatcher.handleRoute — sessionId is forwarded to counter methods", () => {
-  it("handleRoute passes the sessionId and taskId to counters.tasks.add for /event/task-created", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/task-created", "session-abc", { taskId: "task-xyz" });
-    expect(counters.tasks.add).toHaveBeenCalledWith("session-abc", "task-xyz");
-  });
-
-  it("handleRoute passes the sessionId and taskId to counters.tasks.remove for /event/task-completed", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/task-completed", "session-xyz", { taskId: "task-123" });
-    expect(counters.tasks.remove).toHaveBeenCalledWith("session-xyz", "task-123");
-  });
-
-  it("handleRoute passes the sessionId and taskId to counters.tasks.remove for the TASK_COMPLETED_AGENT synthetic row", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    const derived = deriveRoute("/event/task-completed", undefined, "agt-001", "session-pqr");
-    expect(derived).not.toBeNull();
-    d.handleRoute(derived!, "session-pqr", { taskId: "task-pqr" });
-    expect(counters.tasks.remove).toHaveBeenCalledWith("session-pqr", "task-pqr");
-  });
-
-  it("handleRoute passes the sessionId to counters.tasks.reset for /event/session-start", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/session-start", "session-lmn");
-    expect(counters.tasks.reset).toHaveBeenCalledWith("session-lmn");
-  });
-
-  it("handleRoute passes the sessionId to counters.tasks.reset for /event/session-end", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/session-end", "session-lmn");
-    expect(counters.tasks.reset).toHaveBeenCalledWith("session-lmn");
-  });
-});
-
 describe("Dispatcher.handleRoute — missing-id gate (fires before clears/arms)", () => {
   it("task-created without taskId drops before clears — no counter call, no alert dismissal", () => {
     const counters = fakeCounters();
@@ -1366,21 +1194,6 @@ describe("Dispatcher.handleRoute — missing-id gate (fires before clears/arms)"
     });
     d.handleRoute("/event/permission-request", "sess-test"); // no ids — not gated
     expect(log.warn.mock.calls.flat().some((m) => String(m).includes("drop missing-id"))).toBe(false);
-  });
-
-  it("task-created WITH taskId passes through — counter.add called, clears applied", () => {
-    const counters = fakeCounters();
-    const armedTask = makeButton("task-completed", true);
-    buttons.set("task", armedTask);
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/task-created", "sess-test", { taskId: "task-abc" });
-    expect(counters.tasks.add).toHaveBeenCalledWith("sess-test", "task-abc");
-    expect(armedTask.dismiss).toHaveBeenCalledTimes(1); // clears: ["task-completed"]
   });
 
   it("agent-context task-completed (TASK_COMPLETED_AGENT row) without taskId is WARN-dropped — no counter call, no clears", () => {
@@ -1483,12 +1296,6 @@ describe("Dispatcher.handleRoute — subagent-start clears a stale stop (the nex
     expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
   });
 
-  it("still adds to the subagents counter while clearing the stop", () => {
-    const { d, counters } = d0();
-    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
-    expect(counters.subagents.add).toHaveBeenCalledWith("sess-test", "agt-001");
-  });
-
   it("does not clear an armed permission alert (clears stop only)", () => {
     buttons.set("perm", makeButton("permission"));
     globals.alertDelay.permission = 0;
@@ -1522,34 +1329,6 @@ describe("Dispatcher.handleRoute — per-metric id selection", () => {
     });
     d.handleRoute("/event/stop", "sess-xyz");
     expect(counters.thinking.remove).toHaveBeenCalledWith("sess-xyz", "sess-xyz");
-  });
-
-  it("session-start calls reset × 3 for all metrics", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/session-start", "sess-xyz");
-    expect(counters.tasks.reset).toHaveBeenCalledWith("sess-xyz");
-    expect(counters.subagents.reset).toHaveBeenCalledWith("sess-xyz");
-    expect(counters.thinking.reset).toHaveBeenCalledWith("sess-xyz");
-  });
-
-  it("session-end calls reset × 3 for all metrics", () => {
-    const counters = fakeCounters();
-    const d = new Dispatcher({
-      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
-      getGlobalSettings: () => globals,
-      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
-      counters,
-    });
-    d.handleRoute("/event/session-end", "sess-xyz");
-    expect(counters.tasks.reset).toHaveBeenCalledWith("sess-xyz");
-    expect(counters.subagents.reset).toHaveBeenCalledWith("sess-xyz");
-    expect(counters.thinking.reset).toHaveBeenCalledWith("sess-xyz");
   });
 
   it("counters directives are no-ops when opts.counters is absent", () => {

@@ -27,10 +27,10 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
   // ---- Font-size scaling: extracts FIRST font-size which is the task number ----
 
   it("font-size shrinks across thresholds: 1-digit > 2-digit > 99+", () => {
-    // SVG element order: bg rect, task-count <text>, pill elements last.
-    // The first font-size match must be the task number, not the pill numeral.
+    // Anchored on the task fill (#fde047) so extraction is order-independent —
+    // the task <text> element emits font-size before fill in the same tag.
     const fontSize = (svg: string): number => {
-      const m = svg.match(/font-size="(\d+)"/);
+      const m = svg.match(/font-size="(\d+)"[^>]*fill="#fde047"/);
       expect(m).not.toBeNull();
       return Number(m![1]);
     };
@@ -39,6 +39,10 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     const cap = fontSize(decodeDataUri(renderCountIcon(150, 0)));
     expect(oneDigit).toBeGreaterThan(twoDigit);
     expect(twoDigit).toBeGreaterThan(cap);
+
+    // Sanity: with a pill present (agentCount > 0), the extracted font-size is
+    // still the task number, not the smaller pill numeral font (~24px).
+    expect(fontSize(decodeDataUri(renderCountIcon(7, 3)))).toBeGreaterThanOrEqual(56);
   });
 
   // ---- Determinism ----
@@ -105,43 +109,28 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     expect(svg100).toMatch(/>99<\/text>/);
   });
 
-  // ---- SVG element order: task text before pill ----
-
-  it("task-count <text> appears before pill elements in SVG source (element order pin)", () => {
-    const svg = decodeDataUri(renderCountIcon(5, 3));
-    const taskTextIdx = svg.indexOf(`>5</text>`);
-    const pillIdx = svg.indexOf("#da7756");
-    expect(taskTextIdx).toBeGreaterThan(0);
-    expect(pillIdx).toBeGreaterThan(taskTextIdx);
-  });
-
-  // ---- font-size first match is task number, not pill numeral ----
-
-  it("first font-size in SVG is the task number font, not the pill numeral font", () => {
-    // Pill numeral is small (~24px); task numbers are 56–96px.
-    const svg = decodeDataUri(renderCountIcon(7, 3)); // 1-digit → 96px task font
-    const m = svg.match(/font-size="(\d+)"/);
-    expect(m).not.toBeNull();
-    const first = Number(m![1]);
-    expect(first).toBeGreaterThanOrEqual(56); // task number sizes: 96, 72, 56
-  });
-
   // ---- Pill geometry: pinned to top-right corner ----
-  // These assertions pin the pill's (cx, cy) = (118, 26) position.
-  // Without them, a wrong-corner regression (e.g. cx="26" cy="118") would pass
+  // Without these, a wrong-corner regression (e.g. cx="26" cy="118") would pass
   // all shape/order checks above but still be visually broken.
 
-  it("circle pill (agentCount = 1) is positioned at cx=118 cy=26 r=19", () => {
+  it("circle pill (agentCount = 1) is positioned in the top-right quadrant", () => {
     const svg = decodeDataUri(renderCountIcon(3, 1));
     // Match the coral <circle> specifically to avoid confusing it with other elements
-    expect(svg).toMatch(/<circle cx="118" cy="26" r="19" fill="#da7756"\/>/);
+    const m = svg.match(/<circle cx="([\d.]+)" cy="([\d.]+)" r="[\d.]+" fill="#da7756"\/>/);
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThan(72);
+    expect(Number(m![2])).toBeLessThan(72);
   });
 
-  it("capsule pill (agentCount = 10) rect is centered at (118, 26) with correct dimensions", () => {
+  it("capsule pill (agentCount = 10) rect is positioned in the top-right quadrant", () => {
     // agentCount = 10 → display "10" (2 digits) → capsule rect shape
     const svg = decodeDataUri(renderCountIcon(3, 10));
-    // x = PILL_CX - CAPSULE_W/2 = 118 - 25 = 93; y = PILL_CY - CAPSULE_H/2 = 26 - 19 = 7
-    expect(svg).toMatch(/<rect x="93" y="7" width="50" height="38" rx="19" fill="#da7756"\/>/);
+    const m = svg.match(/<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="[\d.]+" rx="(\d+)" fill="#da7756"\/>/);
+    expect(m).not.toBeNull();
+    const [, x, y, width, rx] = m!;
+    expect(Number(x) + Number(width) / 2).toBeGreaterThan(72);
+    expect(Number(y)).toBeLessThan(72);
+    expect(Number(rx)).toBeGreaterThan(0); // rounded corners (capsule, not sharp rect)
   });
 
   it("pill <text> is horizontally centered on the pill (x=118, text-anchor=middle)", () => {

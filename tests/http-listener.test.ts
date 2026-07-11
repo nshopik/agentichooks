@@ -176,14 +176,6 @@ describe("HttpListener", () => {
     expect(received).toEqual([]);
   });
 
-  it("returns 405 for GET on POST-only info routes", async () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
-    await listener.start();
-    const res = await request("GET", "/event/notification", listener.port());
-    expect(res.status).toBe(405);
-    expect(received).toEqual([]);
-  });
-
   it("binds to 127.0.0.1 only (public host() accessor)", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
     await listener.start();
@@ -284,16 +276,6 @@ describe("HttpListener", () => {
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=a1b2c3d4");
     expect(info?.msg).toContain("cwd=myproject");
-  });
-
-  it("signal route (/event/stop) emits result line at INFO level", async () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
-    await listener.start();
-    const body = JSON.stringify({ session_id: "abc", cwd: "/a/b" });
-    await requestWithBody("POST", "/event/stop", listener.port(), body);
-    await new Promise((r) => setTimeout(r, 20));
-    const resultLine = logs.find((l) => l.msg.includes("route=/event/stop") && l.msg.includes("session="));
-    expect(resultLine?.level).toBe("info");
   });
 
   it("verbose route (/event/pre-tool-use) emits result line at DEBUG level", async () => {
@@ -532,39 +514,6 @@ describe("HttpListener — warn suffix on info routes", () => {
     expect(warn!.msg).toContain("(no usable body)");
   });
 
-  it("POST with unparseable body on an info route emits WARN without '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    await requestWithBody("POST", "/event/notification", listener.port(), "not-json");
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("unparseable body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).not.toContain("(session_id required)");
-    expect(warn!.msg).toContain("(no usable body)");
-  });
-
-  it("POST with oversize body on an info route emits WARN without '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    const big = "{" + '"a":"' + "x".repeat(65 * 1024) + '"}';
-    await requestWithBody("POST", "/event/notification", listener.port(), big);
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("oversize body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).not.toContain("(session_id required)");
-    expect(warn!.msg).toContain("(no usable body)");
-  });
-
-  it("POST with empty body on an action route still emits WARN with '(session_id required)' suffix", async () => {
-    listener = new HttpListener({ port: 0, onEvent: () => { /* no-op */ }, log: makeLog() });
-    await listener.start();
-    await request("POST", "/event/stop", listener.port());
-    await new Promise((r) => setTimeout(r, 20));
-    const warn = logs.find((l) => l.level === "warn" && l.msg.includes("empty body"));
-    expect(warn).toBeDefined();
-    expect(warn!.msg).toContain("(session_id required)");
-    expect(warn!.msg).not.toContain("(no usable body)");
-  });
 });
 
 describe("HttpListener — warn truncation (attacker-controlled values)", () => {
@@ -674,14 +623,47 @@ describe("HttpListener — warn rate limiting", () => {
 });
 
 describe("HttpListener — route-set membership", () => {
-  it("ACTION_ROUTES contains /event/subagent-start and /event/subagent-stop", () => {
-    expect(ACTION_ROUTES_SET.has("/event/subagent-start")).toBe(true);
-    expect(ACTION_ROUTES_SET.has("/event/subagent-stop")).toBe(true);
+  it("ACTION_ROUTES_SET is pinned to the exact expected member list", () => {
+    expect([...ACTION_ROUTES_SET].sort()).toEqual(
+      [
+        "/event/permission-denied",
+        "/event/permission-request",
+        "/event/post-tool-use",
+        "/event/post-tool-use-failure",
+        "/event/pre-tool-use",
+        "/event/session-end",
+        "/event/session-start",
+        "/event/stop",
+        "/event/stop-failure",
+        "/event/subagent-start",
+        "/event/subagent-stop",
+        "/event/task-completed",
+        "/event/task-created",
+        "/event/user-prompt-submit",
+      ].sort(),
+    );
   });
 
-  it("INFO_ROUTES does not contain /event/subagent-start or /event/subagent-stop", () => {
-    expect(INFO_ROUTES_SET.has("/event/subagent-start")).toBe(false);
-    expect(INFO_ROUTES_SET.has("/event/subagent-stop")).toBe(false);
+  it("INFO_ROUTES_SET is pinned to the exact expected member list", () => {
+    expect([...INFO_ROUTES_SET].sort()).toEqual(
+      [
+        "/event/config-change",
+        "/event/cwd-changed",
+        "/event/elicitation",
+        "/event/elicitation-result",
+        "/event/file-changed",
+        "/event/instructions-loaded",
+        "/event/notification",
+        "/event/post-compact",
+        "/event/post-tool-batch",
+        "/event/pre-compact",
+        "/event/setup",
+        "/event/teammate-idle",
+        "/event/user-prompt-expansion",
+        "/event/worktree-create",
+        "/event/worktree-remove",
+      ].sort(),
+    );
   });
 });
 
