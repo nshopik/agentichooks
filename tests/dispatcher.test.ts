@@ -1405,8 +1405,8 @@ describe("Dispatcher.handleRoute — missing-id gate (fires before clears/arms)"
   });
 });
 
-describe("Dispatcher.handleRoute — subagent-start/stop are counter-only (no alert state change)", () => {
-  it("subagent-start with agentId calls subagents.add and touches no pending/armed state", () => {
+describe("Dispatcher.handleRoute — subagent-start adds to the counter (and clears only stop); subagent-stop is counter-only", () => {
+  it("subagent-start with agentId calls subagents.add and does not arm anything", () => {
     const counters = fakeCounters();
     buttons.set("stop", makeButton("stop"));
     buttons.set("perm", makeButton("permission"));
@@ -1422,7 +1422,7 @@ describe("Dispatcher.handleRoute — subagent-start/stop are counter-only (no al
     d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
     vi.advanceTimersByTime(5000);
     expect(counters.subagents.add).toHaveBeenCalledWith("sess-test", "agt-001");
-    // Permission still fires — subagent-start has no clears
+    // Permission still fires — subagent-start clears stop only, not permission
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
     // No arms triggered
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
@@ -1444,6 +1444,58 @@ describe("Dispatcher.handleRoute — subagent-start/stop are counter-only (no al
     d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "agt-001" });
     expect(counters.subagents.remove).toHaveBeenCalledWith("sess-test", "agt-001");
     expect(armedPerm.dismiss).not.toHaveBeenCalled();
+  });
+});
+
+describe("Dispatcher.handleRoute — subagent-start clears a stale stop (the next wave resumed)", () => {
+  function d0(counters = fakeCounters()) {
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    return { d, counters };
+  }
+
+  it("cancels a PENDING stop when a subagent-start lands inside its delay window", () => {
+    // The race: Stop arrives while the counter is momentarily empty (a between-wave
+    // gap) → PENDING. A subagent-start inside the delay means the next wave started;
+    // the pending stop must not fire.
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 1000;
+    const { d } = d0();
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" }); // PENDING
+    vi.advanceTimersByTime(500);
+    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("dismisses an ARMED stop when a subagent-start arrives (checkmark overlapping running agents)", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 0; // arm immediately
+    const { d } = d0();
+    d.handleRoute("/event/stop", "sess-test"); // ARMED (green checkmark lit)
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
+    expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it("still adds to the subagents counter while clearing the stop", () => {
+    const { d, counters } = d0();
+    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
+    expect(counters.subagents.add).toHaveBeenCalledWith("sess-test", "agt-001");
+  });
+
+  it("does not clear an armed permission alert (clears stop only)", () => {
+    buttons.set("perm", makeButton("permission"));
+    globals.alertDelay.permission = 0;
+    const { d } = d0();
+    d.handleRoute("/event/permission-request", "sess-test"); // ARMED
+    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
+    expect(buttons.get("perm")!.dismiss).not.toHaveBeenCalled();
   });
 });
 
