@@ -30,6 +30,14 @@ describe("defaultSoundPath", () => {
     delete process.env.SystemRoot;
     expect(defaultSoundPath("stop", "win32")).toBe("C:\\Windows\\Media\\Speech On.wav");
   });
+
+  it("honors a custom SystemRoot for the media root", () => {
+    // Pins the env-var read: with the beforeEach default equal to the fallback,
+    // nothing else in the suite could distinguish "read SystemRoot" from
+    // "hardcode C:\\Windows".
+    process.env.SystemRoot = "D:\\CustomWin";
+    expect(defaultSoundPath("stop", "win32")).toBe("D:\\CustomWin\\Media\\Speech On.wav");
+  });
 });
 
 describe("defaultSoundPath — macOS", () => {

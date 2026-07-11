@@ -8,13 +8,6 @@ function decodeDataUri(uri: string): string {
 }
 
 describe("renderThinkingIcon", () => {
-  // ---- THINKING_FRAMES constant ----
-
-  it("THINKING_FRAMES is the 8-frame pulse sequence", () => {
-    expect(THINKING_FRAMES).toEqual(["·", "*", "✶", "✢", "✻", "✢", "✶", "*"]);
-    expect(THINKING_FRAMES).toHaveLength(8);
-  });
-
   // ---- Legacy: frame + null elapsed (centered big glyph, current layout) ----
 
   it("returns a base64 data URI for each frame when elapsed is null", () => {

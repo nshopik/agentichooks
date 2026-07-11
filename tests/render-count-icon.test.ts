@@ -48,13 +48,6 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     expect(renderCountIcon(5, 3)).toBe(renderCountIcon(5, 3));
   });
 
-  // ---- No sparkle — verify removal ----
-
-  it("does not contain a sparkle polygon element", () => {
-    const svg = decodeDataUri(renderCountIcon(3, 0));
-    expect(svg).not.toContain("<polygon");
-  });
-
   // ---- Pill: absent when agentCount = 0 ----
 
   it("pill is absent when agentCount = 0", () => {
@@ -84,19 +77,21 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     expect(svg).toMatch(/>2<\/text>/);     // pill shows the subagent count
   });
 
-  // ---- Pill: capsule for 2+ agents ----
+  // ---- Pill shape boundary: circle at 1 digit, capsule at 2 ----
+  // The shape switches on the DISPLAYED digit count, not the raw agentCount:
+  // agentCount 9 → "9" → circle; 10 → "10" → capsule.
 
-  it("pill is a capsule (rect) when agentCount = 2", () => {
-    const svg = decodeDataUri(renderCountIcon(3, 2));
-    expect(svg).toContain("#da7756");
-    // Capsule is a <rect> with rx attribute
-    expect(svg).toMatch(/<rect[^>]*rx=/);
-    expect(svg).toMatch(/>2<\/text>/);
+  it("pill is a circle when the agent count is a single digit (agentCount = 9)", () => {
+    const svg = decodeDataUri(renderCountIcon(3, 9));
+    expect(svg).toMatch(/<circle[^>]*fill="#da7756"/);
+    expect(svg).toMatch(/>9<\/text>/);
   });
 
-  it("pill is a capsule when agentCount = 10", () => {
+  it("pill is a coral capsule (rounded rect) when the agent count is two digits (agentCount = 10)", () => {
     const svg = decodeDataUri(renderCountIcon(1, 10));
-    expect(svg).toMatch(/<rect[^>]*rx=/);
+    // The coral fill distinguishes the capsule from the background <rect>,
+    // which the old /<rect[^>]*rx=/ regex matched vacuously.
+    expect(svg).toMatch(/<rect[^>]*rx="\d+"[^>]*fill="#da7756"/);
     expect(svg).toMatch(/>10<\/text>/);
   });
 
@@ -149,13 +144,11 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     expect(svg).toMatch(/<rect x="93" y="7" width="50" height="38" rx="19" fill="#da7756"\/>/);
   });
 
-  it("pill <text> is anchored at x=118 and y = PILL_CY + PILL_FONT_SIZE * 0.35", () => {
+  it("pill <text> is horizontally centered on the pill (x=118, text-anchor=middle)", () => {
     const svg = decodeDataUri(renderCountIcon(3, 1));
-    // Use the same expression the source uses to avoid float-serialization surprises
-    const expectedY = `${26 + 24 * 0.35}`;
-    // Match text-anchor="middle" to select the pill <text>, not the task-count text
-    expect(svg).toMatch(
-      new RegExp(`<text x="118" y="${expectedY}" text-anchor="middle"`)
-    );
+    // Pin horizontal centering only; the exact baseline y is an implementation
+    // detail. The old test recomputed y with the source's own expression, so it
+    // could never disagree with the source.
+    expect(svg).toMatch(/<text x="118" y="[\d.]+" text-anchor="middle"/);
   });
 });

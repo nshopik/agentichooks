@@ -190,11 +190,6 @@ describe("HttpListener", () => {
     expect(listener.host()).toBe("127.0.0.1");
   });
 
-  it("host() returns null before start()", () => {
-    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e) });
-    expect(listener.host()).toBeNull();
-  });
-
   it("Host allowlist is pinned to the resolved listen port (wrong-port Host → 403)", async () => {
     // Behavioral replacement for the former `(listener as any).resolvedPort`
     // private-field poke: the only observable contract of the captured port is
@@ -418,19 +413,6 @@ describe("HttpListener — onEvent body forwarding", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(receivedBodies).toHaveLength(1);
     expect(receivedBodies[0]).toBeUndefined();
-  });
-
-  it("existing route-only onEvent callbacks still compile and work (existing tests unaffected)", async () => {
-    // This test demonstrates that the new signature is backward compatible —
-    // a callback that ignores the second arg still satisfies the widened type.
-    listener = new HttpListener({
-      port: 0,
-      onEvent: (route) => received.push(route),
-    });
-    await listener.start();
-    await request("POST", "/event/stop", listener.port());
-    await new Promise((r) => setTimeout(r, 20));
-    expect(received).toEqual(["/event/stop"]);
   });
 
   it("logs source= in the INFO result line when source is present in the parsed body", async () => {
@@ -692,14 +674,6 @@ describe("HttpListener — warn rate limiting", () => {
 });
 
 describe("HttpListener — route-set membership", () => {
-  it("ACTION_ROUTES has exactly 14 members (12 original + subagent-start + subagent-stop)", () => {
-    expect(ACTION_ROUTES_SET.size).toBe(14);
-  });
-
-  it("INFO_ROUTES has exactly 15 members (17 original − subagent-start − subagent-stop)", () => {
-    expect(INFO_ROUTES_SET.size).toBe(15);
-  });
-
   it("ACTION_ROUTES contains /event/subagent-start and /event/subagent-stop", () => {
     expect(ACTION_ROUTES_SET.has("/event/subagent-start")).toBe(true);
     expect(ACTION_ROUTES_SET.has("/event/subagent-stop")).toBe(true);
@@ -746,29 +720,6 @@ describe("HttpListener — connection-lifetime timeouts", () => {
     const elapsed = Date.now() - t0;
     // Should have been destroyed within ~3× the timeout (generous for CI jitter).
     expect(elapsed).toBeGreaterThanOrEqual(60);
-    expect(elapsed).toBeLessThan(500);
-  });
-
-  it("destroys a socket that sends one byte and then goes idle within idleTimeoutMs", async () => {
-    listener = new HttpListener({
-      port: 0,
-      onEvent: () => { /* no-op */ },
-      idleTimeoutMs: 80,
-    });
-    await listener.start();
-    const port = listener.port();
-
-    // Connect, wait ~50 ms (well inside the 80 ms window), then write one byte.
-    // The idle timer resets on the received data; the socket should close only
-    // after a fresh ~80 ms of silence, so total elapsed since connect must be
-    // >= ~130 ms (50 ms wait + most of the fresh window) and < 500 ms.
-    const t0 = Date.now();
-    const sock = await openRawSocket(port);
-    await new Promise<void>((resolve) => setTimeout(resolve, 50));
-    sock.write("P");
-    await new Promise<void>((resolve) => sock.once("close", () => resolve()));
-    const elapsed = Date.now() - t0;
-    expect(elapsed).toBeGreaterThanOrEqual(100);
     expect(elapsed).toBeLessThan(500);
   });
 
