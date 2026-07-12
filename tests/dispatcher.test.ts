@@ -1970,4 +1970,16 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(d.armedContext("stop")!.latestCwd).toBe("/repos/second");
   });
+
+  it("fireDeferredStop pends the settle window — a subagent-start during it cancels the deferred chime", () => {
+    buttons.set("stop", makeButton("stop"));
+    const { d } = withSubagents(true);
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" }); // suppressed
+    d.fireDeferredStop("sess-test"); // drain → armType("stop") → PENDING (settle floor)
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-002" }); // next wave — cancels the settling stop
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
 });
