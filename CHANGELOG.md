@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
   longer chimes on intermediate Stop hooks when the subagent counter is blind
   to in-flight subagents (`SubagentStart` under-fires in real multi-session
   usage). Every Stop now settles for ~3s before firing, and a following
-  `SubagentStop` cancels it — only a genuinely final Stop survives the window.
+  `SubagentStop` cancels it — only a genuinely final Stop survives the window. (#56)
 
 - **Green check firing over running subagents** — Stop suppression was checked only
   when the `Stop` arrived. In the gap between orchestration waves the subagents
