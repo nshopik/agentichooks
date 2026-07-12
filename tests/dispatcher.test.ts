@@ -147,6 +147,41 @@ describe("Dispatcher.handleRoute — stop settle window floor", () => {
     expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
     expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
   });
+
+  it("a full orchestration cycle chimes exactly once — intermediate Stops cancelled, only the final fires", () => {
+    // subagents counter reads 0 in-flight throughout (default fake — has() is
+    // never stubbed true), so every Stop below goes straight to PENDING via
+    // armType("stop", ...) rather than the suppressStop/deferred path.
+    buttons.set("stop", makeButton("stop"));
+    const d = dispatcher();
+
+    // Intermediate Stop #1 → PENDING, then cancelled by a subagent-stop before
+    // the settle window elapses.
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "agt-001" });
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // well past the original window — cancelled, so nothing fires
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+
+    // Intermediate Stop #2 → same cancellation.
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "agt-002" });
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+
+    // Final Stop — no following subagent-stop, so it survives the settle window
+    // and fires exactly once across the whole sequence.
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("Dispatcher.handleRoute — pending cancelled by clearing route (the bug fix)", () => {
