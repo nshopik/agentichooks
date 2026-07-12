@@ -70,6 +70,15 @@ export const POST_TOOL_USE_FAILURE_INTERRUPT = "/event/post-tool-use-failure-int
 // during normal orchestration; the strand self-heals on the next prompt anyway.
 export const STOP_SAFETY_RELEASE_MS = 10 * 60 * 1000;
 
+// Floor on the Stop pending delay, regardless of the user's configured
+// alertDelay.stop. Rationale: an *intermediate* Stop during multi-subagent
+// orchestration is always followed by more activity (SubagentStop,
+// PreToolUse, SubagentStart) within seconds; a *final* Stop is followed by
+// silence. Holding every Stop briefly and letting subsequent activity cancel
+// the timer means only the final Stop survives to fire. See
+// docs/superpowers/specs/2026-07-12-stop-settle-window-design.md.
+export const STOP_SETTLE_MS = 3000;
+
 // Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
 // missing key a compile error instead of a silent runtime no-op; unknown
 // runtime strings still take the isKnownRoute guard path in handleRoute.
@@ -495,8 +504,11 @@ export class Dispatcher {
       this.fire(type, sessionId, cwd);
       return;
     }
-    // Otherwise → start this session's own delay timer.
-    const delayMs = this.opts.getGlobalSettings().alertDelay[type];
+    // Otherwise → start this session's own delay timer. Stop always pends at
+    // least STOP_SETTLE_MS regardless of the configured alertDelay.stop — see
+    // the constant's comment for why. Other types use the bare configured delay.
+    const configuredDelayMs = this.opts.getGlobalSettings().alertDelay[type];
+    const delayMs = type === "stop" ? Math.max(configuredDelayMs, STOP_SETTLE_MS) : configuredDelayMs;
     if (delayMs <= 0) {
       this.fire(type, sessionId, cwd);
       return;

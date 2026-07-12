@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { Dispatcher, deriveRoute, STOP_SAFETY_RELEASE_MS } from "../src/dispatcher.js";
+import { Dispatcher, deriveRoute, STOP_SAFETY_RELEASE_MS, STOP_SETTLE_MS } from "../src/dispatcher.js";
 import { ACTION_ROUTES as ACTION_ROUTES_EXPORT } from "../src/http-listener.js";
 import {
   DEFAULT_GLOBAL_SETTINGS,
@@ -118,6 +118,34 @@ describe("Dispatcher.handleRoute — pending → fires after delay", () => {
     expect(buttons.get("a")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(buttons.get("a")!.alert).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Dispatcher.handleRoute — stop settle window floor", () => {
+  it("a fresh stop-arm pends max(alertDelay.stop, STOP_SETTLE_MS) even when alertDelay.stop is smaller", () => {
+    globals.alertDelay.stop = 500; // configured delay well under the floor
+    buttons.set("stop", makeButton("stop"));
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("permission and task-completed keep the bare alertDelay — the settle floor is stop-only", () => {
+    globals.alertDelay.permission = 500;
+    globals.alertDelay["task-completed"] = 500;
+    buttons.set("perm", makeButton("permission"));
+    buttons.set("task", makeButton("task-completed"));
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-test");
+    d.fireTaskCompleted("sess-test");
+    vi.advanceTimersByTime(500);
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -496,10 +524,11 @@ describe("Dispatcher.armedMsAgo — survives button rebuild on page/profile swit
   it("session-start clears armedMsAgo for every armed type", () => {
     buttons.set("s", makeButton("stop"));
     buttons.set("p", makeButton("permission"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     globals.alertDelay.permission = 0;
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // stop always settles before arming
     d.handleRoute("/event/permission-request", "sess-test");
     expect(d.armedMsAgo("stop")).not.toBeNull();
     expect(d.armedMsAgo("permission")).not.toBeNull();
@@ -1091,9 +1120,10 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
     const permBtn = makeButton("permission");
     buttons.set("stop", stopBtn);
     buttons.set("perm", permBtn);
-    globals.alertDelay.stop = 0; // stop fires immediately → ARMED
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const d = dispatcher();
-    d.handleRoute("/event/stop", "sess-test"); // ARMED immediately
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // ARMED
     d.handleRoute("/event/permission-request", "sess-test"); // 1s delay → PENDING
 
     d.dismissArmed("stop"); // must not touch permission
@@ -1108,14 +1138,15 @@ describe("Dispatcher.dismissArmed — type-wide dismiss seam", () => {
   });
 
   it("dismissArmed(stop) leaves an ARMED permission untouched", () => {
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     globals.alertDelay.permission = 0;
     const stopBtn = makeButton("stop");
     const permBtn = makeButton("permission");
     buttons.set("stop", stopBtn);
     buttons.set("perm", permBtn);
     const d = dispatcher();
-    d.handleRoute("/event/stop", "sess-test"); // ARMED
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // ARMED
     d.handleRoute("/event/permission-request", "sess-test"); // ARMED
 
     d.dismissArmed("stop");
@@ -1288,9 +1319,10 @@ describe("Dispatcher.handleRoute — subagent-start clears a stale stop (the nex
 
   it("dismisses an ARMED stop when a subagent-start arrives (checkmark overlapping running agents)", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0; // arm immediately
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = d0();
-    d.handleRoute("/event/stop", "sess-test"); // ARMED (green checkmark lit)
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // ARMED (green checkmark lit)
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     d.handleRoute("/event/subagent-start", "sess-test", { agentId: "agt-001" });
     expect(buttons.get("stop")!.dismiss).toHaveBeenCalledTimes(1);
@@ -1493,9 +1525,10 @@ describe("Dispatcher — session-scoped alert clearing (new)", () => {
   // Test 10b: B's pre-tool-use does not clear A's armed stop alert
   it("session B's pre-tool-use does not clear A's armed stop alert", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-A");
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(d.armedMsAgo("stop")).not.toBeNull();
 
     d.handleRoute("/event/pre-tool-use", "sess-B"); // B's pre-tool-use clears B's stop only
@@ -1658,16 +1691,16 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     expect(counters.thinking.remove).toHaveBeenCalledWith("sess-test", "sess-test");
   });
 
-  it("fireDeferredStop releases the held stop after the delay (deferred chime)", () => {
+  it("fireDeferredStop releases the held stop after the settle window (deferred chime)", () => {
     buttons.set("stop", makeButton("stop"));
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
     vi.advanceTimersByTime(5000);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
 
-    d.fireDeferredStop("sess-test"); // subagents drained → release
-    vi.advanceTimersByTime(999);
-    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still in delay
+    d.fireDeferredStop("sess-test"); // subagents drained → release, now settles
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still settling
     vi.advanceTimersByTime(1);
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
@@ -1675,10 +1708,11 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("the deferred stop carries the cwd captured at suppression time", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/captured" });
     d.fireDeferredStop("sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(d.armedContext("stop")!.latestCwd).toBe("/repos/captured");
   });
 
@@ -1727,18 +1761,19 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     buttons.set("stop", makeButton("stop"));
     const { d } = withSubagents(false);
     d.handleRoute("/event/stop", "sess-test");
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 
   it("latest cwd wins when a session is suppressed twice before draining", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/first" });
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/second" });
     d.fireDeferredStop("sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(d.armedContext("stop")!.latestCwd).toBe("/repos/second");
   });
 
@@ -1776,7 +1811,7 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     // (onSessionDrained → fireDeferredStop). Pins the production seam the other
     // tests stub by calling fireDeferredStop directly.
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0; // chime fires on release
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     let d!: Dispatcher;
     const subagents = new SessionSetCounter({
       name: "subagents",
@@ -1796,34 +1831,41 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     expect(audioPlayer.play).not.toHaveBeenCalled();
 
-    d.handleRoute("/event/subagent-stop", "s1", { agentId: "a1" }); // drains → deferred chime
+    d.handleRoute("/event/subagent-stop", "s1", { agentId: "a1" }); // drains → deferred chime, settles
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 
   it("only one session's held stop is released on its own drain", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-A");
     d.handleRoute("/event/stop", "sess-B");
     d.fireDeferredStop("sess-A"); // only A drained
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     // B is still held; its drain releases it independently.
     d.fireDeferredStop("sess-B");
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(audioPlayer.play).toHaveBeenCalledTimes(2);
   });
 
   it("safety timer releases a held stop when the subagent drain never arrives", () => {
     // The bug: a lost subagent-stop (or one without agent_id) leaves the counter
     // stuck >0, so onSessionDrained never fires fireDeferredStop. The backstop
-    // releases the chime anyway.
+    // releases the chime anyway (after which it still settles like any deferred stop).
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0; // chime fires immediately on release
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" });
     vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1);
     expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // still held
+    vi.advanceTimersByTime(1); // safety timer fires → fireDeferredStop → PENDING (settle)
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled(); // now settling
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
@@ -1832,10 +1874,11 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("a real drain before the safety window cancels the backstop — exactly one chime", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test");
     d.fireDeferredStop("sess-test"); // subagents drained normally
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS); // backstop must not re-fire
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
@@ -1863,14 +1906,16 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
 
   it("re-suppression restarts the backstop window — one chime, at the latest deadline", () => {
     buttons.set("stop", makeButton("stop"));
-    globals.alertDelay.stop = 0;
+    globals.alertDelay.stop = 0; // still floors to STOP_SETTLE_MS
     const { d } = withSubagents(true);
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/first" });
     vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1000); // almost expired
     d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/second" }); // restarts window
     vi.advanceTimersByTime(1000); // original deadline passes — must NOT fire
     expect(audioPlayer.play).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1000); // reach the new deadline
+    vi.advanceTimersByTime(STOP_SAFETY_RELEASE_MS - 1000); // reach the new deadline — safety fires, now settling
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
     expect(d.armedContext("stop")!.latestCwd).toBe("/repos/second");
   });
