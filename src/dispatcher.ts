@@ -271,6 +271,15 @@ export class Dispatcher {
       `handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counters=${spec.counters?.map((e) => `${e.metric}.${e.op}`).join(",") ?? "-"}`
     );
     for (const t of spec.clears) this.clearType(t, sessionId);
+    // subagent-stop proves the loop was only briefly idle — cancel a PENDING
+    // stop for this session before applyCounters runs below. Ordering is
+    // load-bearing: a subagent-stop that drains the subagents counter to zero
+    // triggers fireDeferredStop() -> armType("stop") *inside* applyCounters,
+    // creating a fresh PENDING entry for the deferred chime. Cancelling BEFORE
+    // applyCounters means this call only ever cancels a PRE-EXISTING pending
+    // stop (from an earlier /event/stop or an earlier drain) — it can never
+    // self-cancel the PENDING entry this same event is about to create.
+    if (route === "/event/subagent-stop") this.cancelPendingStop(sessionId);
     if (spec.arms) {
       // Stop suppression: a Stop while this session still has in-flight subagents
       // is premature — hold the chime/flash silently. The held alert fires later
@@ -490,6 +499,23 @@ export class Dispatcher {
       }
     }
     if (removedArmed) this.opts.onArmedChanged?.(type);
+  }
+
+  // Narrow stop-only cancel wired to /event/subagent-stop (handleRoute). Cancels
+  // ONLY this session's PENDING stop timer — never touches ARMED entries and
+  // never calls dropDeferredStop. A stray or late SubagentStop must not be able
+  // to dismiss an already-fired (ARMED) chime, nor drop the counter path's held
+  // stop; clearType("stop") would do both, so this is a separate, smaller
+  // operation. See handleRoute's ordering comment for why this must run before
+  // applyCounters.
+  private cancelPendingStop(sessionId: string): void {
+    const inner = this.pending.get("stop");
+    const timer = inner?.get(sessionId);
+    if (!timer) return;
+    clearTimeout(timer);
+    inner!.delete(sessionId);
+    if (inner!.size === 0) this.pending.delete("stop"); // prune-on-empty
+    this.opts.log?.debug(`cancel pending stop (subagent-stop) session=${sessionId.slice(0, 8)}`);
   }
 
   private armType(type: EventType, sessionId: string, cwd: string | null): void {

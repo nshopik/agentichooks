@@ -1338,6 +1338,57 @@ describe("Dispatcher.handleRoute — subagent-start clears a stale stop (the nex
   });
 });
 
+describe("Dispatcher.handleRoute — subagent-stop cancels a PENDING stop (the settle-window canceller)", () => {
+  it("cancels a PENDING stop during the settle window — no fire, no audio", () => {
+    buttons.set("stop", makeButton("stop"));
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test"); // PENDING (settle floor)
+    vi.advanceTimersByTime(STOP_SETTLE_MS - 1);
+    d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "agt-001" });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("does not dismiss an already-ARMED stop", () => {
+    buttons.set("stop", makeButton("stop"));
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test");
+    vi.advanceTimersByTime(STOP_SETTLE_MS); // ARMED
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "agt-001" });
+    expect(buttons.get("stop")!.dismiss).not.toHaveBeenCalled();
+  });
+
+  it("does not drop a held (deferred) stop", () => {
+    buttons.set("stop", makeButton("stop"));
+    const counters = fakeCounters();
+    counters.subagents.has.mockReturnValue(true); // stays "in flight" per this stub
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    d.handleRoute("/event/stop", "sess-test", { cwd: "/repos/proj" }); // suppressed, held
+    d.handleRoute("/event/subagent-stop", "sess-test", { agentId: "other-agent" });
+    d.fireDeferredStop("sess-test"); // the held stop must still be there
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(d.armedContext("stop")!.latestCwd).toBe("/repos/proj");
+  });
+
+  it("session B's subagent-stop does not cancel session A's pending stop", () => {
+    buttons.set("stop", makeButton("stop"));
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-A");
+    d.handleRoute("/event/subagent-stop", "sess-B", { agentId: "agt-001" });
+    vi.advanceTimersByTime(STOP_SETTLE_MS);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("Dispatcher.handleRoute — per-metric id selection", () => {
   it("user-prompt-submit calls thinking.add with (sessionId, sessionId) — thinking id = sessionId itself", () => {
     const counters = fakeCounters();
