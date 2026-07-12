@@ -70,6 +70,15 @@ export const POST_TOOL_USE_FAILURE_INTERRUPT = "/event/post-tool-use-failure-int
 // during normal orchestration; the strand self-heals on the next prompt anyway.
 export const STOP_SAFETY_RELEASE_MS = 10 * 60 * 1000;
 
+// Floor on the Stop pending delay, regardless of the user's configured
+// alertDelay.stop. Rationale: an *intermediate* Stop during multi-subagent
+// orchestration is always followed by more activity (SubagentStop,
+// PreToolUse, SubagentStart) within seconds; a *final* Stop is followed by
+// silence. Holding every Stop briefly and letting subsequent activity cancel
+// the timer means only the final Stop survives to fire. See
+// docs/superpowers/specs/2026-07-12-stop-settle-window-design.md.
+export const STOP_SETTLE_MS = 3000;
+
 // Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
 // missing key a compile error instead of a silent runtime no-op; unknown
 // runtime strings still take the isKnownRoute guard path in handleRoute.
@@ -262,6 +271,15 @@ export class Dispatcher {
       `handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counters=${spec.counters?.map((e) => `${e.metric}.${e.op}`).join(",") ?? "-"}`
     );
     for (const t of spec.clears) this.clearType(t, sessionId);
+    // subagent-stop proves the loop was only briefly idle — cancel a PENDING
+    // stop for this session before applyCounters runs below. Ordering is
+    // load-bearing: a subagent-stop that drains the subagents counter to zero
+    // triggers fireDeferredStop() -> armType("stop") *inside* applyCounters,
+    // creating a fresh PENDING entry for the deferred chime. Cancelling BEFORE
+    // applyCounters means this call only ever cancels a PRE-EXISTING pending
+    // stop (from an earlier /event/stop or an earlier drain) — it can never
+    // self-cancel the PENDING entry this same event is about to create.
+    if (route === "/event/subagent-stop") this.cancelPendingStop(sessionId);
     if (spec.arms) {
       // Stop suppression: a Stop while this session still has in-flight subagents
       // is premature — hold the chime/flash silently. The held alert fires later
@@ -483,6 +501,23 @@ export class Dispatcher {
     if (removedArmed) this.opts.onArmedChanged?.(type);
   }
 
+  // Narrow stop-only cancel wired to /event/subagent-stop (handleRoute). Cancels
+  // ONLY this session's PENDING stop timer — never touches ARMED entries and
+  // never calls dropDeferredStop. A stray or late SubagentStop must not be able
+  // to dismiss an already-fired (ARMED) chime, nor drop the counter path's held
+  // stop; clearType("stop") would do both, so this is a separate, smaller
+  // operation. See handleRoute's ordering comment for why this must run before
+  // applyCounters.
+  private cancelPendingStop(sessionId: string): void {
+    const inner = this.pending.get("stop");
+    const timer = inner?.get(sessionId);
+    if (!timer) return;
+    clearTimeout(timer);
+    inner!.delete(sessionId);
+    if (inner!.size === 0) this.pending.delete("stop"); // prune-on-empty
+    this.opts.log?.debug(`cancel pending stop (subagent-stop) session=${sessionId.slice(0, 8)}`);
+  }
+
   private armType(type: EventType, sessionId: string, cwd: string | null): void {
     // This session PENDING for the type → no-op (timer keeps running, no extension;
     // burst of arms from one session = one alert, per existing rule).
@@ -495,8 +530,11 @@ export class Dispatcher {
       this.fire(type, sessionId, cwd);
       return;
     }
-    // Otherwise → start this session's own delay timer.
-    const delayMs = this.opts.getGlobalSettings().alertDelay[type];
+    // Otherwise → start this session's own delay timer. Stop always pends at
+    // least STOP_SETTLE_MS regardless of the configured alertDelay.stop — see
+    // the constant's comment for why. Other types use the bare configured delay.
+    const configuredDelayMs = this.opts.getGlobalSettings().alertDelay[type];
+    const delayMs = type === "stop" ? Math.max(configuredDelayMs, STOP_SETTLE_MS) : configuredDelayMs;
     if (delayMs <= 0) {
       this.fire(type, sessionId, cwd);
       return;
