@@ -18,8 +18,6 @@ All notable changes to this project will be documented in this file.
 - **Breaking:** default stop alert delay is now 0 ms (was 1000 ms) —
   `background_tasks` is the completion signal, so `alertDelay.stop` is a pure
   tolerance knob, configurable per button in the Property Inspector.
-- Removed the 3s stop settle window and the 10-minute safety-release
-  backstop — superseded by the `background_tasks` gate.
 
 ## [0.9.4] - 2026-06-27
 
