@@ -244,7 +244,7 @@ export class Dispatcher {
   // Same-session same-type arm during PENDING is a deliberate no-op (timer keeps
   // running, no extension), so a burst of arming events from one session still
   // produces exactly one alert. Different sessions each get independent timers.
-  handleRoute(route: string, sessionId: string, ctx?: { taskId?: string; agentId?: string; cwd?: string }): void {
+  handleRoute(route: string, sessionId: string, ctx?: { taskId?: string; agentId?: string; cwd?: string; agenticTaskCount?: number }): void {
     if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
@@ -281,11 +281,15 @@ export class Dispatcher {
     // self-cancel the PENDING entry this same event is about to create.
     if (route === "/event/subagent-stop") this.cancelPendingStop(sessionId);
     if (spec.arms) {
-      // Stop suppression: a Stop while this session still has in-flight subagents
-      // is premature — hold the chime/flash silently. The held alert fires later
-      // via fireDeferredStop() when the subagents counter drains. Only the arm is
-      // suppressed; clears (above) and counters (below) still run.
-      if (spec.arms === "stop" && this.subagentsInFlight(sessionId)) {
+      // Body-gated Stop: background_tasks reporting agentic work in flight is a
+      // stop-clearing signal, not a chime — a fresher "still working" truth
+      // supersedes any earlier chime state for this session (PENDING or ARMED).
+      // Scoped to the literal /event/stop route: stop-failure shares this row's
+      // arms:"stop" shape but always arms (an API error wants attention).
+      if (route === "/event/stop" && (ctx?.agenticTaskCount ?? 0) > 0) {
+        this.opts.log?.info(`suppress stop (background tasks in flight) session=${sessionId.slice(0, 8)} n=${ctx!.agenticTaskCount}`);
+        this.clearType("stop", sessionId);
+      } else if (spec.arms === "stop" && this.subagentsInFlight(sessionId)) {
         this.suppressStop(sessionId, ctx?.cwd ?? null);
       } else {
         this.armType(spec.arms, sessionId, ctx?.cwd ?? null);

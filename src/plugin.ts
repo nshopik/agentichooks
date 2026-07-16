@@ -203,7 +203,12 @@ async function startListener(): Promise<void> {
         }
         return;
       }
-      dispatcher.handleRoute(derived, body!.sessionId!, { taskId: body?.taskId, agentId: body?.agentId, cwd: body?.cwd });
+      dispatcher.handleRoute(derived, body!.sessionId!, {
+        taskId: body?.taskId,
+        agentId: body?.agentId,
+        cwd: body?.cwd,
+        agenticTaskCount: body?.agenticTaskCount,
+      });
     },
     log: makeLogger("http"),
   });

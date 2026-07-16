@@ -2018,3 +2018,67 @@ describe("Dispatcher.handleRoute — stop suppressed while subagents in flight",
     expect(audioPlayer.play).not.toHaveBeenCalled();
   });
 });
+
+describe("Dispatcher.handleRoute — background-tasks gate (agenticTaskCount)", () => {
+  it("a stop with agenticTaskCount > 0 clears permission and task-completed alerts, does not arm stop", () => {
+    buttons.set("perm", makeButton("permission"));
+    buttons.set("task", makeButton("task-completed"));
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.permission = 0;
+    globals.alertDelay["task-completed"] = 0;
+    const d = dispatcher();
+    d.handleRoute("/event/permission-request", "sess-test");
+    d.fireTaskCompleted("sess-test");
+    expect(buttons.get("perm")!.alert).toHaveBeenCalledTimes(1);
+    expect(buttons.get("task")!.alert).toHaveBeenCalledTimes(1);
+    audioPlayer.play.mockClear(); // isolate the assertion below to the stop route's own effect —
+    // permission's default sound already played once during setup above.
+
+    d.handleRoute("/event/stop", "sess-test", { agenticTaskCount: 3 });
+
+    expect(buttons.get("perm")!.dismiss).toHaveBeenCalledTimes(1);
+    expect(buttons.get("task")!.dismiss).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(10_000);
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("a gated stop clears the session's own earlier PENDING stop", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 5000; // a user-configured nonzero delay
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test"); // no agenticTaskCount -> PENDING
+    d.handleRoute("/event/stop", "sess-test", { agenticTaskCount: 1 }); // gated: clears the PENDING stop
+    vi.advanceTimersByTime(6000); // past the original delay
+    expect(buttons.get("stop")!.alert).not.toHaveBeenCalled();
+    expect(audioPlayer.play).not.toHaveBeenCalled();
+  });
+
+  it("stop-failure still arms unconditionally even when ctx carries agenticTaskCount > 0", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 5000;
+    const d = dispatcher();
+    d.handleRoute("/event/stop-failure", "sess-test", { agenticTaskCount: 5 });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+    expect(audioPlayer.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stop with agenticTaskCount === 0 arms after the configured delay", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 5000;
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test", { agenticTaskCount: 0 });
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it("a stop with agenticTaskCount undefined (ctx omitted) arms after the configured delay", () => {
+    buttons.set("stop", makeButton("stop"));
+    globals.alertDelay.stop = 5000;
+    const d = dispatcher();
+    d.handleRoute("/event/stop", "sess-test"); // ctx omitted entirely
+    vi.advanceTimersByTime(5000);
+    expect(buttons.get("stop")!.alert).toHaveBeenCalledTimes(1);
+  });
+});
