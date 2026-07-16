@@ -44,7 +44,7 @@ export type BodyOutcome =
   | { kind: "oversize" }
   | { kind: "parsed"; body: ParsedBody };
 
-export function makeBodyBuffer(maxBytes = 64 * 1024) {
+export function makeBodyBuffer(maxBytes = 256 * 1024) {
   let chunks: Buffer[] = [];
   let total = 0;
   let overflow = false;

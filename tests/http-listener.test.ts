@@ -252,19 +252,33 @@ describe("HttpListener", () => {
     expect(info?.msg).toContain("cwd=?");
   });
 
-  it("POST with oversize body on a signal route emits WARN and INFO result with session=? cwd=?", async () => {
+  it("POST with oversize body (>256 KB) on a signal route emits WARN and INFO result with session=? cwd=?", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
     await listener.start();
-    // Send 65 KB of valid-looking JSON chars (will exceed the 64 KB cap)
-    const big = "{" + '"a":"' + "x".repeat(65 * 1024) + '"}';
+    // Send 257 KB of valid-looking JSON chars (will exceed the new 256 KB cap)
+    const big = "{" + '"a":"' + "x".repeat(257 * 1024) + '"}';
     await requestWithBody("POST", "/event/stop", listener.port(), big);
     await new Promise((r) => setTimeout(r, 20));
     const warn = logs.find((l) => l.level === "warn");
     expect(warn?.msg).toMatch(/oversize body/);
+    expect(warn?.msg).toContain("(>256 KB)");
     expect(warn?.msg).toContain("(session_id required)");
     const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
     expect(info?.msg).toContain("session=?");
     expect(info?.msg).toContain("cwd=?");
+  });
+
+  it("POST with a 65 KB body (under the new 256 KB cap) parses successfully", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const filler = "x".repeat(65 * 1024);
+    const body = JSON.stringify({ session_id: "abc123", filler });
+    await requestWithBody("POST", "/event/stop", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const oversizeWarn = logs.find((l) => l.level === "warn" && l.msg.includes("oversize"));
+    expect(oversizeWarn).toBeUndefined();
+    const info = logs.find((l) => l.level === "info" && l.msg.includes("route="));
+    expect(info?.msg).toContain("session=abc123");
   });
 
   it("POST with valid parsed body on a signal route shows 8-char session and cwd basename in INFO", async () => {
