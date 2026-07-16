@@ -69,7 +69,10 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     "task-completed": {},
   },
   alertDelay: {
-    stop: DEFAULT_ALERT_DELAY_MS,
+    // background_tasks is the completion signal now (see the 2026-07-16
+    // background-tasks-stop-gate spec); alertDelay.stop is a pure
+    // user-tolerance knob, not a false-positive fix, so it defaults to 0.
+    stop: 0,
     permission: DEFAULT_ALERT_DELAY_MS,
     "task-completed": DEFAULT_ALERT_DELAY_MS,
   },
