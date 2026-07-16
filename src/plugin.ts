@@ -142,10 +142,6 @@ const taskCounters = {
   }),
   subagents: new SessionSetCounter({
     name: "subagents",
-    // When a session's subagents drain to 0, release any Stop that was held back
-    // because subagents were still running (the deferred chime). No-op when the
-    // session has no held Stop. Fires BEFORE onChanged per the counter contract.
-    onSessionDrained: (sid) => dispatcher.fireDeferredStop(sid),
     onChanged: (n) => taskCompletedAction.broadcastCounts(taskCounters.tasks.sum(), n),
     log: makeLogger("counter"),
   }),

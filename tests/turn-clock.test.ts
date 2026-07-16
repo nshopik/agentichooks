@@ -8,21 +8,17 @@ function makeInner(): DispatcherCounter & {
   addCalls: Array<[string, string]>;
   removeCalls: Array<[string, string]>;
   resetCalls: string[];
-  hasCalls: string[];
 } {
   const addCalls: Array<[string, string]> = [];
   const removeCalls: Array<[string, string]> = [];
   const resetCalls: string[] = [];
-  const hasCalls: string[] = [];
   return {
     addCalls,
     removeCalls,
     resetCalls,
-    hasCalls,
     add(sessionId, id) { addCalls.push([sessionId, id]); },
     remove(sessionId, id) { removeCalls.push([sessionId, id]); },
     reset(sessionId) { resetCalls.push(sessionId); },
-    has(sessionId) { hasCalls.push(sessionId); return false; },
   };
 }
 
@@ -98,7 +94,6 @@ describe("TurnClock", () => {
       },
       remove() {},
       reset() {},
-      has() { return false; },
     };
     now.mockReturnValueOnce(2000).mockReturnValue(5000);
     const clock = new TurnClock({ inner: capturingInner, now });
