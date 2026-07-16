@@ -11,13 +11,13 @@ All notable changes to this project will be documented in this file.
   completion from subagent counts and settle timers. A `Stop` reporting
   agentic work still in flight (`subagent`, `workflow`, `teammate`,
   `cloud session`, `MCP task`) is a stop-clearing signal, not a chime; only a
-  `Stop` reporting no agentic work fires.
+  `Stop` reporting no agentic work fires. (#57)
 
 ### Changed
 
 - **Breaking:** default stop alert delay is now 0 ms (was 1000 ms) —
   `background_tasks` is the completion signal, so `alertDelay.stop` is a pure
-  tolerance knob, configurable per button in the Property Inspector.
+  tolerance knob, configurable per button in the Property Inspector. (#57)
 
 ## [0.9.4] - 2026-06-27
 
