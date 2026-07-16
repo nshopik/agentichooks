@@ -256,6 +256,7 @@ describe("Dispatcher.handleRoute — matrix-driven cross-type clearing", () => {
 
 describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear all three", () => {
   it("session-start cancels all pending alerts", () => {
+    globals.alertDelay.stop = 1000;
     buttons.set("stop", makeButton("stop"));
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
@@ -273,6 +274,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
   });
 
   it("user-prompt-submit cancels all pending alerts", () => {
+    globals.alertDelay.stop = 1000;
     buttons.set("stop", makeButton("stop"));
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
@@ -299,6 +301,7 @@ describe("Dispatcher.handleRoute — session-start / user-prompt-submit clear al
   });
 
   it("session-end cancels all pending alerts", () => {
+    globals.alertDelay.stop = 1000;
     buttons.set("stop", makeButton("stop"));
     buttons.set("perm", makeButton("permission"));
     buttons.set("task", makeButton("task-completed"));
@@ -389,6 +392,7 @@ describe("Dispatcher.handleRoute — ARMED + zero-delay precedence", () => {
 
 describe("Dispatcher.handleRoute — pre-tool-use clears stop (agentic loop restart)", () => {
   it("pre-tool-use cancels a pending stop alert (loop restarted without user input)", () => {
+    globals.alertDelay.stop = 1000;
     buttons.set("a", makeButton("stop"));
     const d = dispatcher();
     d.handleRoute("/event/stop", "sess-test");
