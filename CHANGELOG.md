@@ -6,19 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **Phantom completion chime during multi-subagent orchestration** — Stop no
-  longer chimes on intermediate Stop hooks when the subagent counter is blind
-  to in-flight subagents (`SubagentStart` under-fires in real multi-session
-  usage). Every Stop now settles for ~3s before firing, and a following
-  `SubagentStop` cancels it — only a genuinely final Stop survives the window. (#56)
+- **Phantom completion chimes during background/multi-agent work** — `Stop`
+  now reads `background_tasks` from the hook body instead of inferring
+  completion from subagent counts and settle timers. A `Stop` reporting
+  agentic work still in flight (`subagent`, `workflow`, `teammate`,
+  `cloud session`, `MCP task`) is a stop-clearing signal, not a chime; only a
+  `Stop` reporting no agentic work fires.
 
-- **Green check firing over running subagents** — Stop suppression was checked only
-  when the `Stop` arrived. In the gap between orchestration waves the subagents
-  counter momentarily reads 0, so a `Stop` landing there went into its delay window
-  unsuppressed and fired while the next wave was already starting. `SubagentStart`
-  now clears a still-armed or mid-delay `Stop` for that session (same rationale as
-  `PreToolUse`), cancelling the stale completion flash the instant the next agent
-  starts. (#54)
+### Changed
+
+- **Breaking:** default stop alert delay is now 0 ms (was 1000 ms) —
+  `background_tasks` is the completion signal, so `alertDelay.stop` is a pure
+  tolerance knob, configurable per button in the Property Inspector.
+- Removed the 3s stop settle window and the 10-minute safety-release
+  backstop — superseded by the `background_tasks` gate.
 
 ## [0.9.4] - 2026-06-27
 
