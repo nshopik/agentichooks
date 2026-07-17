@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Subagent permission dialogs never armed the permission button** — the
+  agent-context filter dropped `PermissionRequest` events carrying `agent_id`;
+  the route now passes through, since a subagent's permission dialog blocks
+  the user like a main-loop one.
 - **Phantom completion chimes during background/multi-agent work** — `Stop`
   now reads `background_tasks` from the hook body instead of inferring
   completion from subagent counts and settle timers. A `Stop` reporting

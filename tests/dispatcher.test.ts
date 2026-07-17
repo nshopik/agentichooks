@@ -768,7 +768,6 @@ describe("deriveRoute — agent-context drop policy", () => {
   const DROP_ROUTES = [
     "/event/stop",
     "/event/stop-failure",
-    "/event/permission-request",
     "/event/user-prompt-submit",
     "/event/session-start",
     "/event/session-end",
@@ -785,6 +784,14 @@ describe("deriveRoute — agent-context drop policy", () => {
       expect(deriveRoute(route, undefined, "agt-001", "s")).toBeNull();
       expect(deriveRoute(route, "compact", "agt-001", "s")).toBeNull();
     }
+  });
+
+  it("returns the route itself for /event/permission-request with agentId (passthrough)", () => {
+    // A subagent's permission dialog blocks the main UI exactly like a main-loop
+    // one — it is the one agent-context event that is genuinely user-facing, so
+    // it must arm. Regression pin for the #24 over-drop.
+    expect(deriveRoute("/event/permission-request", undefined, "agt-001", "s")).toBe("/event/permission-request");
+    expect(deriveRoute("/event/permission-request", "compact", "agt-001", "s")).toBe("/event/permission-request");
   });
 
   it("returns the route itself for /event/task-created with agentId (passthrough)", () => {

@@ -135,10 +135,12 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
 //      without exception, including task-created / task-completed — real Claude Code
 //      hooks always carry session_id, so the counter never sees gated traffic.
 //   2. Agent context: agentId present + route is /event/task-created,
-//      /event/subagent-start, or /event/subagent-stop → passthrough (these are
-//      always agent-context events). agentId present + route is /event/task-completed
-//      → TASK_COMPLETED_AGENT (counter-only). agentId present, any other route → null
-//      (drop; caller must not call handleRoute).
+//      /event/subagent-start, /event/subagent-stop, or /event/permission-request
+//      → passthrough (the first three are always agent-context events; a subagent's
+//      permission dialog blocks the main UI, so it arms like a main-loop one).
+//      agentId present + route is /event/task-completed → TASK_COMPLETED_AGENT
+//      (counter-only). agentId present, any other route → null (drop; caller must
+//      not call handleRoute).
 //   3. Source derivation: agentId absent → source logic. session-start with
 //      source=compact|resume → SESSION_START_SOFT (no-op). post-tool-use-failure
 //      with isInterrupt → POST_TOOL_USE_FAILURE_INTERRUPT (also clears thinking).
@@ -155,10 +157,17 @@ export function deriveRoute(route: string, source: string | undefined, agentId: 
   //    agent_id and is dropped here (not in the passthrough set), so the interrupt
   //    derivation below is reached only by main-thread interrupts.
   if (agentId !== undefined) {
+    // permission-request passes through because the dialog it announces blocks the
+    // user regardless of which context raised it. Its clear-side counterparts
+    // (agent post-tool-use / permission-denied) stay dropped on purpose: letting a
+    // parallel subagent's tool completion clear the alert would cancel another
+    // agent's still-open dialog — the ghost-clear race #24 exists to prevent. The
+    // alert instead clears via keypress, auto-timeout, or main-loop resume.
     if (
       route === "/event/task-created" ||
       route === "/event/subagent-start" ||
-      route === "/event/subagent-stop"
+      route === "/event/subagent-stop" ||
+      route === "/event/permission-request"
     ) return route;
     if (route === "/event/task-completed") return TASK_COMPLETED_AGENT;
     return null;
