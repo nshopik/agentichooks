@@ -259,6 +259,15 @@ export class Dispatcher {
         this.armType(spec.arms, sessionId, ctx?.cwd ?? null);
       }
     }
+    // Reconcile the subagents pill against the same body-carried truth: a Stop
+    // reporting zero agentic tasks means any id still in this session's set is
+    // stale (SubagentStart/SubagentStop don't pair reliably — log-verified
+    // 2026-07-17: a start with no matching stop left the pill floored at 1).
+    // Strict === 0: undefined means no signal (pre-2.1.145 body), touch nothing.
+    // reset() is a no-op on an empty set, so the common turn-end case is free.
+    if (route === "/event/stop" && ctx?.agenticTaskCount === 0) {
+      this.opts.counters?.subagents?.reset(sessionId);
+    }
     if (spec.counters) this.applyCounters(spec.counters, sessionId, ctx);
     this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)}`);
   }

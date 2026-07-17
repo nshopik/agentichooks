@@ -1727,3 +1727,43 @@ describe("Dispatcher — background-tasks gate integration (2026-07-15 phantom s
     expect(audioPlayer.play).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("Dispatcher.handleRoute — subagents reconcile on Stop (agenticTaskCount === 0)", () => {
+  function dispatcherWithCounters() {
+    const counters = fakeCounters();
+    const d = new Dispatcher({
+      audioPlayer: audioPlayer as unknown as { play: (p: string) => void },
+      getGlobalSettings: () => globals,
+      getButtons: () => buttons as unknown as Map<string, DispatchableButton>,
+      counters,
+    });
+    return { d, counters };
+  }
+
+  it("a stop with agenticTaskCount === 0 resets the session's subagents counter", () => {
+    const { d, counters } = dispatcherWithCounters();
+    d.handleRoute("/event/stop", "sess-test", { agenticTaskCount: 0 });
+    expect(counters.subagents.reset).toHaveBeenCalledTimes(1);
+    expect(counters.subagents.reset).toHaveBeenCalledWith("sess-test");
+    // Reconcile is scoped to the subagents slot — tasks stay untouched.
+    expect(counters.tasks.reset).not.toHaveBeenCalled();
+  });
+
+  it("a stop without agenticTaskCount (no signal) does not touch the subagents counter", () => {
+    const { d, counters } = dispatcherWithCounters();
+    d.handleRoute("/event/stop", "sess-test");
+    expect(counters.subagents.reset).not.toHaveBeenCalled();
+  });
+
+  it("a gated stop (agenticTaskCount > 0) does not reset the subagents counter", () => {
+    const { d, counters } = dispatcherWithCounters();
+    d.handleRoute("/event/stop", "sess-test", { agenticTaskCount: 2 });
+    expect(counters.subagents.reset).not.toHaveBeenCalled();
+  });
+
+  it("a stop-failure with agenticTaskCount === 0 does not reset the subagents counter", () => {
+    const { d, counters } = dispatcherWithCounters();
+    d.handleRoute("/event/stop-failure", "sess-test", { agenticTaskCount: 0 });
+    expect(counters.subagents.reset).not.toHaveBeenCalled();
+  });
+});

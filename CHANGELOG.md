@@ -16,6 +16,9 @@ All notable changes to this project will be documented in this file.
   agentic work still in flight (`subagent`, `workflow`, `teammate`,
   `cloud session`, `MCP task`) is a stop-clearing signal, not a chime; only a
   `Stop` reporting no agentic work fires. (#57)
+- **Subagent count pill stuck at a nonzero floor** — a `SubagentStart` with no
+  matching `SubagentStop` left a stale id in the counter forever; a `Stop`
+  reporting zero agentic tasks now resets the session's subagent set. (#57)
 
 ### Changed
 
