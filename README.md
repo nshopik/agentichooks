@@ -6,7 +6,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 > Please report issues at [github.com/nshopik/agentichooks/issues](https://github.com/nshopik/agentichooks/issues). The plugin is distributed via GitHub Releases.
 
-> **Requires Claude Code 2.1.128+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight task counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Upgrade Claude Code if button responses look incomplete after running the installer.
+> **Requires Claude Code 2.1.145+.** Hooks are wired as native [`type: "http"`](https://code.claude.com/docs/en/hooks.md) entries. The hook type itself is supported from 2.1.63, but `TaskCreated` (drives the in-flight task counter) and `WorktreeCreate` only gain `type: "http"` support in 2.1.128 — on older versions those two events are silently ignored while the rest still fire. Pre-2.1.63 silently ignores every entry. Since 2.1.145, `Stop` hook bodies carry `background_tasks`, which the On Stop button reads to skip the chime while background or subagent work is still running; on older Claude Code that field is absent and every `Stop` chimes immediately. Upgrade Claude Code if button responses look incomplete after running the installer.
 
 > **macOS support is experimental.** The Windows install path is the tested one; macOS code paths exist (afplay, system sounds, hook installer) but have not yet been validated end-to-end on a real Mac. Bug reports from Mac users are very welcome.
 

@@ -198,3 +198,113 @@ describe("makeBodyBuffer", () => {
     }
   });
 });
+
+describe("makeBodyBuffer — agenticTaskCount (background_tasks)", () => {
+  it("returns undefined when background_tasks is absent", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc" })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBeUndefined();
+  });
+
+  it("returns undefined when background_tasks is not an array", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", background_tasks: "not-an-array" })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBeUndefined();
+  });
+
+  it("counts entries whose type is in the agentic set", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: [
+        { type: "subagent" },
+        { type: "workflow" },
+        { type: "teammate" },
+        { type: "cloud session" },
+        { type: "MCP task" },
+      ],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(5);
+  });
+
+  it("does not count shell/monitor entries or unrecognized type values", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: [
+        { type: "shell" },
+        { type: "monitor" },
+        { type: "future-type-nobody-has-heard-of" },
+      ],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(0);
+  });
+
+  it("counts a mix of agentic and non-agentic entries", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: [
+        { type: "subagent" },
+        { type: "shell" },
+        { type: "workflow" },
+        { type: "monitor" },
+      ],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(2);
+  });
+
+  it("counts all entries regardless of a status field", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: [
+        { type: "subagent", status: "completed" },
+        { type: "subagent", status: "running" },
+      ],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(2);
+  });
+
+  it("treats an empty array as zero agentic tasks", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({ session_id: "abc", background_tasks: [] })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(0);
+  });
+
+  it("treats non-object entries (string, number, null) as contributing 0", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: ["not-an-object", 42, null, { type: "subagent" }],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(1);
+  });
+
+  it("treats entries with a non-string or missing type as contributing 0", () => {
+    const buf = makeBodyBuffer();
+    buf.push(Buffer.from(JSON.stringify({
+      session_id: "abc",
+      background_tasks: [{ type: 42 }, { type: null }, { notype: "subagent" }],
+    })));
+    const outcome = buf.finish();
+    if (outcome.kind !== "parsed") throw new Error("expected parsed");
+    expect(outcome.body.agenticTaskCount).toBe(0);
+  });
+});

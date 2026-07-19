@@ -18,9 +18,6 @@ export type DispatcherCounter = {
   add(sessionId: string, id: string): void;
   remove(sessionId: string, id: string): void;
   reset(sessionId: string): void;
-  // True when the session currently has >0 ids. Consulted only on the subagents
-  // slot, to decide whether a Stop should be suppressed (subagents still running).
-  has(sessionId: string): boolean;
 };
 
 export type DispatcherOpts = {
@@ -58,26 +55,6 @@ type RouteSpec = {
 export const SESSION_START_SOFT = "/event/session-start-soft";
 export const TASK_COMPLETED_AGENT = "/event/task-completed-agent";
 export const POST_TOOL_USE_FAILURE_INTERRUPT = "/event/post-tool-use-failure-interrupt";
-
-// Backstop for a held Stop whose subagent drain never arrives — a lost
-// subagent-stop, or one without agent_id (the missing-id gate drops it before
-// applyCounters, so the subagents counter never reaches 0). Without this, the
-// chime strands until the session's next resume (UserPromptSubmit/PreToolUse/
-// session-start/-end). The safety timer releases the deferred chime after this
-// interval regardless of counter state. Tradeoff: a legitimate subagent run
-// longer than this fires the chime early (then the real drain is a no-op);
-// firing early — once — beats never. Long enough to essentially never trip
-// during normal orchestration; the strand self-heals on the next prompt anyway.
-export const STOP_SAFETY_RELEASE_MS = 10 * 60 * 1000;
-
-// Floor on the Stop pending delay, regardless of the user's configured
-// alertDelay.stop. Rationale: an *intermediate* Stop during multi-subagent
-// orchestration is always followed by more activity (SubagentStop,
-// PreToolUse, SubagentStart) within seconds; a *final* Stop is followed by
-// silence. Holding every Stop briefly and letting subsequent activity cancel
-// the timer means only the final Stop survives to fire. See
-// docs/superpowers/specs/2026-07-12-stop-settle-window-design.md.
-export const STOP_SETTLE_MS = 3000;
 
 // Closed key set for the matrix. Record<Route, RouteSpec> makes a typo'd or
 // missing key a compile error instead of a silent runtime no-op; unknown
@@ -158,10 +135,12 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
 //      without exception, including task-created / task-completed — real Claude Code
 //      hooks always carry session_id, so the counter never sees gated traffic.
 //   2. Agent context: agentId present + route is /event/task-created,
-//      /event/subagent-start, or /event/subagent-stop → passthrough (these are
-//      always agent-context events). agentId present + route is /event/task-completed
-//      → TASK_COMPLETED_AGENT (counter-only). agentId present, any other route → null
-//      (drop; caller must not call handleRoute).
+//      /event/subagent-start, /event/subagent-stop, or /event/permission-request
+//      → passthrough (the first three are always agent-context events; a subagent's
+//      permission dialog blocks the main UI, so it arms like a main-loop one).
+//      agentId present + route is /event/task-completed → TASK_COMPLETED_AGENT
+//      (counter-only). agentId present, any other route → null (drop; caller must
+//      not call handleRoute).
 //   3. Source derivation: agentId absent → source logic. session-start with
 //      source=compact|resume → SESSION_START_SOFT (no-op). post-tool-use-failure
 //      with isInterrupt → POST_TOOL_USE_FAILURE_INTERRUPT (also clears thinking).
@@ -178,10 +157,17 @@ export function deriveRoute(route: string, source: string | undefined, agentId: 
   //    agent_id and is dropped here (not in the passthrough set), so the interrupt
   //    derivation below is reached only by main-thread interrupts.
   if (agentId !== undefined) {
+    // permission-request passes through because the dialog it announces blocks the
+    // user regardless of which context raised it. Its clear-side counterparts
+    // (agent post-tool-use / permission-denied) stay dropped on purpose: letting a
+    // parallel subagent's tool completion clear the alert would cancel another
+    // agent's still-open dialog — the ghost-clear race #24 exists to prevent. The
+    // alert instead clears via keypress, auto-timeout, or main-loop resume.
     if (
       route === "/event/task-created" ||
       route === "/event/subagent-start" ||
-      route === "/event/subagent-stop"
+      route === "/event/subagent-stop" ||
+      route === "/event/permission-request"
     ) return route;
     if (route === "/event/task-completed") return TASK_COMPLETED_AGENT;
     return null;
@@ -220,17 +206,6 @@ export class Dispatcher {
   // so `armed.get(type) === undefined` means "nothing armed for this type."
   private armed = new Map<EventType, Map<string, ArmedEntry>>();
 
-  // Sessions whose Stop was suppressed because subagents were still in flight,
-  // keyed sessionId → { cwd captured at suppression time (for the deferred
-  // alert's title), safetyTimer }. The entry is consumed by fireDeferredStop()
-  // when the subagents counter drains to 0, or dropped by any stop-clearing
-  // route / keypress (clearType("stop") / dismissArmed("stop")). Suppression is
-  // silent — no visual stand-in; the key simply stays idle until the deferred
-  // chime fires. safetyTimer is the STOP_SAFETY_RELEASE_MS backstop that fires
-  // the deferred chime if the subagent drain never arrives; every drop path must
-  // cancel it (via dropDeferredStop) so it can't double-fire or leak.
-  private deferredStops = new Map<string, { cwd: string | null; safetyTimer: NodeJS.Timeout }>();
-
   constructor(opts: DispatcherOpts) {
     this.opts = opts;
   }
@@ -244,7 +219,7 @@ export class Dispatcher {
   // Same-session same-type arm during PENDING is a deliberate no-op (timer keeps
   // running, no extension), so a burst of arming events from one session still
   // produces exactly one alert. Different sessions each get independent timers.
-  handleRoute(route: string, sessionId: string, ctx?: { taskId?: string; agentId?: string; cwd?: string }): void {
+  handleRoute(route: string, sessionId: string, ctx?: { taskId?: string; agentId?: string; cwd?: string; agenticTaskCount?: number }): void {
     if (!isKnownRoute(route)) {
       this.opts.log?.debug(`unknown route=${route}`);
       return; // no state change; skip trace dump
@@ -271,28 +246,30 @@ export class Dispatcher {
       `handleRoute route=${route} session=${sessionId.slice(0, 8)} clears=${spec.clears.join(",") || "-"} arms=${spec.arms ?? "-"} counters=${spec.counters?.map((e) => `${e.metric}.${e.op}`).join(",") ?? "-"}`
     );
     for (const t of spec.clears) this.clearType(t, sessionId);
-    // subagent-stop proves the loop was only briefly idle — cancel a PENDING
-    // stop for this session before applyCounters runs below. Ordering is
-    // load-bearing: a subagent-stop that drains the subagents counter to zero
-    // triggers fireDeferredStop() -> armType("stop") *inside* applyCounters,
-    // creating a fresh PENDING entry for the deferred chime. Cancelling BEFORE
-    // applyCounters means this call only ever cancels a PRE-EXISTING pending
-    // stop (from an earlier /event/stop or an earlier drain) — it can never
-    // self-cancel the PENDING entry this same event is about to create.
-    if (route === "/event/subagent-stop") this.cancelPendingStop(sessionId);
     if (spec.arms) {
-      // Stop suppression: a Stop while this session still has in-flight subagents
-      // is premature — hold the chime/flash silently. The held alert fires later
-      // via fireDeferredStop() when the subagents counter drains. Only the arm is
-      // suppressed; clears (above) and counters (below) still run.
-      if (spec.arms === "stop" && this.subagentsInFlight(sessionId)) {
-        this.suppressStop(sessionId, ctx?.cwd ?? null);
+      // Body-gated Stop: background_tasks reporting agentic work in flight is a
+      // stop-clearing signal, not a chime — a fresher "still working" truth
+      // supersedes any earlier chime state for this session (PENDING or ARMED).
+      // Scoped to the literal /event/stop route: stop-failure shares this row's
+      // arms:"stop" shape but always arms (an API error wants attention).
+      if (route === "/event/stop" && (ctx?.agenticTaskCount ?? 0) > 0) {
+        this.opts.log?.info(`suppress stop (background tasks in flight) session=${sessionId.slice(0, 8)} n=${ctx!.agenticTaskCount}`);
+        this.clearType("stop", sessionId);
       } else {
         this.armType(spec.arms, sessionId, ctx?.cwd ?? null);
       }
     }
+    // Reconcile the subagents pill against the same body-carried truth: a Stop
+    // reporting zero agentic tasks means any id still in this session's set is
+    // stale (SubagentStart/SubagentStop don't pair reliably — log-verified
+    // 2026-07-17: a start with no matching stop left the pill floored at 1).
+    // Strict === 0: undefined means no signal (pre-2.1.145 body), touch nothing.
+    // reset() is a no-op on an empty set, so the common turn-end case is free.
+    if (route === "/event/stop" && ctx?.agenticTaskCount === 0) {
+      this.opts.counters?.subagents?.reset(sessionId);
+    }
     if (spec.counters) this.applyCounters(spec.counters, sessionId, ctx);
-    this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)} stop-held=${this.deferredStops.has(sessionId)}`);
+    this.opts.log?.trace(`state stop=${this.stateOf("stop", sessionId)} permission=${this.stateOf("permission", sessionId)} task-completed=${this.stateOf("task-completed", sessionId)}`);
   }
 
   // Public seam used by SessionSetCounter (tasks instance) onSessionDrained. Wraps the
@@ -300,56 +277,6 @@ export class Dispatcher {
   // alert and cannot bypass the matrix for arbitrary types.
   fireTaskCompleted(sessionId: string): void {
     this.armType("task-completed", sessionId, null);
-  }
-
-  private subagentsInFlight(sessionId: string): boolean {
-    return this.opts.counters?.subagents?.has(sessionId) ?? false;
-  }
-
-  // Records a held Stop for this session (silent — no visual). Latest cwd wins
-  // on repeated suppression (intermediate Stops during one orchestration); the
-  // backstop timer restarts each time so the safety window tracks the latest Stop.
-  private suppressStop(sessionId: string, cwd: string | null): void {
-    // Re-suppression: cancel the prior backstop so we don't leak a stray timer.
-    const prior = this.deferredStops.get(sessionId);
-    if (prior) clearTimeout(prior.safetyTimer);
-    const safetyTimer = setTimeout(() => {
-      this.opts.log?.warn(`safety-release held stop (subagent drain never arrived) session=${sessionId.slice(0, 8)}`);
-      this.fireDeferredStop(sessionId);
-    }, STOP_SAFETY_RELEASE_MS);
-    this.deferredStops.set(sessionId, { cwd, safetyTimer });
-    this.opts.log?.info(`suppress stop (subagents in-flight) session=${sessionId.slice(0, 8)} deferred=${this.deferredStops.size}`);
-  }
-
-  // Cancels the safety timer and removes the held-stop entry. Idempotent — the
-  // single sanctioned way to drop a held Stop, so the backstop timer can never
-  // outlive its entry. Returns the dropped cwd, or undefined if none was held.
-  private dropDeferredStop(sessionId: string): { cwd: string | null } | undefined {
-    const entry = this.deferredStops.get(sessionId);
-    if (!entry) return undefined;
-    clearTimeout(entry.safetyTimer);
-    this.deferredStops.delete(sessionId);
-    return { cwd: entry.cwd };
-  }
-
-  /**
-   * Public seam wired to the subagents SessionSetCounter onSessionDrained.
-   * If this session has a held Stop (suppressed because subagents were running),
-   * drop it and arm the stop alert now — the deferred chime. No-op when the
-   * session has no held Stop (e.g. a stop-clearing route already consumed it, or
-   * the Stop never raced ahead of the subagent-stops).
-   */
-  fireDeferredStop(sessionId: string): void {
-    const held = this.dropDeferredStop(sessionId);
-    if (!held) return;
-    const cwd = held.cwd;
-    this.opts.log?.info(`fire deferred stop on subagent drain session=${sessionId.slice(0, 8)} remaining=${this.deferredStops.size}`);
-    // Replay the stop route's clears so the deferred completion behaves exactly
-    // like a real Stop: a permission or task-completed alert that re-armed during
-    // the hold window (e.g. the tasks counter drained while subagents still ran)
-    // is dismissed, instead of lingering behind the chime.
-    for (const t of ROUTES["/event/stop"].clears) this.clearType(t, sessionId);
-    this.armType("stop", sessionId, cwd);
   }
 
   /**
@@ -367,13 +294,6 @@ export class Dispatcher {
    */
   dismissArmed(type: EventType): void {
     this.opts.log?.debug(`dismissArmed type=${type}`);
-    // A keypress / auto-timeout on the stop key is type-wide: also drop every
-    // held Stop so a dismissed key cannot resurrect a deferred chime. Cancel each
-    // session's backstop timer before clearing so no orphaned timer fires later.
-    if (type === "stop") {
-      for (const entry of this.deferredStops.values()) clearTimeout(entry.safetyTimer);
-      this.deferredStops.clear();
-    }
     // Iterate and cancel ALL per-session pending timers for this type.
     // TRAP: after the re-key, this.pending.get(type) is a Map<sessionId, Timeout>,
     // and clearTimeout(someMap) is a silent no-op in Node — we MUST iterate.
@@ -461,13 +381,6 @@ export class Dispatcher {
   // was never populated) — so the key stays lit while other sessions are still armed.
   // Fires onArmedChanged iff an armed entry was actually removed.
   private clearType(type: EventType, sessionId: string): void {
-    // A stop-clearing route (user-prompt-submit, session-start/end, pre-tool-use)
-    // means the agent resumed or the session reset — any held Stop is now stale.
-    // Load-bearing ordering: session-start/end ALSO reset the subagents counter,
-    // but reset() is silent (no onSessionDrained), so this clear — which runs in
-    // the clears phase, BEFORE counters — is what drops the held Stop. Without it,
-    // a session boundary would strand the held Stop instead of cancelling it.
-    if (type === "stop") this.dropDeferredStop(sessionId);
     const pendingInner = this.pending.get(type);
     if (pendingInner) {
       const timer = pendingInner.get(sessionId);
@@ -501,23 +414,6 @@ export class Dispatcher {
     if (removedArmed) this.opts.onArmedChanged?.(type);
   }
 
-  // Narrow stop-only cancel wired to /event/subagent-stop (handleRoute). Cancels
-  // ONLY this session's PENDING stop timer — never touches ARMED entries and
-  // never calls dropDeferredStop. A stray or late SubagentStop must not be able
-  // to dismiss an already-fired (ARMED) chime, nor drop the counter path's held
-  // stop; clearType("stop") would do both, so this is a separate, smaller
-  // operation. See handleRoute's ordering comment for why this must run before
-  // applyCounters.
-  private cancelPendingStop(sessionId: string): void {
-    const inner = this.pending.get("stop");
-    const timer = inner?.get(sessionId);
-    if (!timer) return;
-    clearTimeout(timer);
-    inner!.delete(sessionId);
-    if (inner!.size === 0) this.pending.delete("stop"); // prune-on-empty
-    this.opts.log?.debug(`cancel pending stop (subagent-stop) session=${sessionId.slice(0, 8)}`);
-  }
-
   private armType(type: EventType, sessionId: string, cwd: string | null): void {
     // This session PENDING for the type → no-op (timer keeps running, no extension;
     // burst of arms from one session = one alert, per existing rule).
@@ -530,11 +426,7 @@ export class Dispatcher {
       this.fire(type, sessionId, cwd);
       return;
     }
-    // Otherwise → start this session's own delay timer. Stop always pends at
-    // least STOP_SETTLE_MS regardless of the configured alertDelay.stop — see
-    // the constant's comment for why. Other types use the bare configured delay.
-    const configuredDelayMs = this.opts.getGlobalSettings().alertDelay[type];
-    const delayMs = type === "stop" ? Math.max(configuredDelayMs, STOP_SETTLE_MS) : configuredDelayMs;
+    const delayMs = this.opts.getGlobalSettings().alertDelay[type];
     if (delayMs <= 0) {
       this.fire(type, sessionId, cwd);
       return;

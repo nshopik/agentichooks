@@ -6,7 +6,37 @@ export type ParsedBody = {
   agentId?: string;
   taskId?: string;
   isInterrupt?: boolean;
+  agenticTaskCount?: number;
 };
+
+// Wire values for background_tasks[].type that represent agentic work still in
+// flight — a Stop reporting any of these is a stop-clearing signal, not a
+// chime. "cloud session" and "MCP task" carry literal spaces; copy verbatim
+// from hooks-reference.md, don't retype. shell/monitor and any unrecognized
+// type are NOT suppressed — fail toward chiming (a stranded dev server or
+// tail -f must not mute completion forever).
+const AGENTIC_TASK_TYPES = new Set(["subagent", "workflow", "teammate", "cloud session", "MCP task"]);
+
+// Counts background_tasks entries whose type is in AGENTIC_TASK_TYPES. Absent
+// or non-array input returns undefined (mirrors the isInterrupt absent
+// convention) so the dispatcher gate can distinguish "no signal" from "zero
+// tasks reported". Non-object entries and non-string types contribute 0 —
+// malformed entries fail toward chiming, not toward suppressing.
+function countAgenticTasks(raw: unknown): number | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  let count = 0;
+  for (const entry of raw) {
+    if (
+      typeof entry === "object" &&
+      entry !== null &&
+      typeof (entry as { type?: unknown }).type === "string" &&
+      AGENTIC_TASK_TYPES.has((entry as { type: string }).type)
+    ) {
+      count++;
+    }
+  }
+  return count;
+}
 
 export type BodyOutcome =
   | { kind: "empty" }
@@ -14,7 +44,7 @@ export type BodyOutcome =
   | { kind: "oversize" }
   | { kind: "parsed"; body: ParsedBody };
 
-export function makeBodyBuffer(maxBytes = 64 * 1024) {
+export function makeBodyBuffer(maxBytes = 256 * 1024) {
   let chunks: Buffer[] = [];
   let total = 0;
   let overflow = false;
@@ -45,6 +75,7 @@ export function makeBodyBuffer(maxBytes = 64 * 1024) {
             // not fire on interrupts — so deriveRoute uses it to clear the thinking
             // counter. Strict-true guard: a non-boolean value is treated as absent.
             isInterrupt: json.is_interrupt === true ? true : undefined,
+            agenticTaskCount: countAgenticTasks(json.background_tasks),
           },
         };
       } catch {

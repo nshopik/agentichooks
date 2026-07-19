@@ -228,7 +228,7 @@ export class HttpListener {
     }
     if (outcome.kind === "oversize") {
       const suffix = isAction ? "(session_id required)" : "(no usable body)";
-      this.warnLimited(`POST with oversize body route=${url} (>64 KB) ${suffix}`);
+      this.warnLimited(`POST with oversize body route=${url} (>256 KB) ${suffix}`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
