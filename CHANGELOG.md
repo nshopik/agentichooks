@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-07-19
+
 ### Fixed
 
 - **Subagent permission dialogs never armed the permission button** — the
