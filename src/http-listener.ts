@@ -160,10 +160,6 @@ export class HttpListener {
     return (addr as AddressInfo).address;
   }
 
-  isListening(): boolean {
-    return this.server?.listening ?? false;
-  }
-
   private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     const url = req.url ?? "";
     const urlLog = truncateForLog(url);
@@ -214,21 +210,11 @@ export class HttpListener {
     const emit = (msg: string) =>
       isSignal ? this.opts.log?.info(msg) : this.opts.log?.debug(msg);
 
-    if (outcome.kind === "empty") {
+    if (outcome.kind !== "parsed") {
+      // outcome.kind doubles as the log noun ("empty" / "unparseable" / "oversize").
+      const size = outcome.kind === "oversize" ? " (>256 KB)" : "";
       const suffix = isAction ? "(session_id required)" : "(no usable body)";
-      this.warnLimited(`POST with empty body route=${url} ${suffix}`);
-      emit(`${kind} route=${url} session=? cwd=?`);
-      return;
-    }
-    if (outcome.kind === "unparseable") {
-      const suffix = isAction ? "(session_id required)" : "(no usable body)";
-      this.warnLimited(`POST with unparseable body route=${url} ${suffix}`);
-      emit(`${kind} route=${url} session=? cwd=?`);
-      return;
-    }
-    if (outcome.kind === "oversize") {
-      const suffix = isAction ? "(session_id required)" : "(no usable body)";
-      this.warnLimited(`POST with oversize body route=${url} (>256 KB) ${suffix}`);
+      this.warnLimited(`POST with ${outcome.kind} body route=${url}${size} ${suffix}`);
       emit(`${kind} route=${url} session=? cwd=?`);
       return;
     }
