@@ -10,9 +10,8 @@
 //   3. Pill <circle> or <rect> (when agentCount > 0)
 //   4. Pill numeral <text>
 
-const SIZE = 144;
-const RADIUS = 20;
-const BG = "#000000";
+import { SIZE, FONT_FAMILY, svgOpen, svgBg, toDataUri } from "./svg-icon.js";
+
 const FG = "#fde047";          // task number
 const PILL_COLOR = "#da7756";  // coral pill
 const PILL_TEXT = "#000000";
@@ -44,16 +43,16 @@ function buildPill(agentCount: number): string {
   const shape = twoDigit
     ? `<rect x="${PILL_CX - CAPSULE_W / 2}" y="${PILL_CY - CAPSULE_H / 2}" width="${CAPSULE_W}" height="${CAPSULE_H}" rx="${CAPSULE_RX}" fill="${PILL_COLOR}"/>`
     : `<circle cx="${PILL_CX}" cy="${PILL_CY}" r="${PILL_R}" fill="${PILL_COLOR}"/>`;
-  const text = `<text x="${PILL_CX}" y="${PILL_CY + PILL_FONT_SIZE * 0.35}" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="${PILL_FONT_SIZE}" font-weight="700" fill="${PILL_TEXT}">${display}</text>`;
+  const text = `<text x="${PILL_CX}" y="${PILL_CY + PILL_FONT_SIZE * 0.35}" text-anchor="middle" font-family="${FONT_FAMILY}" font-size="${PILL_FONT_SIZE}" font-weight="700" fill="${PILL_TEXT}">${display}</text>`;
   return shape + text;
 }
 
 function buildSvg(display: string, fontSize: number, pillSvg: string): string {
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`,
-    `<rect width="${SIZE}" height="${SIZE}" rx="${RADIUS}" fill="${BG}"/>`,
+    svgOpen(),
+    svgBg(),
     `<text x="${SIZE / 2}" y="${SIZE / 2 + fontSize * 0.35}" text-anchor="middle" `,
-    `font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" `,
+    `font-family="${FONT_FAMILY}" `,
     `font-size="${fontSize}" font-weight="700" fill="${FG}">${display}</text>`,
     pillSvg,
     `</svg>`,
@@ -63,7 +62,5 @@ function buildSvg(display: string, fontSize: number, pillSvg: string): string {
 export function renderCountIcon(taskCount: number, agentCount: number): string {
   const { display, fontSize } = pickDisplay(taskCount);
   const pillSvg = buildPill(agentCount);
-  const svg = buildSvg(display, fontSize, pillSvg);
-  const base64 = Buffer.from(svg, "utf-8").toString("base64");
-  return `data:image/svg+xml;base64,${base64}`;
+  return toDataUri(buildSvg(display, fontSize, pillSvg));
 }

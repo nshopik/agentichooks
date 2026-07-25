@@ -16,16 +16,12 @@
 //
 // Pure function; deterministic; no I/O.
 
-const SIZE = 144;
-const RADIUS = 20;
-const BG = "#000000";
+import { SIZE, FONT_FAMILY, svgOpen, svgBg, toDataUri } from "./svg-icon.js";
+
 const GLYPH_COLOR = "#da7756";     // coral — sparkle / legacy centered glyph
 const TIMER_COLOR = "#9a9a9a";     // gray  — elapsed timer
 const GLYPH_FONT_SIZE = 80;        // legacy centered glyph (frame + null)
-// Corner sparkle geometry restored verbatim from the pre-#38 render-count-icon
-// corner glyph (commit b7f21a5): font-size 33, centered on x=22, baseline y=34.
-// The first cut shipped at 26px and read noticeably smaller than the old badge.
-// Overlap with the timer is safe: sparkle band ends at y≈34; the large-font
+// Sparkle/timer overlap is safe: sparkle band ends at y≈34; the large-font
 // timer's cap top starts at y≈57 (baseline 87.4 − 0.7×44).
 const SPARKLE_FONT_SIZE = 33;      // corner sparkle (frame + elapsed)
 const SPARKLE_X = 22;              // top-left corner x (text-anchor middle)
@@ -35,20 +31,6 @@ const TIMER_FONT_SIZE_SMALL = 30;  // elapsed labels with length >= 7 (h:mm:ss t
 
 export const THINKING_FRAMES = ["·", "*", "✶", "✢", "✻", "✢", "✶", "*"] as const;
 export type ThinkingFrame = (typeof THINKING_FRAMES)[number];
-
-const FONT_FAMILY = `-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif`;
-
-function svgOpen(): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">`;
-}
-
-function svgBg(): string {
-  return `<rect width="${SIZE}" height="${SIZE}" rx="${RADIUS}" fill="${BG}"/>`;
-}
-
-function toDataUri(svg: string): string {
-  return `data:image/svg+xml;base64,${Buffer.from(svg, "utf-8").toString("base64")}`;
-}
 
 function timerText(elapsed: string): string {
   const timerFontSize = elapsed.length >= 7 ? TIMER_FONT_SIZE_SMALL : TIMER_FONT_SIZE_LARGE;
