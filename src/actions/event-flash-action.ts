@@ -17,6 +17,7 @@ import {
   type ButtonState,
 } from "../types.js";
 import type { DispatchableButton } from "../dispatcher.js";
+import { formatAlertTitle } from "../alert-title.js";
 
 const STATE_IDLE = 0;
 const STATE_ALERT = 1;
@@ -66,12 +67,11 @@ export type EventFlashActionOpts = {
    * Lazy callback wired to Dispatcher.dismissArmed. Called when this button
    * type's alert is dismissed by a user keypress or per-button auto-timeout.
    * The dispatcher then clears ARMED state and dismisses every alerting button
-   * of this type (type-wide semantics). When absent, falls back to the local
-   * dismissContext — pre-fix behavior, dispatcher ARMED is not cleared. Must
-   * never run unwired in production (plugin.ts always wires this). Mirrors the
-   * armedMsAgo lazy-arrow pattern.
+   * of this type (type-wide semantics). Required: the round-trip through the
+   * dispatcher is the only correct dismissal path. Mirrors the armedMsAgo
+   * lazy-arrow pattern.
    */
-  onDismissed?: (eventType: EventType) => void;
+  onDismissed: (eventType: EventType) => void;
   /**
    * Lazy lookup (dispatcher constructed later): armed-session context for this
    * action's event type, or null when nothing is armed. Drives the cwd title on
@@ -111,7 +111,7 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
   protected readonly contexts = new Map<string, Ctx>();
   protected readonly opts: EventFlashActionOpts;
 
-  constructor(opts: EventFlashActionOpts = {}) {
+  constructor(opts: EventFlashActionOpts) {
     super();
     this.opts = opts;
   }
@@ -121,7 +121,6 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     for (const [k, v] of this.contexts) {
       out.set(k, {
         eventType: this.eventType,
-        settings: v.settings,
         state: v.state,
         alert: () => this.alertContext(v),
         dismiss: () => this.dismissContext(v),
@@ -181,8 +180,38 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
       // button's ctx.state.alerting must remain true so that the dispatcher's
       // clearType includes it in the round-trip dismissal. Calling dismissContext
       // first would flip alerting=false and produce a redundant double-clear path.
-      if (this.opts.onDismissed) this.opts.onDismissed(this.eventType);
-      else this.dismissContext(ctx); // unwired fallback (tests, safety — pre-fix behavior)
+      this.opts.onDismissed(this.eventType);
+    }
+  }
+
+  /**
+   * Called by plugin.ts via onArmedChanged when the armed-session context for
+   * this action's event type changes (new session armed, session cleared, or
+   * dismissArmed). Applies the cwd title to all visible key contexts:
+   *   - armed → setTitle(formatAlertTitle(count, latestCwd))
+   *   - not armed (null context) → setTitle() no-arg (restore user/manifest title)
+   * Only wired for stop and permission — task-completed uses a count badge
+   * (no title) and never receives this call.
+   */
+  broadcastAlertTitle(): void {
+    const ctx = this.opts.armedContext?.(this.eventType) ?? null;
+    // Coalesce "" → undefined: an armed alert with no resolvable cwd keeps the
+    // user/manifest title instead of blanking it (never call setTitle("")).
+    const title = (ctx !== null ? formatAlertTitle(ctx.count, ctx.latestCwd) : "") || undefined;
+    for (const [, c] of this.contexts) {
+      void c.setTitle(title);
+    }
+  }
+
+  // Restores the cwd title after a page/profile switch — but only when the base
+  // onWillAppear actually re-alerted this button. The expired-budget path sets
+  // state IDLE and calls setTitle(), which must not be overwritten with a title.
+  protected restoreAlertTitle(ctx: Ctx): void {
+    if (!ctx.state.alerting) return;
+    const armedCtx = this.opts.armedContext?.(this.eventType) ?? null;
+    if (armedCtx !== null) {
+      // "" → undefined: same coalesce as broadcastAlertTitle.
+      void ctx.setTitle(formatAlertTitle(armedCtx.count, armedCtx.latestCwd) || undefined);
     }
   }
 
@@ -245,14 +274,10 @@ export abstract class EventFlashAction extends SingletonAction<JsonObject> {
     const timeoutMs = timeoutOverrideMs ?? ctx.settings.autoTimeoutMs;
     if (timeoutMs > 0) {
       ctx.state.timeoutTimer = setTimeout(() => {
-        // Do NOT call dismissContext(ctx) here before onDismissed. The originating
-        // button's ctx.state.alerting must remain true so that the dispatcher's
-        // clearType includes it in the round-trip dismissal. Calling dismissContext
-        // first would flip alerting=false and produce a redundant double-clear path.
+        // Same must-not-dismissContext-first invariant as onKeyDown above.
         // Note: the round-trip will re-run clearTimers(ctx) against the already-fired
         // timeoutTimer — clearTimeout on a fired handle is a harmless no-op.
-        if (this.opts.onDismissed) this.opts.onDismissed(this.eventType);
-        else this.dismissContext(ctx); // unwired fallback (tests, safety — pre-fix behavior)
+        this.opts.onDismissed(this.eventType);
       }, timeoutMs);
     }
   }

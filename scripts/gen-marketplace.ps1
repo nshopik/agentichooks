@@ -2,24 +2,13 @@ param()
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
+. (Join-Path $PSScriptRoot "lib\gdi-primitives.ps1")
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $out  = Join-Path $root "marketplace"
 $keys = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images\keys"
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
 # ---- shared primitives ----
-
-function New-RoundedRectPath {
-    param([single]$x, [single]$y, [single]$w, [single]$h, [single]$radius)
-    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $d = $radius * 2
-    $path.AddArc($x, $y, $d, $d, 180, 90)
-    $path.AddArc(($x + $w - $d), $y, $d, $d, 270, 90)
-    $path.AddArc(($x + $w - $d), ($y + $h - $d), $d, $d, 0, 90)
-    $path.AddArc($x, ($y + $h - $d), $d, $d, 90, 90)
-    $path.CloseFigure()
-    return $path
-}
 
 function New-GradientBrush {
     param([single]$x, [single]$y, [single]$w, [single]$h, [string]$fromHex, [string]$toHex, [single]$angleDeg = 135)
@@ -97,44 +86,6 @@ function Draw-Tagline {
     }
     $font.Dispose()
     $brush.Dispose()
-}
-
-# Center-paints a single string via GraphicsPath.AddString into a StringFormat-centered
-# RectangleF anchored on (cx, cy). emSize is in world units (pixels); GDI+ AddString
-# uses em-size directly, so SVG font-size values map to this parameter as an approximation,
-# fine-tuned visually. No SVG baseline math (y = center + fontSize*0.35) — GDI+ centers
-# automatically via StringFormat.
-function Draw-CenteredText {
-    param(
-        $g,
-        [string]$text,
-        [single]$cx,
-        [single]$cy,
-        [single]$emSize,
-        [System.Drawing.Color]$color,
-        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold,
-        [switch]$AssertGlyph
-    )
-    $family = New-Object System.Drawing.FontFamily("Segoe UI")
-    $sf = New-Object System.Drawing.StringFormat
-    $sf.Alignment     = [System.Drawing.StringAlignment]::Center
-    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-    # Bounding rect: 2×emSize tall so the StringFormat center is at (cx, cy).
-    $halfH = $emSize
-    $halfW = $emSize * 3   # generous width; AddString clips by path, not rect
-    $rect  = New-Object System.Drawing.RectangleF(($cx - $halfW), ($cy - $halfH), ($halfW * 2), ($halfH * 2))
-    $path  = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $path.AddString($text, $family, [int]$fontStyle, $emSize, $rect, $sf)
-    # Guard relies on one string per fresh GraphicsPath (PointCount is per-call).
-    if ($AssertGlyph -and $path.PointCount -le 0) {
-        throw "Draw-CenteredText: glyph for '$text' rendered empty (PointCount=0) - font 'Segoe UI' missing this codepoint?"
-    }
-    $brush = New-Object System.Drawing.SolidBrush($color)
-    $g.FillPath($brush, $path)
-    $brush.Dispose()
-    $path.Dispose()
-    $family.Dispose()
-    $sf.Dispose()
 }
 
 # Black rounded-rect key face. radius = 20*s, matching runtime SVG rx="20" (144-unit space).
