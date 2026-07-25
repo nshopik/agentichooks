@@ -9,58 +9,12 @@ param()
 $ErrorActionPreference = "Stop"
 
 Add-Type -AssemblyName System.Drawing
+. (Join-Path $PSScriptRoot "lib\gdi-primitives.ps1")
 $root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $keys = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images\keys"
 $imgs = Join-Path $root "com.nshopik.agentichooks.sdPlugin\images"
 
 New-Item -ItemType Directory -Force -Path $keys | Out-Null
-
-function New-RoundedRectPath {
-    param([System.Drawing.Graphics]$g, [int]$w, [int]$h, [int]$radius)
-    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $d = $radius * 2
-    $path.AddArc(0, 0, $d, $d, 180, 90)
-    $path.AddArc($w - $d, 0, $d, $d, 270, 90)
-    $path.AddArc($w - $d, $h - $d, $d, $d, 0, 90)
-    $path.AddArc(0, $h - $d, $d, $d, 90, 90)
-    $path.CloseFigure()
-    return $path
-}
-
-# Center-paints one string via GraphicsPath.AddString into a StringFormat-centered
-# RectangleF anchored on (cx, cy). emSize is in world units (pixels); no SVG baseline math.
-# With -AssertGlyph, throws when the font produced no glyph (GDI+ silently emits nothing for a
-# missing codepoint). Guard relies on one string per fresh GraphicsPath (PointCount is per-call).
-function Draw-CenteredText {
-    param(
-        $g,
-        [string]$text,
-        [single]$cx,
-        [single]$cy,
-        [single]$emSize,
-        [System.Drawing.Color]$color,
-        [System.Drawing.FontStyle]$fontStyle = [System.Drawing.FontStyle]::Bold,
-        [switch]$AssertGlyph
-    )
-    $family = New-Object System.Drawing.FontFamily("Segoe UI")
-    $sf = New-Object System.Drawing.StringFormat
-    $sf.Alignment     = [System.Drawing.StringAlignment]::Center
-    $sf.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $halfH = $emSize
-    $halfW = $emSize * 3
-    $rect  = New-Object System.Drawing.RectangleF(($cx - $halfW), ($cy - $halfH), ($halfW * 2), ($halfH * 2))
-    $path  = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $path.AddString($text, $family, [int]$fontStyle, $emSize, $rect, $sf)
-    if ($AssertGlyph -and $path.PointCount -le 0) {
-        throw "Draw-CenteredText: glyph for '$text' rendered empty (PointCount=0) - font 'Segoe UI' missing this codepoint?"
-    }
-    $brush = New-Object System.Drawing.SolidBrush($color)
-    $g.FillPath($brush, $path)
-    $brush.Dispose()
-    $path.Dispose()
-    $family.Dispose()
-    $sf.Dispose()
-}
 
 function Draw-CheckGlyph {
     param($g, $size, $pen, $white)
@@ -141,7 +95,7 @@ function Make-KeyIcon {
     $bg = [System.Drawing.ColorTranslator]::FromHtml($bgHex)
     $bgBrush = New-Object System.Drawing.SolidBrush($bg)
     $radius = [int]($size * 0.14)
-    $rect = New-RoundedRectPath $g $size $size $radius
+    $rect = New-RoundedRectPath -x 0 -y 0 -w $size -h $size -radius $radius
     $g.FillPath($bgBrush, $rect)
 
     $white = [System.Drawing.Color]::White
@@ -197,7 +151,7 @@ function Make-PluginIcon {
 
     # Black rounded face (radius 26*s ~ 0.18 squircle)
     $radius = [int](26 * $s)
-    $rect = New-RoundedRectPath $g $size $size $radius
+    $rect = New-RoundedRectPath -x 0 -y 0 -w $size -h $size -radius $radius
     $blackBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
     $g.FillPath($blackBrush, $rect)
     $blackBrush.Dispose()
