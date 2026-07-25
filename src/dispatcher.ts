@@ -1,9 +1,8 @@
-import type { EventType, GlobalSettings, FlashSettings, ButtonState, Logger } from "./types.js";
+import type { EventType, GlobalSettings, ButtonState, Logger } from "./types.js";
 import { defaultSoundPath } from "./system-sounds.js";
 
 export type DispatchableButton = {
   eventType: EventType;
-  settings: FlashSettings;
   state: ButtonState;
   alert: () => void;
   dismiss: () => void;
@@ -82,9 +81,16 @@ function isKnownRoute(route: string): route is Route {
   return Object.hasOwn(ROUTES, route);
 }
 
+// Shared spec values. Routes bound to the same const are behaviorally identical
+// BY DESIGN — sharing the object makes divergence a deliberate edit (split the
+// const) instead of silent drift between rows that must stay in lockstep.
+const STOP_SPEC: RouteSpec =              { arms: "stop", clears: ["permission", "task-completed"], counters: [{ metric: "thinking", op: "remove" }] };
+const SESSION_BOUNDARY_SPEC: RouteSpec =  { clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] };
+const PERMISSION_CLEAR_SPEC: RouteSpec =  { clears: ["permission"] };
+
 const ROUTES: Readonly<Record<Route, RouteSpec>> = {
-  "/event/stop":                  { arms: "stop",       clears: ["permission", "task-completed"], counters: [{ metric: "thinking", op: "remove" }] },
-  "/event/stop-failure":          { arms: "stop",       clears: ["permission", "task-completed"], counters: [{ metric: "thinking", op: "remove" }] },
+  "/event/stop":                  STOP_SPEC,
+  "/event/stop-failure":          STOP_SPEC,
   "/event/permission-request":    { arms: "permission", clears: [] },
   // Clears task-completed so a fresh task arriving during the post-zero alert (or its 1s
   // pre-fire delay) dismisses the alert immediately and lets the in-flight count visual
@@ -101,12 +107,12 @@ const ROUTES: Readonly<Record<Route, RouteSpec>> = {
   // it instead of letting the green checkmark fire over running agents.
   "/event/subagent-start":        {                     clears: ["stop"],                         counters: [{ metric: "subagents", op: "add" }] },
   "/event/subagent-stop":         {                     clears: [],                               counters: [{ metric: "subagents", op: "remove" }] },
-  "/event/session-start":         {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
-  "/event/session-end":           {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "tasks", op: "reset" }, { metric: "subagents", op: "reset" }, { metric: "thinking", op: "reset" }] },
+  "/event/session-start":         SESSION_BOUNDARY_SPEC,
+  "/event/session-end":           SESSION_BOUNDARY_SPEC,
   "/event/user-prompt-submit":    {                     clears: ["stop", "permission", "task-completed"], counters: [{ metric: "thinking", op: "add" }] },
-  "/event/permission-denied":     {                     clears: ["permission"] },
-  "/event/post-tool-use":         {                     clears: ["permission"] },
-  "/event/post-tool-use-failure": {                     clears: ["permission"] },
+  "/event/permission-denied":     PERMISSION_CLEAR_SPEC,
+  "/event/post-tool-use":         PERMISSION_CLEAR_SPEC,
+  "/event/post-tool-use-failure": PERMISSION_CLEAR_SPEC,
   // The agentic loop can restart after Stop without a UserPromptSubmit (auto-continue,
   // /continue, compact-and-continue). A fresh PreToolUse means the agent is working
   // again, so a still-armed stop alert is stale.
@@ -334,39 +340,36 @@ export class Dispatcher {
     }
   }
 
-  // Public lookup for EventFlashAction.onWillAppear: returns ms since the latest
-  // session was armed for this type, or null if no sessions are armed.
-  // Latest-wins: uses the greatest armedAt across all armed sessions, consistent
-  // with armedContext. Null when no armed entries; prune-on-empty makes "empty but
-  // present" inner Map unrepresentable, guarding the Math.max(...[]) === -Infinity trap.
-  armedMsAgo(type: EventType): number | null {
+  // Single definition of "latest-wins" shared by armedMsAgo and armedContext:
+  // the armed entry with the greatest armedAt across all sessions, plus the
+  // armed-session count. Null when nothing is armed (no inner Map).
+  private latestArmed(type: EventType): { armedAt: number; cwd: string | null; count: number } | null {
     const inner = this.armed.get(type);
     if (!inner) return null;
-    let maxAt = -Infinity;
-    for (const { armedAt } of inner.values()) {
-      if (armedAt > maxAt) maxAt = armedAt;
+    let latest: ArmedEntry | null = null;
+    for (const entry of inner.values()) {
+      if (latest === null || entry.armedAt > latest.armedAt) latest = entry;
     }
-    return Date.now() - maxAt;
+    // Non-null assertion safe: prune-on-empty makes "empty but present" inner
+    // Map unrepresentable, so the loop always assigns.
+    return { armedAt: latest!.armedAt, cwd: latest!.cwd, count: inner.size };
+  }
+
+  // Public lookup for EventFlashAction.onWillAppear: returns ms since the latest
+  // session was armed for this type, or null if no sessions are armed.
+  armedMsAgo(type: EventType): number | null {
+    const latest = this.latestArmed(type);
+    return latest === null ? null : Date.now() - latest.armedAt;
   }
 
   /**
    * Public lookup used by OnStopAction/OnPermissionAction to compute the key title.
-   * Returns null when nothing is armed (no inner Map); otherwise { count, latestCwd }
-   * where count = number of armed sessions, latestCwd = the latest session's cwd
-   * (determined by greatest armedAt, consistent with armedMsAgo latest-wins).
+   * Returns null when nothing is armed; otherwise { count, latestCwd } where
+   * count = number of armed sessions, latestCwd = the latest session's cwd.
    */
   armedContext(type: EventType): { count: number; latestCwd: string | null } | null {
-    const inner = this.armed.get(type);
-    if (!inner) return null;
-    let maxAt = -Infinity;
-    let latestCwd: string | null = null;
-    for (const entry of inner.values()) {
-      if (entry.armedAt > maxAt) {
-        maxAt = entry.armedAt;
-        latestCwd = entry.cwd;
-      }
-    }
-    return { count: inner.size, latestCwd };
+    const latest = this.latestArmed(type);
+    return latest === null ? null : { count: latest.count, latestCwd: latest.cwd };
   }
 
   private stateOf(type: EventType, sessionId: string): "IDLE" | "PENDING" | "ARMED" {
