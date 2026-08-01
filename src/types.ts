@@ -34,10 +34,11 @@ export type ButtonState = {
   pulseFrame: 0 | 1;
 };
 
-export const DEFAULT_FLASH_SETTINGS: FlashSettings = {
+// autoTimeoutMs is deliberately absent: every read resolves through
+// DEFAULT_AUTO_TIMEOUT_BY_EVENT below, which is per-event-type.
+export const DEFAULT_FLASH_SETTINGS: Pick<FlashSettings, "flashMode" | "pulseIntervalMs"> = {
   flashMode: "static",
   pulseIntervalMs: 500,
-  autoTimeoutMs: 0,
 };
 
 // Runtime guard for flashMode arriving from the Property Inspector — the PI
