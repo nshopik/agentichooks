@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every action route now logs its result line at `info`** — previously a
+  hardcoded subset did, leaving `task-created`, `subagent-start/stop`, and the
+  tool-use routes invisible at the default log level. (#60)
+
 ## [0.9.5] - 2026-07-19
 
 ### Fixed

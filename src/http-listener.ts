@@ -1,6 +1,7 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { makeBodyBuffer, type BodyOutcome, type ParsedBody } from "./parse-hook-body.js";
+import { basename } from "./alert-title.js";
 import type { Logger } from "./types.js";
 
 export const ACTION_ROUTES = new Set<string>([
@@ -37,25 +38,6 @@ export const INFO_ROUTES = new Set<string>([
   "/event/elicitation",
   "/event/elicitation-result",
 ]);
-
-// Routes whose result line warrants INFO. Everything else logs at DEBUG.
-// WARN diagnostics fire on ALL routes regardless of classification.
-const SIGNAL_ROUTES = new Set<string>([
-  "/event/stop",
-  "/event/stop-failure",
-  "/event/permission-request",
-  "/event/task-completed",
-  "/event/task-created",
-  "/event/session-start",
-  "/event/session-end",
-  "/event/user-prompt-submit",
-  "/event/permission-denied",
-  "/event/notification",
-]);
-
-function basename(cwd: string): string {
-  return cwd.split(/[\\/]/).filter(Boolean).pop() ?? cwd;
-}
 
 // Attacker-controlled values (headers, url, notification message) are
 // length-capped before interpolation into log lines so a peer on the SSH
@@ -206,9 +188,11 @@ export class HttpListener {
 
   private logRequest(url: string, isAction: boolean, outcome: BodyOutcome): void {
     const kind = isAction ? "action" : "info-only";
-    const isSignal = SIGNAL_ROUTES.has(url);
+    // Action routes drive behavior, so their result line warrants INFO; info-only
+    // routes are log-noise at the default level and stay at DEBUG.
+    // WARN diagnostics fire on ALL routes regardless of classification.
     const emit = (msg: string) =>
-      isSignal ? this.opts.log?.info(msg) : this.opts.log?.debug(msg);
+      isAction ? this.opts.log?.info(msg) : this.opts.log?.debug(msg);
 
     if (outcome.kind !== "parsed") {
       // outcome.kind doubles as the log noun ("empty" / "unparseable" / "oversize").
@@ -226,7 +210,8 @@ export class HttpListener {
       this.warnLimited(`POST without session_id route=${url} (session_id required)`);
     }
     const sid = sessionId ? sessionId.slice(0, 8) : "?";
-    const cwdShort = cwd ? basename(cwd) : "?";
+    // basename() returns "" for a bare drive designator ("C:") — fall back to "?".
+    const cwdShort = (cwd && basename(cwd)) || "?";
     const sourceSuffix = source ? ` source=${source}` : "";
     const agentSuffix = agentId ? ` agent=${agentId.slice(0, 8)}` : "";
     emit(`${kind} route=${url} session=${sid} cwd=${cwdShort}${sourceSuffix}${agentSuffix}`);

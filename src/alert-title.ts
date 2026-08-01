@@ -1,4 +1,14 @@
 /**
+ * Last path segment of `p`, split on both '/' and '\' with empty segments
+ * dropped. A bare drive designator ("C:") is a root, not a name, so it yields
+ * "". Shared with the HTTP listener's cwd log field.
+ */
+export function basename(p: string): string {
+  const last = p.split(/[/\\]/).filter((s) => s.length > 0).at(-1) ?? "";
+  return /^[A-Za-z]:$/.test(last) ? "" : last;
+}
+
+/**
  * Formats a Stream Deck key title for armed stop/permission alerts.
  *
  * Returns the basename of latestCwd (split on both '/' and '\', drop empty segments)
@@ -11,14 +21,10 @@
  * @returns  Key title string, empty string when nothing meaningful to show.
  */
 export function formatAlertTitle(count: number, latestCwd: string | null): string {
-  // Extract basename: split on both separators, drop empty segments.
-  const segments = (latestCwd ?? "").split(/[/\\]/).filter((s) => s.length > 0);
-  const last = segments.at(-1) ?? "";
-  // A bare drive designator ("C:") is a root, not a repo name — omit it.
-  const basename = /^[A-Za-z]:$/.test(last) ? "" : last;
+  const name = basename(latestCwd ?? "");
 
   const parts: string[] = [];
-  if (basename) parts.push(basename);
+  if (name) parts.push(name);
   if (count > 1) parts.push(`+${count - 1}`);
 
   return parts.join("\n");

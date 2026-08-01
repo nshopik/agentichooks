@@ -292,14 +292,24 @@ describe("HttpListener", () => {
     expect(info?.msg).toContain("cwd=myproject");
   });
 
-  it("verbose route (/event/pre-tool-use) emits result line at DEBUG level", async () => {
+  it("info-only route (/event/pre-compact) emits result line at DEBUG level", async () => {
+    listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
+    await listener.start();
+    const body = JSON.stringify({ session_id: "abc", cwd: "/a/b" });
+    await requestWithBody("POST", "/event/pre-compact", listener.port(), body);
+    await new Promise((r) => setTimeout(r, 20));
+    const resultLine = logs.find((l) => l.msg.includes("route=/event/pre-compact") && l.msg.includes("session="));
+    expect(resultLine?.level).toBe("debug");
+  });
+
+  it("action route (/event/pre-tool-use) emits result line at INFO level", async () => {
     listener = new HttpListener({ port: 0, onEvent: (e) => received.push(e), log: makeLog() });
     await listener.start();
     const body = JSON.stringify({ session_id: "abc", cwd: "/a/b" });
     await requestWithBody("POST", "/event/pre-tool-use", listener.port(), body);
     await new Promise((r) => setTimeout(r, 20));
     const resultLine = logs.find((l) => l.msg.includes("route=/event/pre-tool-use") && l.msg.includes("session="));
-    expect(resultLine?.level).toBe("debug");
+    expect(resultLine?.level).toBe("info");
   });
 
   it("/event/notification with message field emits second INFO line with escaped message text", async () => {
