@@ -5,7 +5,7 @@
 #
 # Run with:
 #   bash install-hooks.sh                     # default: http://127.0.0.1:9123
-#   AGENTIC_HOOKS_URL=http://10.0.0.5:9123 bash install-hooks.sh
+#   AGENTIC_HOOKS_URL=http://localhost:9123 bash install-hooks.sh   # listener accepts only 127.0.0.1:9123 / localhost:9123
 #   SETTINGS_PATH=/custom/path/settings.json bash install-hooks.sh
 #
 # The plugin's HTTP listener binds 127.0.0.1:9123 on the Windows side, so the
