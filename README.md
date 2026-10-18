@@ -14,7 +14,7 @@ Flash a Stream Deck button on Claude Code hook events (turn end, permission requ
 
 - Auto-clear when you reply: a `UserPromptSubmit` hook dismisses any active alert as soon as you start typing back to Claude.
 - Static or pulsing flash mode, configurable per button.
-- Live task count: the Task Completed button shows the number of in-progress tasks as a big number — a rough progress bar for the run — and flashes once when all tasks complete, with no per-task noise. A small coral pill in the corner separately shows how many subagents are running in parallel.
+- Live subagent count: the Task Completed button shows how many subagents are running as a big coral number. With **Show task count** on, the big number is the in-progress task count instead — a rough progress bar for the run — and a small coral pill in the corner shows the subagent count. The button flashes once when all tasks complete, with no per-task noise. Claude Code creates tasks by default only on Opus 4.7, Sonnet 4.6, Haiku 4.5, and earlier models; on newer models set [`CLAUDE_CODE_ENABLE_TODO_TOOLS=1`](https://code.claude.com/docs/en/tools-reference#task-tool-availability).
 - On Stop thinking indicator: an animated coral glyph on the On Stop button from when you submit a prompt until Claude stops (on by default; disable per button via the Property Inspector).
 - Optional audio cue per event. Stop and Permission default to system sounds (`Speech On.wav` / `Windows Message Nudge.wav` on Windows; `Glass.aiff` / `Funk.aiff` on macOS). Task Completed has no default sound — silent unless you pick a file.
 - Works for remote Claude sessions via SSH reverse tunnel — your local deck flashes when Claude finishes on a remote machine.
@@ -109,6 +109,7 @@ Plugin-global settings (More Actions → plugin settings):
 - **Audio per event** — sound file. Stop and Permission default to system sounds; Task Completed has no default. Set the path to empty (Mute button) to silence an event without removing the configured sound.
 - **Alert delay per event** — seconds between an arming hook and the alert firing. Default `1 s`. Set to `0` to fire immediately.
 - **▶ Test** — plays the configured sound.
+- **Show task count** (Task Completed) — on: task count + subagent pill; off: subagent count only. Default off.
 
 ## Alert delay window and clear matrix
 
