@@ -64,6 +64,11 @@ export type EventFlashActionOpts = {
    */
   currentAgentCount?: () => number;
   /**
+   * Lazy lookup of the global showTaskCount setting. Only consumed by
+   * OnTaskCompletedAction.
+   */
+  showTaskCount?: () => boolean;
+  /**
    * Lazy callback wired to Dispatcher.dismissArmed. Called when this button
    * type's alert is dismissed by a user keypress or per-button auto-timeout.
    * The dispatcher then clears ARMED state and dismisses every alerting button

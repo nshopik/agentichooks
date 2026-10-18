@@ -23,6 +23,9 @@ export type GlobalSettings = {
     permission: number;
     "task-completed": number;
   };
+  // Task Completed key: true shows task count + subagent pill; false shows
+  // subagent count only. Default false.
+  showTaskCount: boolean;
 };
 
 export const HTTP_PORT = 9123;
@@ -77,6 +80,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     permission: DEFAULT_ALERT_DELAY_MS,
     "task-completed": DEFAULT_ALERT_DELAY_MS,
   },
+  showTaskCount: false,
 };
 
 export const ALL_EVENT_TYPES: ReadonlyArray<EventType> = ["stop", "permission", "task-completed"];
