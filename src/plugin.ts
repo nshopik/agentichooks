@@ -71,6 +71,7 @@ const actionOpts: EventFlashActionOpts = {
   // binding and resolves at repaint / willAppear time.
   currentElapsedMs: (): number | null => turnClock.currentElapsedMs(),
   currentAgentCount: (): number => taskCounters.subagents.sum(),
+  showTaskCount: (): boolean => globals.showTaskCount,
   // Lazy: dispatcher is constructed below. Called when a button's keypress or
   // auto-timeout dismisses an alert; the dispatcher clears ARMED state and
   // dismisses every alerting button of that type (type-wide semantics). Same
@@ -113,6 +114,7 @@ function mergeGlobals(raw: JsonObject | undefined): GlobalSettings {
       if (Number.isFinite(sec)) base.alertDelay[ev] = Math.max(0, sec * 1000);
     }
   }
+  base.showTaskCount = stored.showTaskCount === true;
   return base;
 }
 
@@ -123,6 +125,7 @@ async function loadGlobals(): Promise<void> {
 
 streamDeck.settings.onDidReceiveGlobalSettings<JsonObject>((ev) => {
   globals = mergeGlobals(ev.settings);
+  taskCompletedAction.broadcastCounts(taskCounters.tasks.sum(), taskCounters.subagents.sum());
 });
 
 const dispatchLog = makeLogger("dispatch");

@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Breaking: Task Completed button shows the subagent count by default** —
+  the task count + subagent pill layout moved behind the new global
+  **Show task count** setting.
 - **Every action route now logs its result line at `info`** — previously a
   hardcoded subset did, leaving `task-created`, `subagent-start/stop`, and the
   tool-use routes invisible at the default log level. (#60)

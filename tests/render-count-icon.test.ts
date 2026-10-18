@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderCountIcon } from "../src/render-count-icon.js";
+import { renderCountIcon, renderTaskKeyIcon } from "../src/render-count-icon.js";
 
 function decodeDataUri(uri: string): string {
   const prefix = "data:image/svg+xml;base64,";
@@ -139,5 +139,27 @@ describe("renderCountIcon(taskCount, agentCount)", () => {
     // detail. The old test recomputed y with the source's own expression, so it
     // could never disagree with the source.
     expect(svg).toMatch(/<text x="118" y="[\d.]+" text-anchor="middle"/);
+  });
+});
+
+describe("renderTaskKeyIcon(taskSum, agentSum, showTaskCount)", () => {
+  it.each([
+    // [taskSum, agentSum, showTaskCount, expected]
+    [0, 0, false, ""],
+    [3, 0, false, ""],
+    [0, 2, false, renderCountIcon(2, 0, "#da7756")],
+    [3, 2, false, renderCountIcon(2, 0, "#da7756")],
+    [0, 0, true, ""],
+    [3, 0, true, renderCountIcon(3, 0)],
+    [0, 2, true, renderCountIcon(0, 2)],
+    [3, 2, true, renderCountIcon(3, 2)],
+  ])("tasks=%i agents=%i showTaskCount=%s", (tasks, agents, show, expected) => {
+    expect(renderTaskKeyIcon(tasks, agents, show)).toBe(expected);
+  });
+
+  it("draws the subagent count in coral, not task yellow, when showTaskCount is off", () => {
+    const svg = decodeDataUri(renderTaskKeyIcon(0, 2, false));
+    expect(svg).toMatch(/fill="#da7756">2<\/text>/);
+    expect(svg).not.toContain("#fde047");
   });
 });

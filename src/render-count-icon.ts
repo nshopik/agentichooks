@@ -1,12 +1,13 @@
 // Runtime-generated SVG icon for the Task Completed key.
-// Shows the in-flight task count (big yellow number) and an optional coral
-// subagent-count pill (top-right corner, shown when agentCount > 0).
+// Shows a big number (yellow task count, or coral subagent count when the
+// task count is hidden) and an optional coral subagent-count pill
+// (top-right corner, shown when agentCount > 0).
 // Sparkle and frame param are removed — animation moves to On Stop.
 // Pure function; deterministic; no I/O.
 //
 // SVG element order (pinned for test stability):
 //   1. Background <rect>
-//   2. Task-count <text>   ← first font-size match
+//   2. Big-number <text>   ← first font-size match
 //   3. Pill <circle> or <rect> (when agentCount > 0)
 //   4. Pill numeral <text>
 
@@ -47,20 +48,28 @@ function buildPill(agentCount: number): string {
   return shape + text;
 }
 
-function buildSvg(display: string, fontSize: number, pillSvg: string): string {
+function buildSvg(display: string, fontSize: number, fill: string, pillSvg: string): string {
   return [
     svgOpen(),
     svgBg(),
     `<text x="${SIZE / 2}" y="${SIZE / 2 + fontSize * 0.35}" text-anchor="middle" `,
     `font-family="${FONT_FAMILY}" `,
-    `font-size="${fontSize}" font-weight="700" fill="${FG}">${display}</text>`,
+    `font-size="${fontSize}" font-weight="700" fill="${fill}">${display}</text>`,
     pillSvg,
     `</svg>`,
   ].join("");
 }
 
-export function renderCountIcon(taskCount: number, agentCount: number): string {
-  const { display, fontSize } = pickDisplay(taskCount);
+export function renderCountIcon(count: number, agentCount: number, fill: string = FG): string {
+  const { display, fontSize } = pickDisplay(count);
   const pillSvg = buildPill(agentCount);
-  return toDataUri(buildSvg(display, fontSize, pillSvg));
+  return toDataUri(buildSvg(display, fontSize, fill, pillSvg));
+}
+
+// Task Completed key image. Without showTaskCount the big number is the
+// subagent count in the pill's coral and there is no pill. "" means idle: the caller clears the
+// state-0 override so the manifest/user image shows.
+export function renderTaskKeyIcon(taskSum: number, agentSum: number, showTaskCount: boolean): string {
+  if (!showTaskCount) return agentSum > 0 ? renderCountIcon(agentSum, 0, PILL_COLOR) : "";
+  return taskSum > 0 || agentSum > 0 ? renderCountIcon(taskSum, agentSum) : "";
 }

@@ -35,3 +35,9 @@ describe("DEFAULT_GLOBAL_SETTINGS.alertDelay", () => {
     expect(DEFAULT_GLOBAL_SETTINGS.alertDelay["task-completed"]).toBe(1000);
   });
 });
+
+describe("DEFAULT_GLOBAL_SETTINGS.showTaskCount", () => {
+  it("defaults to false (subagent count only)", () => {
+    expect(DEFAULT_GLOBAL_SETTINGS.showTaskCount).toBe(false);
+  });
+});
